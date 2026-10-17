@@ -12,7 +12,13 @@ The pipeline behind fACTUAL. Its method is public so anyone can check it.
    Opinion pieces never join news stories. Articles more than 72 hours apart are never grouped.
    The model, threshold and window are written into every `stories.json`.
 
-Checking (stage 3) is not built yet.
+Checking (stage 3) is not built yet. The verdict rules it will follow are in `method/verdicts.md`.
+
+## Privacy
+
+The site sets no cookies and loads nothing from other domains. A reader's ZIP code, when the app asks
+for one, stays on their device: the app downloads statewide race and ad data and filters it locally.
+No server ever receives it.
 
 ## Run it
 
