@@ -12,7 +12,8 @@ The pipeline behind fACTUAL. Its method is public so anyone can check it.
    Opinion pieces never join news stories. Articles more than 72 hours apart are never grouped.
    The model, threshold and window are written into every `stories.json`.
 
-Checking (stage 3) is not built yet. The verdict rules it will follow are in `method/verdicts.md`.
+Checking (stage 3) is not built yet. The verdict rules it will follow are in `method/verdicts.md`. How outlets are
+balanced left, center and right is in `method/balance.md`.
 
 ## Privacy
 

@@ -14,6 +14,11 @@ Rules that hold whatever the model:
 - A story needs at least two different outlets.
 - Opinion pieces never join news stories (see is_opinion).
 - Articles more than WINDOW_HOURS apart are never grouped.
+
+Ranking gives left, center and right equal weight. Each outlet's side is computed from
+Pew's audience numbers in feeds.json (never set by hand). A story's score is the mean,
+over the three sides, of the share of that side's working outlets that covered it, so a
+side with more outlets in the list gets no more say than a side with fewer.
 """
 import json
 import re
@@ -28,10 +33,28 @@ ROOT = Path(__file__).resolve().parent.parent
 MODEL = "BAAI/bge-small-en-v1.5"
 THRESHOLD = 0.80     # minimum average cosine similarity to join a story
 WINDOW_HOURS = 72
+# Audience lean = Republican users / (Republican + Democratic users), from Pew. This treats
+# the two parties as equal in size. Below LEFT_BELOW is left, above RIGHT_ABOVE is right.
+LEFT_BELOW, RIGHT_ABOVE = 0.40, 0.60
+# Stories this close (average similarity) are different angles on one event. They stay
+# separate stories, but the lower-ranked one is folded under the higher one on Today, so
+# one event never takes two of the five slots. Measured 2026-10-17: every pair above this
+# was related (one shooting, one sanctions waiver); no single merge threshold kept
+# distinct stories apart, so they are linked rather than merged.
+RELATED = 0.74
+SIDES = ("left", "center", "right")
 
 # URL path segments and title prefixes that mark opinion, analysis or columns.
 OPINION_PATH = re.compile(r"/(opinion|opinions|commentary|columns?|columnists?|editorials?|op-?eds?|analysis|perspective)(/|-)", re.I)
 OPINION_TITLE = re.compile(r"^(opinion|analysis|commentary|editorial|column|op-ed)\s*[:|]", re.I)
+
+
+def side_of(feed):
+    pew = feed.get("pew")
+    if not pew:
+        return "unplaced"
+    share = pew["rep"] / (pew["rep"] + pew["dem"])
+    return "left" if share < LEFT_BELOW else "right" if share > RIGHT_ABOVE else "center"
 
 
 def is_opinion(art):
@@ -97,6 +120,11 @@ def main():
     vectors /= np.linalg.norm(vectors, axis=1, keepdims=True)
     clusters = group(vectors, [hours(a) for a in news])
 
+    feeds = json.loads((ROOT / "pipeline/feeds.json").read_text())
+    side = {f["source"]: side_of(f) for f in feeds["feeds"]}
+    working = {f["source"] for f in scan.get("feeds", []) if f["ok"]}
+    roster = {k: sorted(src for src in working if side.get(src, "unplaced") == k) for k in (*SIDES, "unplaced")}
+
     stories = []
     for idx in clusters:
         arts = [news[i] for i in idx]
@@ -106,27 +134,50 @@ def main():
         # Working title: the article closest to the story's centre of meaning.
         centre = vectors[idx].mean(axis=0)
         lead = arts[int(np.argmax(vectors[idx] @ centre))]
+        coverage = {k: [src for src in sources if side.get(src, "unplaced") == k] for k in (*SIDES, "unplaced")}
+        shares = [len(coverage[k]) / len(roster[k]) if roster[k] else 0.0 for k in SIDES]
         stories.append({
+            "_idx": idx,
             "working_title": lead["title"],
             "outlets": len(sources),
             "sources": sources,
+            "coverage": coverage,
+            "balance_score": round(sum(shares) / len(SIDES), 4),
             "articles": [{"source": a["source"], "title": a["title"], "url": a["url"], "published": a["published"]}
                          for a in sorted(arts, key=lambda a: a["published"] or "")],
         })
-    stories.sort(key=lambda s: (s["outlets"], len(s["articles"])), reverse=True)
+    stories.sort(key=lambda s: (s["balance_score"], s["outlets"], len(s["articles"])), reverse=True)
+    for n, st in enumerate(stories):
+        st["id"] = n
+        st["related"] = []
+        st["related_to"] = None
+        for earlier in stories[:n]:
+            if earlier["related_to"] is None and float((vectors[st["_idx"]] @ vectors[earlier["_idx"]].T).mean()) >= RELATED:
+                st["related_to"] = earlier["id"]
+                earlier["related"].append(n)
+                break
+    for st in stories:
+        del st["_idx"]
     out = {
         "scanned_at": scan["fetched_at"],
         "articles_scanned": len(articles),
-        "feeds": scan.get("feeds", []),
-        "method": {"model": MODEL, "threshold": THRESHOLD, "window_hours": WINDOW_HOURS, "linkage": "average"},
+        "feeds": [{**f, "side": side.get(f["source"], "unplaced")} for f in scan.get("feeds", [])],
+        "method": {"model": MODEL, "threshold": THRESHOLD, "window_hours": WINDOW_HOURS, "linkage": "average", "related": RELATED},
+        "placement": {"source": feeds["placement_source"], "left_below": LEFT_BELOW, "right_above": RIGHT_ABOVE,
+                      "measure": "Republican users / (Republican + Democratic users)"},
+        "roster": roster,
         "count": len(stories),
         "opinion_excluded": opinion,
         "stories": stories,
     }
     (ROOT / "data/stories.json").write_text(json.dumps(out, indent=1))
     print(f"{len(stories)} stories covered by 2+ outlets -> data/stories.json ({opinion} opinion pieces kept out)\n")
-    for s in stories[:10]:
-        print(f"  {s['outlets']:>2} outlets  {s['working_title'][:90]}")
+    print("  roster: " + " · ".join(f"{k} {len(roster[k])}" for k in (*SIDES, "unplaced")) + "\n")
+    for s in [s for s in stories if s["related_to"] is None][:8]:
+        c = " ".join(f"{k[0].upper()}{len(s['coverage'][k])}/{len(roster[k])}" for k in SIDES)
+        print(f"  {s['balance_score']:.2f}  {c}  {s['working_title'][:66]}")
+        for r in s["related"]:
+            print(f"        related: {stories[r]['working_title'][:66]}")
     return 0
 
 
