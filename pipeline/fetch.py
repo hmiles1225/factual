@@ -81,7 +81,7 @@ def main():
     feeds = json.loads((ROOT / "pipeline/feeds.json").read_text())["feeds"]
     with ThreadPoolExecutor(max_workers=8) as pool:
         results = list(pool.map(fetch, feeds))
-    articles, failed = [], 0
+    articles, failed, status = [], 0, []
     for source, items, err in results:
         if err:
             failed += 1
@@ -89,12 +89,13 @@ def main():
         else:
             print(f"  ok    {source:<22} {len(items)} articles")
             articles.extend(items)
+        status.append({"source": source, "ok": not err, "articles": len(items), "error": err})
     seen, unique = set(), []
     for a in articles:
         if a["url"] not in seen:
             seen.add(a["url"])
             unique.append(a)
-    out = {"fetched_at": datetime.now(timezone.utc).isoformat(), "count": len(unique), "articles": unique}
+    out = {"fetched_at": datetime.now(timezone.utc).isoformat(), "count": len(unique), "feeds": status, "articles": unique}
     (ROOT / "data").mkdir(exist_ok=True)
     (ROOT / "data/articles.json").write_text(json.dumps(out, indent=1))
     print(f"\n{len(unique)} articles from {len(feeds) - failed} of {len(feeds)} feeds -> data/articles.json")

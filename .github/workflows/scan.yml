@@ -1,7 +1,7 @@
-# Hourly scan: fetch feeds, group articles into stories, publish the JSON.
+# Hourly scan: fetch feeds, group articles into stories, publish the site and its JSON.
 #
 # Secrets (repo Settings > Secrets and variables > Actions):
-#   FTP_HOST, FTP_USER, FTP_PASSWORD  Hostinger FTP account limited to the subdomain folder
+#   FTP_HOST, FTP_USER, FTP_PASSWORD  Hostinger FTP account limited to public_html/factual/
 # Until all three exist, the scan still runs and the deploy step is skipped with a notice.
 #
 # GitHub pauses scheduled workflows in a public repo after 60 days with no commits.
@@ -10,6 +10,8 @@ name: scan
 on:
   schedule:
     - cron: "17 * * * *"   # off the top of the hour, when GitHub's scheduler is busiest
+  push:
+    branches: [main]   # a push is a deploy
   workflow_dispatch:
 
 concurrency:
@@ -67,13 +69,16 @@ jobs:
           # Hostinger's FTPS certificate is issued to *.hstgr.io, not to our domain or IP.
           # Connect to FTP_HOST but verify the certificate as hstgr.io, so TLS stays verified.
           # Upload under a temp name, then rename, so a reader never gets half a file.
-          # The rename runs after curl has changed into data/, so it uses the bare name.
-          for f in data/*.json; do
-            name=$(basename "$f")
+          # The rename runs after curl has changed into the file's folder, so it uses the bare name.
+          put() {  # put <local file> <remote path>
+            name=$(basename "$2")
             curl --fail --silent --show-error --ssl-reqd --ftp-create-dirs \
               --connect-to "hstgr.io:21:$FTP_HOST:21" \
               --user "$FTP_USER:$FTP_PASSWORD" \
-              -T "$f" "ftp://hstgr.io/data/$name.tmp" \
+              -T "$1" "ftp://hstgr.io/$2.tmp" \
               -Q "-RNFR $name.tmp" -Q "-RNTO $name"
-            echo "uploaded $name"
-          done
+            echo "uploaded $2"
+          }
+          # The site first, then the data it reads.
+          (cd web && find . -type f | sed 's|^\./||') | while read -r rel; do put "web/$rel" "$rel"; done
+          for f in data/*.json; do put "$f" "data/$(basename "$f")"; done

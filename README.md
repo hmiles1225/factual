@@ -22,4 +22,13 @@ python3 -m venv .venv
 .venv/bin/python pipeline/fetch.py && .venv/bin/python pipeline/cluster.py
 ```
 
-`.github/workflows/scan.yml` runs both stages every hour and uploads `data/*.json` over FTPS.
+## The site
+
+`web/` is the front end: static HTML, CSS and JS that read `data/stories.json`. No build step.
+Fonts are self-hosted (SIL Open Font License), so readers' browsers never call Google.
+Caching rules are in `web/.htaccess`.
+
+## Deploy
+
+`.github/workflows/scan.yml` runs both stages every hour and on every push to `main`, then uploads
+`web/` and `data/*.json` over FTPS to https://hestonmiles.com/factual/.

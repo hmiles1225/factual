@@ -87,7 +87,8 @@ def group(vectors, times):
 
 
 def main():
-    articles = json.loads((ROOT / "data/articles.json").read_text())["articles"]
+    scan = json.loads((ROOT / "data/articles.json").read_text())
+    articles = scan["articles"]
     news = [a for a in articles if not is_opinion(a)]
     opinion = len(articles) - len(news)
 
@@ -114,6 +115,9 @@ def main():
         })
     stories.sort(key=lambda s: (s["outlets"], len(s["articles"])), reverse=True)
     out = {
+        "scanned_at": scan["fetched_at"],
+        "articles_scanned": len(articles),
+        "feeds": scan.get("feeds", []),
         "method": {"model": MODEL, "threshold": THRESHOLD, "window_hours": WINDOW_HOURS, "linkage": "average"},
         "count": len(stories),
         "opinion_excluded": opinion,
