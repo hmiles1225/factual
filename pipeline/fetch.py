@@ -19,11 +19,19 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 UA = "fACTUAL-scan/0.1 (+https://hestonmiles.com/factual/)"
 ATOM = "{http://www.w3.org/2005/Atom}"
+SITEMAP = "{http://www.sitemaps.org/schemas/sitemap/0.9}"
+NEWS = "{http://www.google.com/schemas/sitemap-news/0.9}"
 # python.org builds on macOS ship without CA certs; fall back to the system bundle.
 _CA = "/etc/ssl/cert.pem"
 SSL_CTX = ssl.create_default_context(cafile=_CA) if os.path.exists(_CA) else ssl.create_default_context()
 # Below this share of working feeds, the scan fails so the site keeps its last good data.
 MIN_FEED_SHARE = 2 / 3
+# A feed whose newest item is older than this has stopped updating. It counts as failed,
+# so a dead feed can never pass old stories off as today's news.
+MAX_FEED_AGE_HOURS = 72
+# Every outlet is read over the same window, so a long feed can't make one outlet look
+# like it covers more stories than another.
+MAX_ITEM_AGE_HOURS = 48
 
 
 def clean(text):
@@ -64,6 +72,17 @@ def parse(xml_bytes, source):
             "published": when(it.findtext(f"{ATOM}updated") or it.findtext(f"{ATOM}published")),
             "summary": clean(it.findtext(f"{ATOM}summary"))[:500],
         })
+    for it in root.iter(f"{SITEMAP}url"):  # Google News sitemap (outlets with no RSS)
+        news = it.find(f"{NEWS}news")
+        if news is None:
+            continue
+        items.append({
+            "source": source,
+            "title": clean(news.findtext(f"{NEWS}title")),
+            "url": (it.findtext(f"{SITEMAP}loc") or "").strip(),
+            "published": when(news.findtext(f"{NEWS}publication_date")),
+            "summary": "",
+        })
     return [i for i in items if i["title"] and i["url"]]
 
 
@@ -72,6 +91,15 @@ def fetch(feed):
     try:
         with urllib.request.urlopen(req, timeout=20, context=SSL_CTX) as r:
             items = parse(r.read(), feed["source"])
+        dated = [i["published"] for i in items if i["published"]]
+        if not dated:
+            return feed["source"], [], "no dated items"
+        newest = max(dated)
+        age = (datetime.now(timezone.utc) - datetime.fromisoformat(newest)).total_seconds() / 3600
+        if age > MAX_FEED_AGE_HOURS:
+            return feed["source"], [], f"stale: newest item {newest[:10]}"
+        cutoff = datetime.now(timezone.utc).timestamp() - MAX_ITEM_AGE_HOURS * 3600
+        items = [i for i in items if i["published"] and datetime.fromisoformat(i["published"]).timestamp() >= cutoff]
         return feed["source"], items, None
     except Exception as e:  # report every failure; never hide a dead feed
         return feed["source"], [], f"{type(e).__name__}: {e}"[:120]
