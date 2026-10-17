@@ -1,0 +1,23 @@
+{
+  "_note": "Starter list for testing the fetch stage. Outlet lean is never set by hand here; placement comes from the published method (word choice + reader surveys). Add or remove outlets in the open, with a changelog entry.",
+  "feeds": [
+    {"source": "NPR", "url": "https://feeds.npr.org/1001/rss.xml"},
+    {"source": "Fox News", "url": "https://moxie.foxnews.com/google-publisher/latest.xml"},
+    {"source": "BBC News", "url": "https://feeds.bbci.co.uk/news/world/us_and_canada/rss.xml"},
+    {"source": "The Hill", "url": "https://thehill.com/feed/"},
+    {"source": "New York Times", "url": "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml"},
+    {"source": "New York Post", "url": "https://nypost.com/feed/"},
+    {"source": "The Guardian US", "url": "https://www.theguardian.com/us-news/rss"},
+    {"source": "CBS News", "url": "https://www.cbsnews.com/latest/rss/main"},
+    {"source": "Breitbart", "url": "https://feeds.feedburner.com/breitbart"},
+    {"source": "Reason", "url": "https://reason.com/feed/"},
+    {"source": "Politico", "url": "https://rss.politico.com/politics-news.xml"},
+    {"source": "ABC News", "url": "https://feeds.abcnews.com/abcnews/topstories"},
+    {"source": "Wall Street Journal", "url": "https://feeds.a.dj.com/rss/RSSWorldNews.xml"},
+    {"source": "PBS NewsHour", "url": "https://www.pbs.org/newshour/feeds/rss/headlines"},
+    {"source": "The Federalist", "url": "https://thefederalist.com/feed/"},
+    {"source": "Vox", "url": "https://www.vox.com/rss/index.xml"},
+    {"source": "Washington Examiner", "url": "https://www.washingtonexaminer.com/feed/"},
+    {"source": "Texas Tribune", "url": "https://www.texastribune.org/feeds/main/"}
+  ]
+}

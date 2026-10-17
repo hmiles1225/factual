@@ -1,0 +1,25 @@
+# fACTUAL scan
+
+The pipeline behind fACTUAL. Its method is public so anyone can check it.
+
+## Stages
+
+1. **Fetch** (`pipeline/fetch.py`). Reads every feed in `pipeline/feeds.json` and prints a line per
+   feed, so a blocked feed shows up instead of going missing. If fewer than two thirds of the
+   feeds work, the scan fails and the site keeps its last good data.
+2. **Group** (`pipeline/cluster.py`). Groups articles about the same event by meaning, using a
+   small local embedding model (`BAAI/bge-small-en-v1.5`). A story needs two or more outlets.
+   Opinion pieces never join news stories. Articles more than 72 hours apart are never grouped.
+   The model, threshold and window are written into every `stories.json`.
+
+Checking (stage 3) is not built yet.
+
+## Run it
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/python pipeline/fetch.py && .venv/bin/python pipeline/cluster.py
+```
+
+`.github/workflows/scan.yml` runs both stages every hour and uploads `data/*.json` over FTPS.

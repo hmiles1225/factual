@@ -1,0 +1,76 @@
+# Hourly scan: fetch feeds, group articles into stories, publish the JSON.
+#
+# Secrets (repo Settings > Secrets and variables > Actions):
+#   FTP_HOST, FTP_USER, FTP_PASSWORD  Hostinger FTP account limited to the subdomain folder
+# Until all three exist, the scan still runs and the deploy step is skipped with a notice.
+#
+# GitHub pauses scheduled workflows in a public repo after 60 days with no commits.
+name: scan
+
+on:
+  schedule:
+    - cron: "17 * * * *"   # off the top of the hour, when GitHub's scheduler is busiest
+  workflow_dispatch:
+
+concurrency:
+  group: scan
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      FASTEMBED_CACHE_PATH: ${{ github.workspace }}/.fastembed
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Cache embedding model
+        uses: actions/cache@v6
+        with:
+          path: .fastembed
+          key: fastembed-${{ hashFiles('requirements.txt', 'pipeline/cluster.py') }}
+
+      - run: pip install -r requirements.txt
+
+      - name: Fetch
+        run: python pipeline/fetch.py
+
+      - name: Group into stories
+        run: python pipeline/cluster.py
+
+      - name: Keep a copy of this run's output
+        uses: actions/upload-artifact@v7
+        with:
+          name: data-${{ github.run_id }}
+          path: data/*.json
+          retention-days: 3
+
+      - name: Deploy to Hostinger
+        env:
+          FTP_HOST: ${{ secrets.FTP_HOST }}
+          FTP_USER: ${{ secrets.FTP_USER }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        run: |
+          if [ -z "$FTP_HOST" ] || [ -z "$FTP_USER" ] || [ -z "$FTP_PASSWORD" ]; then
+            echo "::notice::FTP secrets not set. Skipping deploy."
+            exit 0
+          fi
+          # Upload under a temp name, then rename, so a reader never gets half a file.
+          # The rename runs after curl has changed into data/, so it uses the bare name.
+          for f in data/*.json; do
+            name=$(basename "$f")
+            curl --fail --silent --show-error --ssl-reqd --ftp-create-dirs \
+              --user "$FTP_USER:$FTP_PASSWORD" \
+              -T "$f" "ftp://$FTP_HOST/data/$name.tmp" \
+              -Q "-RNFR $name.tmp" -Q "-RNTO $name"
+            echo "uploaded $name"
+          done
