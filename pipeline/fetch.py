@@ -17,7 +17,7 @@ from email.utils import parsedate_to_datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-UA = "fACTUAL-scan/0.1 (+https://factual.hestonmiles.com)"
+UA = "fACTUAL-scan/0.1 (+https://hestonmiles.com/factual/)"
 ATOM = "{http://www.w3.org/2005/Atom}"
 # python.org builds on macOS ship without CA certs; fall back to the system bundle.
 _CA = "/etc/ssl/cert.pem"
