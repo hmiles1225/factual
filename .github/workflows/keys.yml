@@ -1,0 +1,54 @@
+# Checks that the model API keys work: one tiny call to each provider.
+# Results go out as annotations (visible on the run page). Keys are never printed.
+# Runs when this file changes, or by hand from the Actions tab.
+name: keys
+
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/keys.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+    steps:
+      - name: Claude
+        run: |
+          [ -n "$ANTHROPIC_API_KEY" ] || { echo "::error::ANTHROPIC_API_KEY is not set"; exit 1; }
+          code=$(curl -sS -o models.json -w '%{http_code}' https://api.anthropic.com/v1/models \
+            -H "x-api-key: $ANTHROPIC_API_KEY" -H "anthropic-version: 2023-06-01")
+          if [ "$code" != 200 ]; then
+            echo "::error::Claude key rejected listing models (HTTP $code): $(jq -r '.error.message // empty' models.json | head -c 300)"; exit 1
+          fi
+          echo "::notice::Claude models available: $(jq -r '[.data[].id] | join(", ")' models.json)"
+          code=$(curl -sS -o msg.json -w '%{http_code}' https://api.anthropic.com/v1/messages \
+            -H "Content-Type: application/json" -H "x-api-key: $ANTHROPIC_API_KEY" -H "anthropic-version: 2023-06-01" \
+            -d '{"model":"claude-opus-5-5","max_tokens":1024,"output_config":{"effort":"low"},
+                 "messages":[{"role":"user","content":"Reply with the single word: ok"}]}')
+          if [ "$code" != 200 ]; then
+            echo "::error::Claude message call failed (HTTP $code): $(jq -r '.error.message // empty' msg.json | head -c 300)"; exit 1
+          fi
+          echo "::notice::Claude works: claude-opus-5-5 answered, stop_reason=$(jq -r .stop_reason msg.json), tokens in/out=$(jq -r '"\(.usage.input_tokens)/\(.usage.output_tokens)"' msg.json)"
+
+      - name: Gemini
+        if: always()
+        run: |
+          [ -n "$GEMINI_API_KEY" ] || { echo "::error::GEMINI_API_KEY is not set"; exit 1; }
+          # Gemini 3.x needs the key as a query parameter; the x-goog-api-key header 404s.
+          model=gemini-3.6-flash
+          code=$(curl -sS -o gem.json -w '%{http_code}' \
+            "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$GEMINI_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"contents":[{"parts":[{"text":"Reply with the single word: ok"}]}]}')
+          if [ "$code" != 200 ]; then
+            echo "::error::Gemini call failed (HTTP $code): $(jq -r '.error.message // empty' gem.json 2>/dev/null | head -c 300)"; exit 1
+          fi
+          echo "::notice::Gemini works: $model answered, finishReason=$(jq -r '.candidates[0].finishReason' gem.json), tokens in/out=$(jq -r '"\(.usageMetadata.promptTokenCount)/\(.usageMetadata.candidatesTokenCount // 0)"' gem.json)"
