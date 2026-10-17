@@ -64,13 +64,16 @@ jobs:
             echo "::notice::FTP secrets not set. Skipping deploy."
             exit 0
           fi
+          # Hostinger's FTPS certificate is issued to *.hstgr.io, not to our domain or IP.
+          # Connect to FTP_HOST but verify the certificate as hstgr.io, so TLS stays verified.
           # Upload under a temp name, then rename, so a reader never gets half a file.
           # The rename runs after curl has changed into data/, so it uses the bare name.
           for f in data/*.json; do
             name=$(basename "$f")
             curl --fail --silent --show-error --ssl-reqd --ftp-create-dirs \
+              --connect-to "hstgr.io:21:$FTP_HOST:21" \
               --user "$FTP_USER:$FTP_PASSWORD" \
-              -T "$f" "ftp://$FTP_HOST/data/$name.tmp" \
+              -T "$f" "ftp://hstgr.io/data/$name.tmp" \
               -Q "-RNFR $name.tmp" -Q "-RNTO $name"
             echo "uploaded $name"
           done
