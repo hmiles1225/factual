@@ -163,7 +163,10 @@ details[open] > summary::after { content: "\2212"; }
 }
 @media (min-width: 960px) {
   .stories { grid-template-columns: 1fr 1fr; gap: 24px; }
-  .story-lead { grid-column: 1 / -1; display: grid; grid-template-columns: 7fr 5fr; column-gap: 48px; row-gap: 20px; padding: 40px; }
+  .story-lead { grid-column: 1 / -1; padding: 40px; }
+  .story-lead:has(.checks) { display: grid; grid-template-columns: 7fr 5fr; column-gap: 48px; row-gap: 20px; }
+  .story-lead .headline { max-width: 22ch; }
+  .story-lead .gist { max-width: 62ch; }
   .story-lead .checks { align-self: start; border-top: 0; padding-top: 34px; }
   .story-lead .story-foot { grid-column: 1 / -1; }
   .more-list { grid-template-columns: 1fr 1fr; column-gap: 40px; }
