@@ -1,13 +1,21 @@
-// Renders the latest scan: Today (index.html) and one story (story.html?s=<id>).
+// Renders the latest scan: Today (index.html), one story (story.html?s=<id>[&d=<day>]) and the
+// archive (archive.html), which keeps every story that was on Today, by day.
 // Every string from a feed or a model goes in through textContent, never innerHTML,
 // so a headline or a claim can't inject markup.
 //
-// Reading order on every story: the story the coverage agrees on, then what's true or not
-// (only claims the evidence decided), then what's still open. Everything else is folded away.
+// Reading order on every story: common ground (what both sides report), who covered it and when,
+// where the left and the right differ with each side's claim checked, then the values questions.
 "use strict";
 
-const LEAD = 5;
-const WORDS = ["no", "one", "two", "three", "four", "five"];
+const WORDS = ["no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen"];
+// Today's sections. Politics moves by the day; the others are grouped over the week.
+const TOPICS = [
+  { key: "politics", name: "Politics", span: "Today" },
+  { key: "environment", name: "Environment", span: "This week" },
+  { key: "science", name: "Science", span: "This week" },
+  { key: "health", name: "Health", span: "This week" },
+];
+const topicName = k => (TOPICS.find(t => t.key === k) || { name: "" }).name;
 const DECIDED = ["Holds up", "Missing context", "Doesn't hold up"];
 
 // Verdicts: always a glyph and a word, never color alone (Figma Foundations 5:119).
@@ -33,7 +41,8 @@ const stamp = iso => {
     ? clock(iso) : d.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 };
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
-const storyHref = story => `story.html?s=${encodeURIComponent(story.sid)}`;
+const storyHref = (story, day) => `story.html?s=${encodeURIComponent(story.sid)}${day ? `&d=${day}` : ""}`;
+const dayName = d => new Date(`${d}T12:00:00`).toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
 const lead = story => story.articles.find(a => a.title === story.working_title) || story.articles[0];
 const claimOf = (lib, key) => (lib && lib.claims && lib.claims[key]) || null;
 const listNames = (names, max = 4) => names.length <= max
@@ -179,9 +188,9 @@ function figure(img, cls) {
   return f;
 }
 
-function storyCard(story, i, data) {
-  const li = el("li", i === 0 ? "story story-lead" : "story");
-  if (i === 0 && story.image) li.append(figure(story.image, "lead-photo"));
+function storyCard(story, i, data, isLead) {
+  const li = el("li", isLead ? "story story-lead" : "story");
+  if (isLead && story.image) li.append(figure(story.image, "lead-photo"));
   const main = el("div", "story-main");
   main.append(el("p", "story-num", String(i + 1).padStart(2, "0")));
   const h = el("h2", "headline");
@@ -216,24 +225,82 @@ function storyCard(story, i, data) {
 
 function renderToday(data) {
   const feeds = data.feeds || [];
-  $("today-date").textContent = "Politics · " + new Date(data.scanned_at).toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
+  $("today-date").textContent = new Date(data.scanned_at).toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
   $("scanline").textContent = `Updated ${clock(data.scanned_at)}`;
 
-  // Only stories with a written summary (agreed facts) are shown. Never a bare headline.
-  const summarized = data.stories.filter(s => s.related_to === null && s.topic === "politics" && s.brief && s.brief.agreed && s.brief.agreed.length);
-  const leadStories = summarized.slice(0, LEAD);
-  if (!leadStories.length) {
-    $("today-title").textContent = "Today’s stories are being summarized.";
-    $("stories").replaceWith(el("p", "dek", "Check back shortly. A story appears here once the coverage has been summarized."));
-  } else {
-    $("today-count").textContent = WORDS[leadStories.length] || String(leadStories.length);
-    leadStories.forEach((s, i) => $("stories").append(storyCard(s, i, data)));
+  // Only stories with a written summary, chosen by the scan for Today (covered by both sides). Never a bare headline.
+  const shown = s => s.related_to === null && s.on_today && s.brief && s.brief.agreed && s.brief.agreed.length;
+  let total = 0;
+  const nav = $("topic-nav");
+  for (const t of TOPICS) {
+    const list = data.stories.filter(s => shown(s) && s.topic === t.key);
+    total += list.length;
+    const sec = el("section", "topic-section");
+    sec.id = t.key;
+    const head = el("div", "topic-head");
+    head.append(el("h2", "topic-name", t.name), el("p", "topic-span", `${t.span} \u00b7 ${list.length ? `${WORDS[list.length] || list.length} ${list.length === 1 ? "story" : "stories"}` : "none yet"}`));
+    sec.append(head);
+    if (list.length) {
+      const ol = el("ol", "stories");
+      ol.setAttribute("aria-label", `${t.name} stories`);
+      list.forEach((s, i) => ol.append(storyCard(s, i, data, t.key === "politics" && i === 0)));
+      sec.append(ol);
+    } else {
+      sec.append(el("p", "topic-empty", `No ${t.name.toLowerCase()} story ${t.span === "Today" ? "today" : "this week"} has been covered by both left- and right-leaning outlets yet. We only summarize stories both sides are covering.`));
+    }
+    $("sections").append(sec);
+    const chip = el("a", "topic-chip", t.name);
+    chip.href = `#${t.key}`;
+    chip.append(el("span", "topic-count", String(list.length)));
+    nav.append(chip);
   }
+  $("today-count").textContent = WORDS[total] || String(total);
 
   const ok = feeds.filter(f => f.ok).sort((a, b) => a.source.localeCompare(b.source));
   $("feeds").append(el("p", "feeds-list", ok.map(f => f.source).join(", ")));
   const down = feeds.filter(f => !f.ok).map(f => f.source);
   if (down.length) $("feeds").append(el("p", "feeds-down", `Not reachable in the last scan: ${down.join(", ")}.`));
+}
+
+/* ---------- Archive ---------- */
+
+function renderArchive(index) {
+  const box = $("archive-days");
+  const days = (index && index.days) || [];
+  if (!days.length) { box.append(el("p", "topic-empty", "The archive starts with today. Stories are kept here once they have been on Today.")); return; }
+  days.forEach((d, n) => {
+    const det = el("details", "arch-day");
+    const sum = el("summary");
+    sum.append(el("span", "arch-date", dayName(d.date)), el("span", "arch-count", `${d.count} ${d.count === 1 ? "story" : "stories"}`));
+    det.append(sum);
+    const body = el("div", "arch-body");
+    det.append(body);
+    let loaded = false;
+    det.addEventListener("toggle", () => {
+      if (!det.open || loaded) return;
+      loaded = true;
+      getJSON(`data/archive/${d.date}.json`).then(arch => {
+        const stories = Object.values(arch.stories || {});
+        for (const t of TOPICS) {
+          const list = stories.filter(s => s.topic === t.key);
+          if (!list.length) continue;
+          body.append(el("h3", "arch-topic", t.name));
+          const ul = el("ul", "arch-list");
+          for (const s of list) {
+            const li = el("li");
+            const a = el("a", "arch-link", s.working_title);
+            a.href = storyHref(s, d.date);
+            const cg = ((s.brief && s.brief.agreed) || []).filter(acrossSides).length;
+            li.append(a, el("span", "arch-meta", `${s.sources.length} outlets${cg ? ` \u00b7 ${cg} common-ground ${cg === 1 ? "fact" : "facts"}` : ""}`));
+            ul.append(li);
+          }
+          body.append(ul);
+        }
+      }).catch(() => body.append(el("p", "topic-empty", "This day could not be loaded.")));
+    });
+    if (n === 0) det.open = true;
+    box.append(det);
+  });
 }
 
 /* ---------- One story ---------- */
@@ -267,45 +334,123 @@ function claimDetails(c) {
   return det;
 }
 
-// Does a disagreement follow the left-right line? Read from where each version's outlets sit, never by hand.
+const meanLean = (outlets, leanOf) => { const v = outlets.map(o => leanOf[o]).filter(x => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+
+// Does a disagreement follow the left-right line? Read from where each side's outlets sit, never by hand.
 function splitLine(pos, leanOf) {
-  const avg = p => { const v = p.outlets.map(o => leanOf[o]).filter(x => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
-  const [a, b] = pos.map(avg);
+  const [a, b] = pos.map(p => meanLean(p.outlets, leanOf));
   if (a == null || b == null) return null;
   const shared = pos[0].outlets.filter(o => pos[1].outlets.includes(o));
   const both = shared.length ? ` ${listNames(shared, 3)} reported both.` : "";
-  if (Math.min(a, b) < 0.45 && Math.max(a, b) > 0.55) {
-    const left = a < b ? 1 : 2;
-    return `This one splits along left and right: version ${left} comes mostly from left-leaning outlets, version ${3 - left} from right-leaning ones.${both}`;
-  }
-  const n = [sideName(pos[0].outlets, leanOf), sideName(pos[1].outlets, leanOf)];
+  if (Math.min(a, b) < 0.45 && Math.max(a, b) > 0.55) return `This one splits along left and right.${both}`;
+  const n = pos.map(p => sideName(p.outlets, leanOf));
   const same = n[0] === n[1] && /^(Left|Right)-leaning/.test(n[0]) ? n[0].toLowerCase() : "outlets with similar audiences";
-  return `Not a left-right split: both versions come from ${same}.${both}`;
+  return `Not a left-right split: both accounts come from ${same}.${both}`;
 }
 
-// One disagreement: the point, whether it is partisan, and each version with where its outlets sit and its claim checked.
+// The words that are the actual difference, in bold. The phrase was checked in code to be in the text.
+function withCrux(node, text, crux) {
+  const i = crux ? text.indexOf(crux) : -1;
+  if (i < 0) { node.textContent = text; return node; }
+  node.append(document.createTextNode(text.slice(0, i)), el("strong", null, crux), document.createTextNode(text.slice(i + crux.length)));
+  return node;
+}
+
+// One disagreement: the point, whether it is partisan, and each side's account with where its outlets
+// sit and its claim checked. The more left-leaning account always comes first, so left reads left.
 function differenceBlock(d, lib, leanOf) {
   const art = el("article", "diff");
   art.append(el("h3", "diff-point", d.point));
-  const pos = d.positions.slice(0, 2);
+  const pos = d.positions.slice(0, 2).sort((p, q) => (meanLean(p.outlets, leanOf) ?? 0.5) - (meanLean(q.outlets, leanOf) ?? 0.5));
   const line = pos.length === 2 ? splitLine(pos, leanOf) : null;
   if (line) art.append(el("p", "diff-split", line));
+  const names = pos.map(p => sideName(p.outlets, leanOf));
+  const heads = names.length === 2 && names[0] === names[1] ? [`Some ${names[0].toLowerCase()}`, `Other ${names[1].toLowerCase()}`] : names;
   const cols = el("div", "sides");
   pos.forEach((p, i) => {
     const col = el("div", "side");
-    col.append(el("p", "side-name", `Version ${i + 1} \u00b7 ${sideName(p.outlets, leanOf)}`), el("p", "side-says", p.says));
-    const pts = p.outlets.filter(o => leanOf[o] != null).map(o => ({ name: o, lean: leanOf[o], style: "fill", note: `version ${i + 1}` }));
-    if (pts.length) col.append(spectrum(pts, null, `Version ${i + 1} outlets by audience: ${p.outlets.join(", ")}`));
+    const head = el("p", "side-head");
+    head.append(el("span", "side-tag", heads[i]), document.createTextNode(" say"));
+    col.append(head, withCrux(el("p", "side-says"), p.says, p.crux));
+    const pts = p.outlets.filter(o => leanOf[o] != null).map(o => ({ name: o, lean: leanOf[o], style: "fill", note: heads[i].toLowerCase() }));
+    if (pts.length) col.append(spectrum(pts, null, `${heads[i]}: ${p.outlets.join(", ")}, placed by audience`));
     col.append(el("p", "side-outlets", listNames(p.outlets, 4)));
     const c = claimOf(lib, p.check);
     if (c) col.append(claimDetails(c));
-    else if (p.checkable_claim) col.append(el("p", "side-pending", "Checking this version\u2019s claim against primary sources."));
+    else if (p.checkable_claim) col.append(el("p", "side-pending", "Checking this claim against primary sources."));
     cols.append(col);
   });
   art.append(cols);
   const shared = claimOf(lib, d.check);  // older briefs: one claim for the whole difference
   if (shared) art.append(claimDetails(shared));
   return art;
+}
+
+// When each side covered it: one row per side, one dot per article, on a shared time axis.
+function timeline(articles, sideOf, ariaLabel) {
+  const rows = [["left", "Left"], ["center", "Center"], ["right", "Right"]]
+    .map(([k, label]) => ({ k, label, arts: articles.filter(a => a.published && sideOf[a.source] === k) }))
+    .filter(r => r.arts.length);
+  const fig = el("figure", "timeline");
+  if (!rows.length) return fig;
+  const wrap = el("div", "spectrum-wrap");
+  const tip = el("div", "chart-tip");
+  tip.setAttribute("role", "status");
+  fig.append(wrap);
+  const ts = rows.flatMap(r => r.arts.map(a => Date.parse(a.published)));
+  let t0 = Math.min(...ts), t1 = Math.max(...ts);
+  if (t1 - t0 < 2 * 3600e3) { t0 -= 3600e3; t1 += 3600e3; }
+  fig.draw = () => {
+    const W = Math.max(260, Math.round(wrap.clientWidth)), padL = 58, padR = 12, rowH = 30, r = 5;
+    const H = rows.length * rowH + 26;
+    const x = t => padL + (t - t0) / (t1 - t0) * (W - padL - padR);
+    const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, width: W, height: H, class: "chart-svg", role: "group", "aria-label": ariaLabel });
+    rows.forEach((row, i) => {
+      const y = 14 + i * rowH;
+      svg.append(svgEl("line", { x1: padL, x2: W - padR, y1: y + 0.5, y2: y + 0.5, class: "chart-base" }));
+      const lab = svgEl("text", { x: 0, y: y + 4, class: "chart-label" });
+      lab.textContent = row.label;
+      svg.append(lab);
+      for (const a of row.arts) {
+        const px = x(Date.parse(a.published));
+        const g = svgEl("g", { class: "dotg", tabindex: 0, role: "img", "aria-label": `${a.source}, ${stamp(a.published)}: ${a.title}` });
+        g.append(svgEl("circle", { cx: px, cy: y, r: 11, class: "hit" }), svgEl("circle", { cx: px, cy: y, r, class: "dot fill" }));
+        const show = () => {
+          tip.replaceChildren(el("strong", null, `${a.source} \u00b7 ${stamp(a.published)}`), el("span", "chart-tip-src", a.title.length > 70 ? a.title.slice(0, 68) + "\u2026" : a.title));
+          tip.classList.add("on");
+          const tw = tip.offsetWidth;
+          tip.style.left = `${Math.max(0, Math.min(W - tw, px - tw / 2))}px`;
+          tip.style.top = `${y - 10}px`;
+        };
+        const hide = () => tip.classList.remove("on");
+        g.addEventListener("pointerenter", show); g.addEventListener("focus", show);
+        g.addEventListener("pointerleave", hide); g.addEventListener("blur", hide);
+        svg.append(g);
+      }
+    });
+    const days = (t1 - t0) > 2 * 86400e3;
+    const fmt = t => new Date(t).toLocaleString([], days ? { weekday: "short", month: "short", day: "numeric" } : { weekday: "short", hour: "numeric" });
+    for (const [t, anchor] of [[t0, "start"], [t1, "end"]]) {
+      const lab = svgEl("text", { x: x(t), y: H - 4, class: "chart-axis", "text-anchor": anchor });
+      lab.textContent = fmt(t);
+      svg.append(lab);
+    }
+    wrap.replaceChildren(svg, tip);
+  };
+  let t;
+  window.addEventListener("resize", () => { clearTimeout(t); t = setTimeout(fig.draw, 120); });
+  return fig;
+}
+
+// Who reported it first, in plain words, from the article times.
+function firstLine(articles, sideOf) {
+  const first = k => { const t = articles.filter(a => a.published && sideOf[a.source] === k).map(a => Date.parse(a.published)); return t.length ? Math.min(...t) : null; };
+  const l = first("left"), r = first("right");
+  if (l == null || r == null) return null;
+  const h = Math.round(Math.abs(l - r) / 3600e3);
+  if (h < 2) return "Of the articles we read, left- and right-leaning outlets published within two hours of each other.";
+  const span = h >= 48 ? `${Math.round(h / 24)} days` : `${h} hours`;
+  return `Of the articles we read, ${l < r ? "left" : "right"}-leaning outlets published first, ${span} before ${l < r ? "right" : "left"}-leaning outlets.`;
 }
 
 // A fact is common ground when outlets on both the left and the right report it.
@@ -323,14 +468,14 @@ function renderStory(data) {
   const story = data.stories.find(s => s.sid === sid);
   const body = $("story-body");
   if (!story) {
-    $("story-title").textContent = "This story has moved off the latest scan.";
+    $("story-title").textContent = "This story is no longer on Today, and we could not find it in the archive.";
     const back = el("a", "read-more", "See today's stories");
     back.href = "./";
     body.append(back);
     return;
   }
   document.title = `${story.working_title} · fACTUAL`;
-  $("story-meta").textContent = `${story.topic === "politics" ? "Politics · " : ""}Updated ${clock(data.scanned_at)}`;
+  $("story-meta").textContent = `${topicName(story.topic) ? topicName(story.topic) + " \u00b7 " : ""}${data.archiveDay ? `From the archive \u00b7 ${dayName(data.archiveDay)}` : `Updated ${clock(data.scanned_at)}`}`;
   $("story-title").textContent = story.working_title;
   $("story-sub").append(el("p", "byline", `Headline from ${lead(story).source}`));
   if (story.image) $("story-sub").append(figure(story.image, "story-photo"));
@@ -378,12 +523,21 @@ function renderStory(data) {
       [["fill", "Covered this story"], ["ghost", "Did not"]],
       `Outlets that covered this story, placed by audience: ${story.sources.join(", ")}`);
     sc.append(fig);
+    const sideOf = Object.fromEntries((data.feeds || []).map(f => [f.source, f.side]));
+    const tl = timeline(story.articles, sideOf, `When each side published: ${story.articles.length} articles`);
     const unplaced = story.sources.filter(o => leanOf[o] == null);
     const who = sideName(story.sources, leanOf);
     if (/^(Left|Right)-leaning/.test(who)) fig.before(el("p", "diff-split", `Only ${who.toLowerCase()} covered this story.`));
     sc.append(el("p", "block-note", `Each dot is an outlet we read, placed by the share of its regular audience who are Republican (Pew Research Center, 2025).${unplaced.length ? ` Also covered by ${listNames(unplaced, 4)}, which Pew did not survey.` : ""}`));
+    if (tl.draw) {
+      sc.append(el("h3", "sub-title", "When each side covered it"));
+      const fl = firstLine(story.articles, sideOf);
+      if (fl) sc.append(el("p", "diff-split", fl));
+      sc.append(tl);
+    }
     body.append(sc);
     fig.draw();
+    if (tl.draw) tl.draw();
   }
 
   // 3. Where left and right differ, with each side's factual claim checked where possible.
@@ -432,13 +586,37 @@ function renderStory(data) {
 function fail() {
   const box = el("div", "error");
   box.append(el("p", null, "We couldn't load the latest scan. Reload the page in a minute. If it keeps happening, the scan itself may have failed; the last good one stays up when that happens."));
-  ($("stories") || $("story-body")).after(box);
+  ($("sections") || $("story-body") || $("archive-days")).after(box);
 }
 
 const getJSON = (url, optional) => fetch(url, { cache: "no-cache" })
   .then(r => { if (!r.ok) { if (optional) return null; throw new Error(r.status); } return r.json(); })
   .catch(e => { if (optional) return null; throw e; });
 
-Promise.all([getJSON("data/stories.json"), getJSON("data/library.json", true)])
-  .then(([data, library]) => { data.library = library; (document.body.dataset.page === "story" ? renderStory : renderToday)(data); })
-  .catch(fail);
+// An archived day, shaped like a scan so the story page can render it.
+const fromArchive = (arch, day) => ({ stories: Object.values(arch.stories || {}), feeds: arch.feeds, scanned_at: arch.updated_at, archiveDay: day });
+
+async function load() {
+  const page = document.body.dataset.page;
+  if (page === "archive") return renderArchive(await getJSON("data/archive/index.json", true));
+  const library = getJSON("data/library.json", true);
+  const params = new URLSearchParams(location.search);
+  let data;
+  if (page === "story" && params.get("d")) {
+    data = fromArchive(await getJSON(`data/archive/${params.get("d")}.json`), params.get("d"));
+  } else {
+    data = await getJSON("data/stories.json");
+    // A story that has left the live scan is still in the archive: look back up to a week.
+    if (page === "story" && !data.stories.some(s => s.sid === params.get("s"))) {
+      const index = await getJSON("data/archive/index.json", true);
+      for (const d of ((index && index.days) || []).slice(0, 7)) {
+        const arch = await getJSON(`data/archive/${d.date}.json`, true);
+        if (arch && arch.stories && arch.stories[params.get("s")]) { data = fromArchive(arch, d.date); break; }
+      }
+    }
+  }
+  data.library = await library;
+  (page === "story" ? renderStory : renderToday)(data);
+}
+
+load().catch(fail);

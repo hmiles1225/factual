@@ -1,9 +1,11 @@
 """Stage 3 on the live site: what the coverage agrees on, and where it differs.
 
-Runs after cluster.py in the hourly scan. For each of Today's top political stories:
-  1. Gemini reads the outlets' headlines and summaries and writes a brief: facts the coverage agrees
-     on, points where it differs (each side's position, with the outlets that take it), and any
-     values question. Every item must cite the numbered articles it comes from, or it is dropped.
+Runs after cluster.py in the hourly scan. For each topic's top stories covered by both left- and
+right-leaning outlets (politics 5, environment, science and health 3 each):
+  1. Gemini reads the outlets' headlines, summaries and the opening of each article and writes a brief:
+     common ground (facts outlets on both sides state), other agreed facts, points where the coverage
+     differs (each side's position, with the outlets that take it), and any values question. Every item
+     must cite the numbered articles it comes from, or it is dropped.
   2. Agreed facts are confirmed against the cited outlets' own text: a fact stays only if at least
      two different outlets state it. These are consensus reports, labeled as such, not verdicts.
   3. A difference that turns on a fact is checked against primary sources (Gemini checks, code
@@ -21,7 +23,9 @@ import re
 import sys
 import urllib.error
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from pathlib import Path
 
 import numpy as np
@@ -32,21 +36,26 @@ from images import image_for  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 LIBRARY_URL = "https://hestonmiles.com/factual/data/library.json"
-TOP_STORIES = 5
-MAX_CANDIDATES = 8               # political stories tried, in rank order, to find 5 with a summary
-MAX_NEW_PER_SCAN = 4
-MAX_NEW_PER_DAY = 25
-ANTHROPIC_DAILY_USD = 1.00
-GEMINI_DAILY_USD = 1.50
+ARCHIVE_URL = "https://hestonmiles.com/factual/data/archive/"
+TOPIC_QUOTAS = {"politics": 5, "environment": 3, "science": 3, "health": 3}   # Heston's call, 2026-10-18
+EXTRA_CANDIDATES = 3             # stories tried past the quota, in rank order, when one won't summarize
+ARTICLES_PER_BRIEF = 14          # picked round-robin by side, so one side can't fill the brief
+EXCERPT_CHARS = 900              # opening of each article read for the brief; never published
+REBRIEF_HOURS = 6                # a story is re-summarized when a new side joins, else at most this often
+MAX_NEW_PER_SCAN = 5
+MAX_NEW_PER_DAY = 30
+ANTHROPIC_DAILY_USD = 0.75       # ~$3/day in all with Gemini (Heston's call, 2026-10-18)
+GEMINI_DAILY_USD = 2.25
 # One-off raises, approved by Heston for a specific date only. Expires by itself.
-GEMINI_EXTRA_USD = {"2026-10-18": 0.75}   # fill Today with 5 summarized stories after the brief rework
-GEMINI_DAILY_SEARCHES = 150      # Google gives 5,000 free a month across Gemini 3 models
+GEMINI_EXTRA_USD = {}             # date -> extra dollars; none approved beyond the ~$3/day plan
+GEMINI_FREE_SEARCHES = 150      # Google gives 5,000 free a month across Gemini 3 models; ~150 a day
+SEARCH_USD = 0.014               # then $14 per 1,000 searches (ai.google.dev pricing, 2026-10-18), charged to the Gemini cap
 UNDERCOUNT = 1.7                 # our cost log ran this far under the real bill (2026-10-17)
 RECHECK_AFTER_DAYS = 7
 OPUS_TYPICAL_USD = 0.51          # measured mean per Opus second opinion, 2026-10-17 eval
 SAME_CLAIM = 0.93                # embedding similarity at which two wordings are one claim
 MIN_OUTLETS_AGREED = 2           # an agreed fact needs at least this many outlets to state it
-BRIEF_VERSION = "7"              # bump when the brief instructions change, so cached briefs regenerate
+BRIEF_VERSION = "8"              # bump when the brief instructions change, so cached briefs regenerate
 PRICES = {"claude-opus-5-5": (4.00, 20.00, 0.010), "claude-haiku-5-5": (0.10, 0.50, 0), "claude-sonnet-5-5": (2.00, 10.00, 0),
           "gemini-3.8-flash": (0.75, 3.75, 0.0)}   # Gemini searches are tracked by count, not dollars
 
@@ -59,8 +68,9 @@ BRIEF_SCHEMA = _item({
         "point": {"type": "string", "description": "What the coverage differs on, in neutral words."},
         "positions": {"type": "array", "items": _item({
             "says": {"type": "string"}, "articles": _ints,
+            "crux": {"type": "string", "description": "Copied word for word from says: the short phrase that is what this side says differently."},
             "checkable_claim": {"type": "string", "description": "A checkable factual claim this side makes, as one statement, attributed. Else empty."},
-        }, ["says", "articles", "checkable_claim"])},
+        }, ["says", "crux", "articles", "checkable_claim"])},
         "checkable_claim": {"type": "string", "description": "Deprecated; leave empty."},
     }, ["point", "positions", "checkable_claim"])},
     "values_questions": {"type": "array", "items": {"type": "string"}},
@@ -69,22 +79,26 @@ BRIEF_SCHEMA = _item({
 }, ["common_ground", "agreed", "differences", "values_questions", "main_subject"])
 
 BRIEF_PROMPT = """You are writing the neutral brief for one news story, from the numbered coverage
-below (each line: outlet, its audience lean, headline, and summary when there is one).
+below (each line: outlet, its audience lean, headline, its summary when there is one, and the opening
+of the article when we could read it).
 
 Write:
-- common_ground: up to 2 facts that at least one left-leaning AND at least one right-leaning outlet
-  both state in their own headline or summary. Write each at the level of detail both sides give,
-  leaving out any number, quote or framing only one side uses. Even when the sides disagree on why or
-  how, they often agree on what happened (who did what, when): that is common ground. List every
-  article number that states it. Leave it empty if no fact is stated on both sides.
-- agreed: up to 4 facts that several outlets report. Plain, neutral sentences. Prefer facts reported
+- common_ground: 3 to 6 sentences that, read in order, report the story the way a wire service would:
+  what happened, who is involved, when and where, what each named party says, and the key numbers.
+  Use only facts that at least one left-leaning AND at least one right-leaning outlet both state in
+  their own text (headline, summary or opening). Write each sentence at the level of detail both sides
+  give, leaving out any number, quote or framing only one side uses. Even when the sides disagree on
+  why or how, they usually agree on what happened: that is common ground. Each sentence is one fact
+  with every article number that states it. Fewer sentences only if the coverage truly shares less.
+- agreed: up to 3 more facts, not already in common_ground, that several outlets report. Plain, neutral sentences. Prefer facts reported
   by outlets of different leans. When left- and right-leaning outlets both report the same core event,
   write that fact at the level of detail they share: leave out a number, quote or detail only some of
   them give, or make that detail its own fact. List every article number that states the fact.
 - differences: up to 3 points where the coverage differs, especially where left-leaning and
   right-leaning outlets tell it differently (the lean of each outlet is shown in the coverage list): in
   what happened, in a disputed fact, in context left out, or in emphasis. Name the point neutrally, then
-  give each position in neutral words with the article numbers that take it. For each position, if it
+  give each position in neutral words with the article numbers that take it, and copy into crux the
+  few words of that position that are the actual difference (they will be shown in bold). For each position, if it
   rests on a checkable factual claim about the world, write that claim as one statement in its
   checkable_claim, attributed to whoever made it but never to the outlet (write "A federal judge
   approved the warrant", not "The Daily Wire reports a federal judge approved the warrant"), so each
@@ -110,8 +124,8 @@ Coverage:
 
 CONFIRM_SCHEMA = _item({"facts": {"type": "array", "items": _item({"fact": {"type": "integer"}, "stated_by": _ints}, ["fact", "stated_by"])}}, ["facts"])
 CONFIRM_PROMPT = """For each numbered fact, list which numbered articles state it, using ONLY the text of
-those articles below. An article states a fact only if its headline or summary says it; implying it or
-being about the same topic is not enough.
+those articles below. An article states a fact only if its headline, summary or opening says it; implying
+it or being about the same topic is not enough.
 
 Facts:
 {facts}
@@ -158,16 +172,25 @@ def key_of(text):
     return hashlib.sha1(re.sub(r"[^a-z0-9%$.]+", " ", text.lower()).strip().encode()).hexdigest()[:12]
 
 
-def gemini_json(prompt, schema):
+THOUGHTS = {"tokens": 0, "calls": 0}   # thinking tokens this scan, logged so effort can be tuned on data
+
+
+def gemini_json(prompt, schema, thinking=None):
+    """thinking: None keeps the model default (medium on gemini-3.8-flash); "low" for pure matching tasks."""
     key = os.environ["GEMINI_API_KEY"]
-    body = json.dumps({"model": C.GEMINI_MODEL, "input": prompt,
-                       "response_format": {"type": "text", "mime_type": "application/json", "schema": schema}}).encode()
+    req_body = {"model": C.GEMINI_MODEL, "input": prompt,
+                "response_format": {"type": "text", "mime_type": "application/json", "schema": schema}}
+    if thinking:
+        req_body["generation_config"] = {"thinking_level": thinking}
+    body = json.dumps(req_body).encode()
     req = urllib.request.Request(C.GEMINI_URL, data=body, headers={"Content-Type": "application/json", "x-goog-api-key": key})
     with urllib.request.urlopen(req, timeout=120, context=C.SSL_CTX) as r:
         raw = json.loads(r.read())
     texts = []
     C._walk(raw.get("steps", raw), lambda n: texts.append(n["text"]) if isinstance(n, dict) and n.get("type") == "text" and isinstance(n.get("text"), str) else None)
     u = raw.get("usage") or {}
+    THOUGHTS["tokens"] += u.get("thought_tokens") or u.get("total_thought_tokens") or 0
+    THOUGHTS["calls"] += 1
     usage = {"input_tokens": u.get("input_tokens") or u.get("total_input_tokens") or 0,
              "output_tokens": (u.get("output_tokens") or u.get("total_output_tokens") or 0) + (u.get("thought_tokens") or u.get("total_thought_tokens") or 0)}
     return json.loads(raw.get("output_text") or texts[-1]), usage
@@ -234,7 +257,8 @@ def main():
         return spend["gemini_usd"] < gemini_cap
 
     def charge_gemini(usage, searches=0):
-        spend["gemini_usd"] = round(spend["gemini_usd"] + UNDERCOUNT * cost_usd(C.GEMINI_MODEL, usage), 4)
+        paid = max(0, spend["gemini_searches"] + searches - GEMINI_FREE_SEARCHES) - max(0, spend["gemini_searches"] - GEMINI_FREE_SEARCHES)
+        spend["gemini_usd"] = round(spend["gemini_usd"] + UNDERCOUNT * cost_usd(C.GEMINI_MODEL, usage) + paid * SEARCH_USD, 4)
         spend["gemini_searches"] += searches
 
     def charge_anthropic(model, usage, searches=0):
@@ -295,8 +319,7 @@ def main():
         if rec and fresh and not rec.get("pending_second"):
             rec["stories"] = sorted(set(rec.get("stories", [])) | {story_sid})
             return existing
-        if state["new_this_scan"] >= MAX_NEW_PER_SCAN or spend["new_claims"] >= MAX_NEW_PER_DAY \
-                or not gemini_ok() or spend["gemini_searches"] >= GEMINI_DAILY_SEARCHES:
+        if state["new_this_scan"] >= MAX_NEW_PER_SCAN or spend["new_claims"] >= MAX_NEW_PER_DAY or not gemini_ok():
             return existing
         try:
             first = C.check(text, "gemini")
@@ -328,37 +351,37 @@ def main():
         print(f"  {record['verdict']:<16} {text[:80]}")
         return k
 
-    # Walk the political ranking until TOP_STORIES stories have a real summary (agreed facts),
-    # trying at most MAX_CANDIDATES. Only summarized stories are shown on Today.
-    candidates = [s for s in data["stories"] if s.get("related_to") is None and s.get("topic") == "politics"][:MAX_CANDIDATES]
-    summarized = 0
-    for story in candidates:
-        if summarized >= TOP_STORIES:
-            break
-        arts = story["articles"][:14]
-        lines = []
-        for i, a in enumerate(arts):
-            summ = (summaries.get(a["url"]) or "")[:300]
-            lines.append(f"{i + 1}. {a['source']} ({side_of.get(a['source'], 'unplaced')}): {a['title']}" + (f" | {summ}" if summ else ""))
-        coverage = "\n".join(lines)
-        digest = hashlib.sha1((BRIEF_VERSION + coverage).encode()).hexdigest()[:16]
+    def process(story):
+        """Summarize one story (cached unless stale), check its claims, find its image. True if summarized."""
+        arts = pick_articles(story["articles"], side_of, ARTICLES_PER_BRIEF)
+        outlets_now = sorted({a["source"] for a in story["articles"]})
+        sides_now = sorted({side_of.get(o, "unplaced") for o in outlets_now})
         cached = briefs.get(story["sid"])
-        if cached and cached["digest"] == digest:
-            brief = cached["brief"]
-        else:
-            if not gemini_ok():
-                brief = cached["brief"] if cached else None
-            else:
-                try:
-                    raw, usage = gemini_json(BRIEF_PROMPT.replace("{coverage}", coverage), BRIEF_SCHEMA)
-                    charge_gemini(usage)
-                    brief = build_brief(raw, arts, lines, side_of, gemini_json, charge_gemini)
-                    briefs[story["sid"]] = {"digest": digest, "brief": brief, "at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
-                except Exception as e:
-                    print(f"  brief failed for {story['sid']}: {e}")
-                    brief = cached["brief"] if cached else None
+        age_h = (datetime.now(timezone.utc) - datetime.fromisoformat(cached["at"])).total_seconds() / 3600 if cached else 0
+        # Re-summarize on a new brief version, or when the outlets changed and either a new side joined or
+        # REBRIEF_HOURS have passed. A new article from an outlet already in the story never triggers it.
+        stale = not cached or cached.get("version") != BRIEF_VERSION or (
+            cached.get("outlets") != outlets_now and (cached.get("sides") != sides_now or age_h >= REBRIEF_HOURS))
+        brief = cached["brief"] if cached else None
+        if stale and gemini_ok():
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                excerpts = list(pool.map(excerpt, [a["url"] for a in arts]))
+            lines = []
+            for i, (a, ex) in enumerate(zip(arts, excerpts)):
+                summ = (summaries.get(a["url"]) or "")[:300]
+                lines.append(f"{i + 1}. {a['source']} ({side_of.get(a['source'], 'unplaced')}): {a['title']}"
+                             + (f" | {summ}" if summ else "") + (f" | Opening: {ex}" if ex else ""))
+            try:
+                raw, usage = gemini_json(BRIEF_PROMPT.replace("{coverage}", "\n".join(lines)), BRIEF_SCHEMA)
+                charge_gemini(usage)
+                brief = build_brief(raw, arts, lines, side_of, gemini_json, charge_gemini)
+                briefs[story["sid"]] = {"version": BRIEF_VERSION, "outlets": outlets_now, "sides": sides_now, "brief": brief,
+                                        "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                                        "openings_read": sum(1 for x in excerpts if x)}
+            except Exception as e:
+                print(f"  brief failed for {story['sid']}: {e}")
         if not brief:
-            continue
+            return False
         # Factual differences are checked against primary sources (cached in the library).
         for d in brief["differences"]:
             if d.get("checkable_claim") and not d.get("check"):  # briefs written before per-side claims
@@ -381,20 +404,123 @@ def main():
                     print(f"  image lookup failed for {subj['name']}: {e}")
             if images.get(ikey):
                 story["image"] = images[ikey]
-        if brief["agreed"]:
-            summarized += 1
-        print(f"  {story['sid']}: {len(brief['agreed'])} agreed, {len(brief['differences'])} differences")
+        print(f"  {story['sid']} [{story['topic']}]: {len(brief['agreed'])} agreed, {len(brief['differences'])} differences")
+        return bool(brief["agreed"])
+
+
+    # Each topic: walk its ranking (stories covered by both left- and right-leaning outlets only) until
+    # its quota has a real summary, trying at most EXTRA_CANDIDATES more. Only these appear on Today.
+    both = lambda s: bool(s["coverage"].get("left")) and bool(s["coverage"].get("right"))
+    for topic, quota in TOPIC_QUOTAS.items():
+        cands = [s for s in data["stories"] if s.get("related_to") is None and s.get("topic") == topic and both(s)]
+        done = 0
+        for story in cands[:quota + EXTRA_CANDIDATES]:
+            if done >= quota:
+                break
+            if process(story):
+                done += 1
+                story["on_today"] = True
+        print(f"  {topic}: {done} of {quota} on Today ({len(cands)} stories covered by both sides)")
+
+    write_archive([s for s in data["stories"] if s.get("on_today")], data.get("feeds", []))
 
     live = {s["sid"] for s in data["stories"]}
     lib["briefs"] = {k: v for k, v in briefs.items() if k in live}
     lib["updated_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     lib["caps"] = {"anthropic_daily_usd": ANTHROPIC_DAILY_USD, "gemini_daily_usd": GEMINI_DAILY_USD,
-                   "gemini_daily_searches": GEMINI_DAILY_SEARCHES, "new_claims_per_day": MAX_NEW_PER_DAY}
+                   "gemini_free_searches": GEMINI_FREE_SEARCHES, "search_usd": SEARCH_USD, "new_claims_per_day": MAX_NEW_PER_DAY}
     (ROOT / "data/library.json").write_text(json.dumps(lib, indent=1))
     stories_path.write_text(json.dumps(data, indent=1))
     print(f"check_today: {state['new_this_scan']} new claims · today anthropic ${spend['anthropic_usd']:.2f}/{ANTHROPIC_DAILY_USD:.2f} · "
-          f"gemini ${spend['gemini_usd']:.2f}/{gemini_cap:.2f}, searches {spend['gemini_searches']}/{GEMINI_DAILY_SEARCHES}")
+          f"gemini ${spend['gemini_usd']:.2f}/{gemini_cap:.2f}, searches {spend['gemini_searches']} ({GEMINI_FREE_SEARCHES} free), "
+          f"thinking tokens {THOUGHTS['tokens']} over {THOUGHTS['calls']} calls")
     return 0
+
+
+def pick_articles(arts, side_of, n):
+    """Up to n articles, one per outlet first (newest), dealt round-robin left, right, center, unplaced,
+    so the brief hears both sides equally whatever the article counts."""
+    ordered = sorted(arts, key=lambda a: a.get("published") or "", reverse=True)
+    seen, firsts, rest = set(), [], []
+    for a in ordered:
+        (rest if a["source"] in seen else firsts).append(a)
+        seen.add(a["source"])
+    by_side = {k: [] for k in ("left", "right", "center", "unplaced")}
+    for a in firsts + rest:
+        by_side[side_of.get(a["source"], "unplaced")].append(a)
+    out = []
+    while len(out) < n and any(by_side.values()):
+        for k in by_side:
+            if by_side[k] and len(out) < n:
+                out.append(by_side[k].pop(0))
+    return out
+
+
+_P = re.compile(r"<p\b[^>]*>(.*?)</p>", re.S | re.I)
+_JUNK = re.compile(r"subscribe|sign up|newsletter|cookie|all rights reserved|advertisement|click here", re.I)
+
+
+def excerpt(url):
+    """The opening paragraphs of an article, read for the brief only (never stored or published).
+    A page that refuses us, or has no readable paragraphs, gives an empty string."""
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": C.UA})
+        with urllib.request.urlopen(req, timeout=12, context=C.SSL_CTX) as r:
+            page = r.read(2_000_000).decode("utf-8", "replace")
+    except Exception:
+        return ""
+    page = re.sub(r"<(script|style|noscript)\b.*?</\1>", " ", page, flags=re.S | re.I)
+    out = ""
+    for m in _P.finditer(page):
+        t = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", m.group(1))).strip()
+        t = __import__("html").unescape(t)
+        if len(t) >= 80 and not _JUNK.search(t):
+            out += t + " "
+            if len(out) >= EXCERPT_CHARS:
+                break
+    return out[:EXCERPT_CHARS].strip()
+
+
+def _live_json(url):
+    """A JSON file from the live site; None if it doesn't exist yet. Other failures raise."""
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": C.UA}), timeout=20, context=C.SSL_CTX) as r:
+            return json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return None
+        raise
+
+
+def write_archive(stories, feeds):
+    """Keep every story that was on Today, by day (U.S. Eastern), so the site builds an archive. A story
+    keeps its latest summary for the day. If the live archive can't be read, skip: never overwrite it."""
+    day = datetime.now(ZoneInfo("America/New_York")).date().isoformat()
+    try:
+        arch = _live_json(f"{ARCHIVE_URL}{day}.json") or {"date": day, "stories": {}}
+        index = _live_json(f"{ARCHIVE_URL}index.json") or {"days": []}
+    except Exception as e:
+        print(f"  archive not readable ({e}); not writing it this scan")
+        return
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    keep = ("sid", "working_title", "topic", "span", "outlets", "sources", "coverage", "articles", "checks", "image")
+    for st in stories:
+        rec = {k: st[k] for k in keep if k in st}
+        rec["brief"] = {k: v for k, v in st["brief"].items() if k != "dropped_agreed"}
+        rec["archived_at"] = now
+        arch["stories"][st["sid"]] = rec
+    arch["feeds"] = feeds
+    arch["updated_at"] = now
+    out = ROOT / "data/archive"
+    out.mkdir(parents=True, exist_ok=True)
+    (out / f"{day}.json").write_text(json.dumps(arch, indent=1))
+    counts = {}
+    for rec in arch["stories"].values():
+        counts[rec.get("topic", "other")] = counts.get(rec.get("topic", "other"), 0) + 1
+    days = [d for d in index["days"] if d["date"] != day] + [{"date": day, "count": len(arch["stories"]), "topics": counts}]
+    index["days"] = sorted(days, key=lambda d: d["date"], reverse=True)
+    (out / "index.json").write_text(json.dumps(index, indent=1))
+    print(f"  archive {day}: {len(arch['stories'])} stories")
 
 
 def deattribute(claim, outlets):
@@ -415,7 +541,7 @@ def build_brief(raw, arts, lines, side_of, ask, charge):
     # Common ground first, then other agreed facts; both pass the same confirmation, and the sides each
     # fact is confirmed on (not the writer's say-so) decide whether the page calls it common ground.
     seen, cands = set(), []
-    for a in raw.get("common_ground", [])[:2] + raw.get("agreed", [])[:4]:
+    for a in raw.get("common_ground", [])[:6] + raw.get("agreed", [])[:3]:
         key = a.get("fact", "").strip().casefold()
         if key and key not in seen:
             seen.add(key); cands.append(a)
@@ -430,7 +556,8 @@ def build_brief(raw, arts, lines, side_of, ask, charge):
         facts = "\n".join(f"{j + 1}. {f}" for j, (f, _) in enumerate(agreed))
         # Confirm against every article, not only the ones the brief cited: an outlet that states the
         # fact counts whether or not the brief writer listed it. Missing one would hide common ground.
-        out, usage = ask(CONFIRM_PROMPT.replace("{facts}", facts).replace("{articles}", "\n".join(lines)), CONFIRM_SCHEMA)
+        # Pure matching, so low thinking: same answer, fewer billed thinking tokens.
+        out, usage = ask(CONFIRM_PROMPT.replace("{facts}", facts).replace("{articles}", "\n".join(lines)), CONFIRM_SCHEMA, "low")
         charge(usage)
         stated = {f["fact"]: valid(f["stated_by"]) for f in out.get("facts", [])}
         for j, (fact, idx) in enumerate(agreed):
@@ -442,8 +569,9 @@ def build_brief(raw, arts, lines, side_of, ask, charge):
                 dropped.append({"fact": fact, "why": f"confirmed in {len(outlets(by))} outlet(s): {', '.join(outlets(by))}"})
 
     differences = []
-    for d in raw.get("differences", [])[:2]:
+    for d in raw.get("differences", [])[:3]:
         positions = [{"says": p["says"].strip(), "outlets": outlets(valid(p["articles"])),
+                      "crux": c if (c := (p.get("crux") or "").strip()) and c in p["says"] and len(c) < len(p["says"].strip()) else "",
                       "checkable_claim": (p.get("checkable_claim") or "").strip(), "check": None} for p in d.get("positions", [])[:3]]
         positions = [p for p in positions if p["says"] and p["outlets"]]
         if d.get("point", "").strip() and positions:

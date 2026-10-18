@@ -32,6 +32,10 @@ MAX_FEED_AGE_HOURS = 72
 # Every outlet is read over the same window, so a long feed can't make one outlet look
 # like it covers more stories than another.
 MAX_ITEM_AGE_HOURS = 48
+# Articles are kept for this long across scans, so slower topics (environment, science, health) can be
+# grouped over a week: one outlet covers a story on Monday, another on Wednesday. Same window for all.
+POOL_DAYS = 7
+LIVE_ARTICLES = "https://hestonmiles.com/factual/data/articles.json"
 
 
 def clean(text):
@@ -105,10 +109,22 @@ def fetch(feed):
         return feed["source"], [], f"{type(e).__name__}: {e}"[:120]
 
 
+def fetch_outlet(feed):
+    """The outlet's main feed decides whether it worked; its section feeds (health, science, climate)
+    add articles when they work, and a failing section is reported without failing the outlet."""
+    source, items, err = fetch(feed)
+    for url in feed.get("sections", []):
+        _, more, serr = fetch({"source": source, "url": url})
+        if serr:
+            print(f"  section {source}: {url} {serr}")
+        items += more
+    return source, items, err
+
+
 def main():
     feeds = json.loads((ROOT / "pipeline/feeds.json").read_text())["feeds"]
     with ThreadPoolExecutor(max_workers=8) as pool:
-        results = list(pool.map(fetch, feeds))
+        results = list(pool.map(fetch_outlet, feeds))
     articles, failed, status = [], 0, []
     for source, items, err in results:
         if err:
@@ -123,14 +139,27 @@ def main():
         if a["url"] not in seen:
             seen.add(a["url"])
             unique.append(a)
-    out = {"fetched_at": datetime.now(timezone.utc).isoformat(), "count": len(unique), "feeds": status, "articles": unique}
+    fresh = len(unique)
+    # Carry forward last scan's articles that are still inside the pool window. Never fatal.
+    pool_cut = datetime.now(timezone.utc).timestamp() - POOL_DAYS * 86400
+    try:
+        with urllib.request.urlopen(urllib.request.Request(LIVE_ARTICLES, headers={"User-Agent": UA}), timeout=30, context=SSL_CTX) as r:
+            for a in json.loads(r.read()).get("articles", []):
+                if a.get("url") and a["url"] not in seen and a.get("published") \
+                        and datetime.fromisoformat(a["published"]).timestamp() >= pool_cut:
+                    seen.add(a["url"])
+                    unique.append(a)
+    except Exception as e:
+        print(f"  pool: last scan's articles not readable ({e}); this scan starts the pool fresh")
+    out = {"fetched_at": datetime.now(timezone.utc).isoformat(), "count": len(unique), "fresh": fresh,
+           "pool_days": POOL_DAYS, "feeds": status, "articles": unique}
     (ROOT / "data").mkdir(exist_ok=True)
     (ROOT / "data/articles.json").write_text(json.dumps(out, indent=1))
-    print(f"\n{len(unique)} articles from {len(feeds) - failed} of {len(feeds)} feeds -> data/articles.json")
+    print(f"\n{fresh} new articles from {len(feeds) - failed} of {len(feeds)} feeds, {len(unique)} in the {POOL_DAYS}-day pool -> data/articles.json")
     if len(feeds) - failed < MIN_FEED_SHARE * len(feeds):
         print(f"Too few feeds worked ({len(feeds) - failed} of {len(feeds)}). Not publishing this scan.")
         return 1
-    return 0 if unique else 1
+    return 0 if fresh else 1
 
 
 if __name__ == "__main__":

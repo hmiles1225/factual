@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>fACTUAL</title>
-<meta name="description" content="Today's most-covered political stories, with each claim checked against primary sources.">
+<meta name="description" content="The stories both left- and right-leaning outlets are covering: what they agree on, where they differ, and what holds up.">
 <meta name="theme-color" content="#F4F2EC">
 <link rel="preload" href="fonts/schibsted-grotesk-v7.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/newsreader-italic-v26.woff2" as="font" type="font/woff2" crossorigin>
@@ -17,30 +17,37 @@
 <header class="masthead">
   <div class="masthead-inner">
     <a class="wordmark" href="./" aria-label="fACTUAL"><span class="f" aria-hidden="true">f</span><span aria-hidden="true">ACTUAL</span></a>
-    <p class="scanline" id="scanline" aria-live="polite">Loading the latest scan…</p>
+    <nav class="mast-nav" aria-label="Site">
+      <p class="scanline" id="scanline" aria-live="polite">Loading the latest scan…</p>
+      <a class="nav-link" href="archive.html">Archive</a>
+    </nav>
   </div>
 </header>
 
 <main id="main" class="page">
   <section class="intro" aria-labelledby="today-title">
-    <p class="kicker" id="today-date">Politics</p>
-    <h1 id="today-title">Today, in <span id="today-count">five</span> stories.</h1>
-    <p class="dek">The political stories the most outlets are covering. What they agree on first, then what holds up.</p>
+    <p class="kicker" id="today-date">Today</p>
+    <h1 id="today-title">Today, in <span id="today-count">…</span> stories.</h1>
+    <p class="dek">Only stories that both left- and right-leaning outlets are covering. What they agree on first, then where they differ, and what holds up.</p>
+    <nav class="topic-nav" id="topic-nav" aria-label="Sections"></nav>
   </section>
 
-  <ol class="stories" id="stories" aria-label="Today's most-covered political stories"></ol>
+  <div id="sections"></div>
 
   <section class="about" id="about" aria-labelledby="about-title">
     <h2 id="about-title">What this is</h2>
     <div class="about-cols">
       <div>
         <p>fACTUAL reads the public news feeds of a fixed list of outlets every hour and groups articles about the same
-          event by what they say. Today shows U.S. politics and U.S. policy abroad.</p>
+          event by what they say. Today shows U.S. politics and U.S. policy abroad, plus environment, science and
+          health, topics that get politicized. A story appears only when outlets on both the left and the right
+          are covering it. Every story that appears is kept in the <a href="archive.html">archive</a>.</p>
         <p>Claims in Today’s stories are checked by AI against primary sources. Every quote shown was found on its
           source page by our code, a Doesn’t hold up needs two different AI models to agree, and no person reviews a
           check before it appears.</p>
-        <p>Headlines are the outlets’ own words, shown in italic and named. We link to every article and never
-          republish article text. The method, the outlet list and the code are public:
+        <p>Headlines are the outlets’ own words, shown in italic and named. To write each summary, the scanner
+          reads the opening paragraphs of each article; that text is used once and never stored or republished.
+          We link to every article. The method, the outlet list and the code are public:
           <a href="https://github.com/hmiles1225/factual">github.com/hmiles1225/factual</a>.</p>
         <h3>For publishers</h3>
         <p>Our scanner identifies itself as <code>fACTUAL-scan</code> and reads each feed once an hour. To ask a

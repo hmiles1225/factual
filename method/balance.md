@@ -27,3 +27,16 @@ rank by raw outlet count. A story's score is the average, over left, center and 
 that side's outlets that covered it. Each side counts for a third.
 
 Every story shows its coverage the same way, for example "Left 4 of 10 · Center 2 of 4 · Right 3 of 3".
+
+## Which stories appear (2026-10-18)
+
+- Today has four sections: Politics (5 stories, grouped over the last 48 hours) and Environment,
+  Science and Health (3 each, grouped over a 7-day pool of articles, because these topics move by the
+  week: one outlet covers a story on Monday, another on Wednesday).
+- A story appears only if at least one left-leaning **and** one right-leaning outlet covered it. A
+  section with no such story says so instead of filling the slot.
+- Each summary reads up to 14 articles, dealt round-robin left, right, center, unplaced (one per
+  outlet first), so neither side can fill the summary by publishing more articles.
+- Common ground is only what outlets on both sides state in their own text. The confirmation reads
+  every article in the story, not just the ones the summary writer cited.
+- Every story that appears on Today is kept in the archive, by day (U.S. Eastern).

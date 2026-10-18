@@ -45,10 +45,11 @@ LEFT_BELOW, RIGHT_ABOVE = 0.40, 0.60
 # distinct stories apart, so they are linked rather than merged.
 RELATED = 0.74
 
-# Today covers U.S. politics and U.S. policy abroad (Heston's call, 2026-10-18). A story is political
-# when its meaning is closer to these examples than to the non-political ones, by POLITICS_MARGIN.
-# Tuned by eye on the 2026-10-18 scan: celebrity trials, foreign wars and disasters fall out; Senate
-# debates, rallies, sanctions and agency actions stay in.
+# Today has four sections: U.S. politics (and U.S. policy abroad), and three topics that get
+# politicized: environment, science and health (Heston's call, 2026-10-18). A story takes the topic
+# whose examples its meaning is closest to, if that beats the non-topic examples by TOPIC_MARGIN.
+# Politics examples tuned by eye on the 2026-10-18 scan: celebrity trials, foreign wars and disasters
+# fall out; Senate debates, rallies, sanctions and agency actions stay in.
 POLITICS = [
     "U.S. Congress passes a bill; senators and representatives vote", "The White House and the president announce a policy",
     "U.S. election campaign, candidates, voters, polls and midterms", "A federal court rules on a Trump administration policy or a state law",
@@ -57,15 +58,47 @@ POLITICS = [
     "Republicans and Democrats clash over legislation", "A White House official or cabinet member resigns or is fired",
     "The president holds a campaign rally for midterm candidates", "Congressional or Senate candidates debate before the election",
 ]
+ENVIRONMENT = [
+    "Climate change policy: emissions rules, the Paris agreement, carbon pollution",
+    "The EPA changes environmental rules on air, water or chemical pollution",
+    "Oil and gas drilling, pipelines, coal and fossil fuel policy",
+    "Renewable energy, electric vehicles, solar and wind power subsidies",
+    "Public lands, national parks, endangered species and conservation",
+    "Scientists link extreme heat, floods or drought to climate change",
+]
+SCIENCE = [
+    "NASA, space missions and rocket launches",
+    "Federal science funding, research grants and the National Science Foundation",
+    "Scientists publish a study in a journal; new research findings",
+    "Gene editing, genetics, evolution and scientific consensus",
+    "Government regulation of artificial intelligence and its risks",
+    "Nuclear power, fusion and energy research",
+]
+HEALTH = [
+    "Vaccines: safety, schedules, mandates and vaccine advisers",
+    "The FDA approves or restricts a drug; the CDC issues health guidance",
+    "The health secretary and HHS change federal health policy",
+    "Abortion, reproductive health and access to care",
+    "Medicaid, Medicare, health insurance and prescription drug prices",
+    "Disease outbreaks: measles, flu, COVID and the public health response",
+    "Fluoride, food dyes, nutrition and chronic disease policy",
+]
+TOPICS = {"politics": POLITICS, "environment": ENVIRONMENT, "science": SCIENCE, "health": HEALTH}
 NOT_POLITICS = [
     "A shooting, crime or police investigation in a city", "A wildfire, storm, earthquake or accident kills people",
     "Sports: a game, a team, a player, a championship", "Business, company earnings, a product launch, technology",
-    "Celebrity, entertainment, movies and music", "Religion: the Pope and the Vatican", "Health and science research findings",
+    "Celebrity, entertainment, movies and music", "Religion: the Pope and the Vatican",
     "A foreign country's internal politics, protests or election abroad", "Weather and travel",
     "A celebrity, athlete or murderer on trial; a judge sentences a defendant",
+    "A celebrity's looks, body, diet, weight loss or fitness routine",
     "A foreign separatist movement or referendum in Canada or Europe", "A war between other countries: battlefield news, drones, front lines",
 ]
-POLITICS_MARGIN = 0.01
+TOPIC_MARGIN = 0.01
+# Politics moves by the day; environment, science and health move by the week. Politics is grouped from
+# the last RECENT_HOURS of articles; the slow topics from the whole pool (fetch.py keeps POOL_DAYS).
+SLOW_TOPICS = ("environment", "science", "health")
+RECENT_HOURS = 48
+POOL_DAYS = 7
 SIDES = ("left", "center", "right")
 
 # URL path segments and title prefixes that mark opinion, analysis or columns.
@@ -113,7 +146,7 @@ def hours(art):
     return datetime.fromisoformat(p).timestamp() / 3600 if p else None
 
 
-def group(vectors, times):
+def group(vectors, times, window=None):
     """Average-linkage agglomerative clustering on cosine similarity.
 
     vectors are L2-normalised, so the dot product is the cosine. Returns a list of
@@ -123,7 +156,7 @@ def group(vectors, times):
     sim = vectors @ vectors.T
     t = np.array([np.nan if x is None else x for x in times])
     gap = np.abs(t[:, None] - t[None, :])
-    sim[np.nan_to_num(gap, nan=0.0) > WINDOW_HOURS] = -1.0
+    sim[np.nan_to_num(gap, nan=0.0) > (window or WINDOW_HOURS)] = -1.0
     np.fill_diagonal(sim, -1.0)
 
     members = {i: [i] for i in range(n)}
@@ -160,7 +193,23 @@ def main():
     model = TextEmbedding(MODEL)
     vectors = np.array(list(model.embed([text_for(a) for a in news])), dtype=np.float32)
     vectors /= np.linalg.norm(vectors, axis=1, keepdims=True)
-    clusters = group(vectors, [hours(a) for a in news])
+    unit = lambda a: a / np.linalg.norm(a, axis=1, keepdims=True)
+    protos = {t: unit(np.array(list(model.embed(ex)), dtype=np.float32)) for t, ex in TOPICS.items()}
+    other = unit(np.array(list(model.embed(NOT_POLITICS)), dtype=np.float32))
+
+    def sub(ids, window):  # cluster a subset; return clusters as indices into news
+        return [[ids[j] for j in m] for m in group(vectors[ids], [hours(news[i]) for i in ids], window)] if ids else []
+
+    now_h = datetime.fromisoformat(scan["fetched_at"]).timestamp() / 3600
+    dated = [i for i, a in enumerate(news) if hours(a) is not None]
+    recent = [i for i in dated if now_h - hours(news[i]) <= RECENT_HOURS]
+    # The week's environment, science and health articles, sorted one by one, then grouped over the pool.
+    base = (vectors @ other.T).max(axis=1)
+    art = {t: (vectors @ m.T).max(axis=1) - base for t, m in protos.items()}
+    top_topic = lambda i: max(art, key=lambda t: art[t][i])
+    slow = [i for i in dated if top_topic(i) in SLOW_TOPICS and art[top_topic(i)][i] > 0]
+    # Week clusters go first, so a story carried over from the last scan keeps its id in its week form.
+    clusters = [(m, "week") for m in sub(slow, POOL_DAYS * 24)] + [(m, "day") for m in sub(recent, WINDOW_HOURS)]
 
     feeds = json.loads((ROOT / "pipeline/feeds.json").read_text())
     side = {f["source"]: side_of(f) for f in feeds["feeds"]}
@@ -171,7 +220,7 @@ def main():
 
     prev_sid, used_sids = previous_ids(), set()
     stories = []
-    for idx in clusters:
+    for idx, span in clusters:
         arts = [news[i] for i in idx]
         sources = sorted({a["source"] for a in arts})
         if len(sources) < 2:
@@ -191,6 +240,7 @@ def main():
         stories.append({
             "_idx": idx,
             "sid": sid,
+            "span": span,
             "working_title": lead["title"],
             "outlets": len(sources),
             "sources": sources,
@@ -199,14 +249,19 @@ def main():
             "articles": [{"source": a["source"], "title": a["title"], "url": a["url"], "published": a["published"]}
                          for a in sorted(arts, key=lambda a: a["published"] or "")],
         })
-    unit = lambda a: a / np.linalg.norm(a, axis=1, keepdims=True)
-    pol = unit(np.array(list(model.embed(POLITICS)), dtype=np.float32))
-    other = unit(np.array(list(model.embed(NOT_POLITICS)), dtype=np.float32))
     titles = unit(np.array(list(model.embed([" ".join(a["title"] for a in st["articles"][:6]) for st in stories])), dtype=np.float32)) if stories else np.zeros((0, 384))
     for st, v in zip(stories, titles):
-        score = float((pol @ v).max() - (other @ v).max())
-        st["politics_score"] = round(score, 3)
-        st["topic"] = "politics" if score > POLITICS_MARGIN else "other"
+        base = float((other @ v).max())
+        scores = {t: float((m @ v).max()) - base for t, m in protos.items()}
+        best = max(scores, key=scores.get)
+        st["topic_scores"] = {t: round(x, 3) for t, x in scores.items()}
+        st["politics_score"] = round(scores["politics"], 3)
+        st["topic"] = best if scores[best] > TOPIC_MARGIN else "other"
+    # Slow topics come from the week pass; politics and the rest from the day pass. A day story on a slow
+    # topic is kept only if the week pass did not already group its articles.
+    week_urls = {a["url"] for st in stories if st["span"] == "week" and st["topic"] in SLOW_TOPICS for a in st["articles"]}
+    stories = [st for st in stories if (st["span"] == "week" and st["topic"] in SLOW_TOPICS)
+               or (st["span"] == "day" and not (st["topic"] in SLOW_TOPICS and any(a["url"] in week_urls for a in st["articles"])))]
     stories.sort(key=lambda s: (s["balance_score"], s["outlets"], len(s["articles"])), reverse=True)
     for n, st in enumerate(stories):
         st["id"] = n
@@ -224,7 +279,8 @@ def main():
         "articles_scanned": len(articles),
         "feeds": [{**f, "side": side.get(f["source"], "unplaced"), "lean": lean.get(f["source"])} for f in scan.get("feeds", [])],
         "method": {"model": MODEL, "threshold": THRESHOLD, "window_hours": WINDOW_HOURS, "linkage": "average", "related": RELATED,
-                   "topic": "U.S. politics and U.S. policy abroad", "politics_margin": POLITICS_MARGIN},
+                   "topics": {"politics": "U.S. politics and U.S. policy abroad", "environment": "Environment and climate",
+                              "science": "Science", "health": "Health"}, "topic_margin": TOPIC_MARGIN},
         "placement": {"source": feeds["placement_source"], "left_below": LEFT_BELOW, "right_above": RIGHT_ABOVE,
                       "measure": "Republican users / (Republican + Democratic users)"},
         "roster": roster,
@@ -235,12 +291,12 @@ def main():
     (ROOT / "data/stories.json").write_text(json.dumps(out, indent=1))
     print(f"{len(stories)} stories covered by 2+ outlets -> data/stories.json ({opinion} opinion pieces kept out)\n")
     print("  roster: " + " · ".join(f"{k} {len(roster[k])}" for k in (*SIDES, "unplaced")) + "\n")
-    print(f"  politics: {sum(st['topic'] == 'politics' for st in stories)} of {len(stories)} stories\n")
-    for s in [s for s in stories if s["related_to"] is None and s["topic"] == "politics"][:8]:
-        c = " ".join(f"{k[0].upper()}{len(s['coverage'][k])}/{len(roster[k])}" for k in SIDES)
-        print(f"  {s['balance_score']:.2f}  {c}  {s['working_title'][:66]}")
-        for r in s["related"]:
-            print(f"        related: {stories[r]['working_title'][:66]}")
+    for t in TOPICS:
+        print(f"  {t}: {sum(st['topic'] == t for st in stories)} of {len(stories)} stories")
+        for s in [s for s in stories if s["related_to"] is None and s["topic"] == t][:8]:
+            c = " ".join(f"{k[0].upper()}{len(s['coverage'][k])}/{len(roster[k])}" for k in SIDES)
+            print(f"    {s['balance_score']:.2f}  {c}  {s['working_title'][:66]}")
+        print()
     return 0
 
 

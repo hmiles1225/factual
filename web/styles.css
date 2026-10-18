@@ -47,6 +47,35 @@ code { font: 400 0.8125rem var(--mono); }
 .scanline { margin: 0; font: 400 0.75rem/1.3 var(--mono); color: var(--ink-3); text-align: right; }
 .back { display: inline-flex; align-items: center; min-height: 44px; font: 600 0.875rem/1 var(--sans); }
 .back::before { content: "\2190"; margin-right: 6px; }
+.mast-nav { display: flex; align-items: center; gap: 20px; }
+.nav-link { display: inline-flex; align-items: center; min-height: 44px; font: 600 0.875rem/1 var(--sans); }
+
+/* ---------- Today's sections ---------- */
+.topic-nav { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 24px; }
+.topic-chip { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; border: 1px solid var(--rule); border-radius: 999px;
+  background: var(--card); color: var(--ink); font: 600 0.875rem/1 var(--sans); text-decoration: none; transition: border-color 150ms ease-out; }
+.topic-chip:hover { border-color: var(--ink); }
+.topic-count { font: 500 0.75rem/1 var(--mono); color: var(--ink-2); }
+.topic-section { margin-top: 64px; scroll-margin-top: 16px; }
+.topic-section:first-child { margin-top: 8px; }
+.topic-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding-bottom: 12px; margin-bottom: 20px; border-bottom: 2px solid var(--ink); }
+.topic-name { margin: 0; font: 700 1.75rem/1.1 var(--sans); letter-spacing: -0.02em; }
+.topic-span { margin: 0; font: 500 0.75rem/1.2 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); white-space: nowrap; }
+.topic-empty { margin: 0; max-width: 56ch; font-size: 1rem; line-height: 1.55; color: var(--ink-2); }
+
+/* ---------- Archive ---------- */
+.arch-day { border-top: 1px solid var(--rule); }
+.arch-day:last-child { border-bottom: 1px solid var(--rule); }
+.arch-day > summary { display: flex; align-items: baseline; gap: 16px; padding: 18px 0; min-height: 56px; }
+.arch-date { flex: 1; font: 700 1.25rem/1.2 var(--sans); letter-spacing: -0.01em; }
+.arch-count { font: 400 0.8125rem/1.2 var(--mono); color: var(--ink-2); }
+.arch-body { padding: 0 0 24px; }
+.arch-topic { margin: 16px 0 8px; font: 600 0.75rem/1.2 var(--sans); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); }
+.arch-list { list-style: none; margin: 0; padding: 0; }
+.arch-list li { display: grid; gap: 4px; padding: 12px 0; border-top: 1px solid var(--rule); }
+.arch-link { font: 400 1.125rem/1.35 var(--serif); color: var(--ink); text-decoration: none; }
+.arch-link:hover { text-decoration: underline; }
+.arch-meta { font: 400 0.75rem/1.4 var(--mono); color: var(--ink-3); }
 .page { padding-bottom: 96px; }
 
 .kicker { margin: 0 0 10px; font: 500 0.75rem/1.2 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-2); }
@@ -185,6 +214,7 @@ details[open] > summary::after { content: "\2212"; }
 .sub-title { margin: 28px 0 12px; font: 600 0.75rem/1.2 var(--sans); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); }
 .fact-sides { margin: 4px 0 0; font: 400 0.75rem/1.45 var(--mono); color: var(--ink-3); }
 
+.timeline { margin: 4px 0 0; }
 .foot-meta { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 
 /* ---------- Spectrum: outlets placed by audience, Pew 2025. Ink and gray only. ---------- */
@@ -213,9 +243,12 @@ i.dot.ghost { background: var(--rule); }
 .block-title + .diff-split { margin: 0 0 8px; font-weight: 600; color: var(--ink); }
 .side .spectrum { margin: auto 0 0; padding-top: 14px; }
 .sides { display: grid; gap: 14px; }
-.side { display: flex; flex-direction: column; padding: 16px 18px; background: var(--card); border: 1px solid var(--rule); border-radius: 14px; }
-.side-name { margin: 0 0 8px; font: 600 0.75rem/1.2 var(--sans); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); }
-.side-says { margin: 0; font: 400 1.0625rem/1.5 var(--serif); }
+.side { display: flex; flex-direction: column; padding: 18px 18px 16px; background: var(--card); border: 1px solid var(--rule); border-top: 4px solid var(--ink); border-radius: 14px; }
+/* Which side is talking can't be missed: a solid label, then "say". Text, never color. */
+.side-head { margin: 0 0 12px; font: 600 1rem/1.3 var(--sans); color: var(--ink); }
+.side-tag { display: inline-block; padding: 5px 10px; border-radius: 6px; background: var(--ink); color: var(--paper); font: 700 0.875rem/1.25 var(--sans); }
+.side-says { margin: 0; font: 400 1.125rem/1.5 var(--serif); }
+.side-says strong { font-weight: 600; box-shadow: inset 0 -0.42em 0 var(--wash); }
 .side-outlets { margin: 8px 0 0; font: 400 0.75rem/1.45 var(--mono); color: var(--ink-3); }
 .side-pending { margin: 12px 0 0; font-size: 0.8125rem; color: var(--ink-3); }
 .side .check-row { margin-top: 14px; }

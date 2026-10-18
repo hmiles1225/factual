@@ -1,177 +1,209 @@
 {
-  "_note": "Fixed, published outlet list. Lean is never set by hand: each outlet's side is computed in code from the 'pew' numbers, copied exactly from Pew Research Center's News Media Tracker (survey of 9,482 U.S. adults, March 10-16, 2025): the % of Republicans/lean Republican and the % of Democrats/lean Democrat who regularly get news from the outlet. Outlets Pew did not ask about have no 'pew' entry and stay Unplaced. Add or remove outlets in the open, with a changelog entry.",
-  "feeds": [
-    {
-      "source": "NPR",
-      "url": "https://feeds.npr.org/1001/rss.xml",
-      "pew": {
-        "rep": 9,
-        "dem": 32
-      }
-    },
-    {
-      "source": "CNN",
-      "url": "https://www.cnn.com/sitemap/news.xml",
-      "_note": "CNN's RSS feeds stopped updating (newest items 2023 and 2024). Google News sitemap, listed in the outlet's robots.txt. Used for the three largest cable outlets so all three are read over the same 48 hours.",
-      "pew": {
-        "rep": 20,
-        "dem": 48
-      }
-    },
-    {
-      "source": "MS NOW (formerly MSNBC)",
-      "url": "https://www.ms.now/news-sitemap.xml",
-      "_note": "Google News sitemap, listed in the outlet's robots.txt. Used for the three largest cable outlets so all three are read over the same 48 hours.",
-      "pew": {
-        "rep": 11,
-        "dem": 33,
-        "note": "Pew asked about MSNBC; the network was renamed MS NOW after the survey."
-      }
-    },
-    {
-      "source": "Fox News",
-      "url": "https://www.foxnews.com/sitemap.xml?type=news",
-      "_note": "Google News sitemap, listed in the outlet's robots.txt. Used for the three largest cable outlets so all three are read over the same 48 hours.",
-      "pew": {
-        "rep": 57,
-        "dem": 18
-      }
-    },
-    {
-      "source": "BBC News",
-      "url": "https://feeds.bbci.co.uk/news/world/us_and_canada/rss.xml",
-      "pew": {
-        "rep": 13,
-        "dem": 30,
-        "note": "Pew asked about BBC News."
-      }
-    },
-    {
-      "source": "The Hill",
-      "url": "https://thehill.com/feed/",
-      "pew": {
-        "rep": 4,
-        "dem": 6
-      }
-    },
-    {
-      "source": "New York Times",
-      "url": "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml",
-      "pew": {
-        "rep": 10,
-        "dem": 29
-      }
-    },
-    {
-      "source": "New York Post",
-      "url": "https://nypost.com/feed/",
-      "pew": {
-        "rep": 10,
-        "dem": 8
-      }
-    },
-    {
-      "source": "The Guardian US",
-      "url": "https://www.theguardian.com/us-news/rss",
-      "pew": {
-        "rep": 4,
-        "dem": 13,
-        "note": "Pew asked about The Guardian."
-      }
-    },
-    {
-      "source": "CBS News",
-      "url": "https://www.cbsnews.com/latest/rss/main",
-      "pew": {
-        "rep": 22,
-        "dem": 39
-      }
-    },
-    {
-      "source": "Breitbart",
-      "url": "https://feeds.feedburner.com/breitbart",
-      "pew": {
-        "rep": 7,
-        "dem": 0.5,
-        "note": "Pew prints Democrats as '<1'; 0.5 is used."
-      }
-    },
-    {
-      "source": "Reason",
-      "url": "https://reason.com/feed/"
-    },
-    {
-      "source": "Politico",
-      "url": "https://rss.politico.com/politics-news.xml",
-      "pew": {
-        "rep": 4,
-        "dem": 12
-      }
-    },
-    {
-      "source": "ABC News",
-      "url": "https://feeds.abcnews.com/abcnews/topstories",
-      "pew": {
-        "rep": 27,
-        "dem": 46
-      }
-    },
-    {
-      "source": "Wall Street Journal",
-      "url": "https://feeds.content.dowjones.io/public/rss/RSSUSnews",
-      "_note": "The old feeds.a.dj.com feed stopped updating in January 2025.",
-      "pew": {
-        "rep": 12,
-        "dem": 16
-      }
-    },
-    {
-      "source": "PBS NewsHour",
-      "url": "https://www.pbs.org/newshour/feeds/rss/headlines",
-      "pew": {
-        "rep": 11,
-        "dem": 31,
-        "note": "Pew asked about PBS."
-      }
-    },
-    {
-      "source": "The Federalist",
-      "url": "https://thefederalist.com/feed/"
-    },
-    {
-      "source": "Vox",
-      "url": "https://www.vox.com/rss/index.xml"
-    },
-    {
-      "source": "Washington Examiner",
-      "url": "https://www.washingtonexaminer.com/feed/"
-    },
-    {
-      "source": "Texas Tribune",
-      "url": "https://www.texastribune.org/feeds/main/"
-    },
-    {
-      "source": "The Daily Wire",
-      "url": "https://www.dailywire.com/feeds/rss.xml",
-      "pew": {
-        "rep": 12,
-        "dem": 2
-      }
-    },
-    {
-      "source": "Forbes",
-      "url": "https://www.forbes.com/news_sitemap.xml",
-      "pew": {
-        "rep": 9,
-        "dem": 10
-      },
-      "_note": "Google News sitemap, listed in Forbes' robots.txt."
-    }
-  ],
-  "placement_source": {
-    "name": "Pew Research Center, The Political Gap in Americans' News Sources",
-    "date": "2025-06-10",
-    "survey": "March 10-16, 2025, n=9,482",
-    "url": "https://www.pewresearch.org/journalism/2025/06/10/the-political-gap-in-americans-news-sources/"
+ "_note": "Fixed, published outlet list. Lean is never set by hand: each outlet's side is computed in code from the 'pew' numbers, copied exactly from Pew Research Center's News Media Tracker (survey of 9,482 U.S. adults, March 10-16, 2025): the % of Republicans/lean Republican and the % of Democrats/lean Democrat who regularly get news from the outlet. Outlets Pew did not ask about have no 'pew' entry and stay Unplaced. Add or remove outlets in the open, with a changelog entry.",
+ "feeds": [
+  {
+   "source": "NPR",
+   "url": "https://feeds.npr.org/1001/rss.xml",
+   "pew": {
+    "rep": 9,
+    "dem": 32
+   },
+   "sections": [
+    "https://feeds.npr.org/1128/rss.xml",
+    "https://feeds.npr.org/1007/rss.xml"
+   ]
+  },
+  {
+   "source": "CNN",
+   "url": "https://www.cnn.com/sitemap/news.xml",
+   "_note": "CNN's RSS feeds stopped updating (newest items 2023 and 2024). Google News sitemap, listed in the outlet's robots.txt. Used for the three largest cable outlets so all three are read over the same 48 hours.",
+   "pew": {
+    "rep": 20,
+    "dem": 48
+   }
+  },
+  {
+   "source": "MS NOW (formerly MSNBC)",
+   "url": "https://www.ms.now/news-sitemap.xml",
+   "_note": "Google News sitemap, listed in the outlet's robots.txt. Used for the three largest cable outlets so all three are read over the same 48 hours.",
+   "pew": {
+    "rep": 11,
+    "dem": 33,
+    "note": "Pew asked about MSNBC; the network was renamed MS NOW after the survey."
+   }
+  },
+  {
+   "source": "Fox News",
+   "url": "https://www.foxnews.com/sitemap.xml?type=news",
+   "_note": "Google News sitemap, listed in the outlet's robots.txt. Used for the three largest cable outlets so all three are read over the same 48 hours.",
+   "pew": {
+    "rep": 57,
+    "dem": 18
+   },
+   "sections": [
+    "https://moxie.foxnews.com/google-publisher/health.xml"
+   ]
+  },
+  {
+   "source": "BBC News",
+   "url": "https://feeds.bbci.co.uk/news/world/us_and_canada/rss.xml",
+   "pew": {
+    "rep": 13,
+    "dem": 30,
+    "note": "Pew asked about BBC News."
+   }
+  },
+  {
+   "source": "The Hill",
+   "url": "https://thehill.com/feed/",
+   "pew": {
+    "rep": 4,
+    "dem": 6
+   }
+  },
+  {
+   "source": "New York Times",
+   "url": "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml",
+   "pew": {
+    "rep": 10,
+    "dem": 29
+   },
+   "sections": [
+    "https://rss.nytimes.com/services/xml/rss/nyt/Health.xml",
+    "https://rss.nytimes.com/services/xml/rss/nyt/Science.xml",
+    "https://rss.nytimes.com/services/xml/rss/nyt/Climate.xml"
+   ]
+  },
+  {
+   "source": "New York Post",
+   "url": "https://nypost.com/feed/",
+   "pew": {
+    "rep": 10,
+    "dem": 8
+   },
+   "sections": [
+    "https://nypost.com/health/feed/"
+   ]
+  },
+  {
+   "source": "The Guardian US",
+   "url": "https://www.theguardian.com/us-news/rss",
+   "pew": {
+    "rep": 4,
+    "dem": 13,
+    "note": "Pew asked about The Guardian."
+   }
+  },
+  {
+   "source": "CBS News",
+   "url": "https://www.cbsnews.com/latest/rss/main",
+   "pew": {
+    "rep": 22,
+    "dem": 39
+   },
+   "sections": [
+    "https://www.cbsnews.com/latest/rss/health"
+   ]
+  },
+  {
+   "source": "Breitbart",
+   "url": "https://feeds.feedburner.com/breitbart",
+   "pew": {
+    "rep": 7,
+    "dem": 0.5,
+    "note": "Pew prints Democrats as '<1'; 0.5 is used."
+   },
+   "sections": [
+    "https://www.breitbart.com/tech/feed/"
+   ]
+  },
+  {
+   "source": "Reason",
+   "url": "https://reason.com/feed/"
+  },
+  {
+   "source": "Politico",
+   "url": "https://rss.politico.com/politics-news.xml",
+   "pew": {
+    "rep": 4,
+    "dem": 12
+   }
+  },
+  {
+   "source": "ABC News",
+   "url": "https://feeds.abcnews.com/abcnews/topstories",
+   "pew": {
+    "rep": 27,
+    "dem": 46
+   },
+   "sections": [
+    "https://feeds.abcnews.com/abcnews/healthheadlines"
+   ]
+  },
+  {
+   "source": "Wall Street Journal",
+   "url": "https://feeds.content.dowjones.io/public/rss/RSSUSnews",
+   "_note": "The old feeds.a.dj.com feed stopped updating in January 2025.",
+   "pew": {
+    "rep": 12,
+    "dem": 16
+   }
+  },
+  {
+   "source": "PBS NewsHour",
+   "url": "https://www.pbs.org/newshour/feeds/rss/headlines",
+   "pew": {
+    "rep": 11,
+    "dem": 31,
+    "note": "Pew asked about PBS."
+   }
+  },
+  {
+   "source": "The Federalist",
+   "url": "https://thefederalist.com/feed/"
+  },
+  {
+   "source": "Vox",
+   "url": "https://www.vox.com/rss/index.xml"
+  },
+  {
+   "source": "Washington Examiner",
+   "url": "https://www.washingtonexaminer.com/feed/"
+  },
+  {
+   "source": "The Daily Wire",
+   "url": "https://www.dailywire.com/feeds/rss.xml",
+   "pew": {
+    "rep": 12,
+    "dem": 2
+   }
+  },
+  {
+   "source": "Forbes",
+   "url": "https://www.forbes.com/news_sitemap.xml",
+   "pew": {
+    "rep": 9,
+    "dem": 10
+   },
+   "_note": "Google News sitemap, listed in Forbes' robots.txt."
   }
+ ],
+ "placement_source": {
+  "name": "Pew Research Center, The Political Gap in Americans' News Sources",
+  "date": "2025-06-10",
+  "survey": "March 10-16, 2025, n=9,482",
+  "url": "https://www.pewresearch.org/journalism/2025/06/10/the-political-gap-in-americans-news-sources/"
+ },
+ "_note_sections": "Section feeds (health, science, climate) checked live on 2026-10-18. Guardian and BBC sections left out: mostly UK and global, and they would add about 50 left-leaning items a scan. Fox Science, CBS Science and NPR Climate were stale; the WSJ science feed was dead.",
+ "changelog": [
+  {
+   "date": "2026-10-18",
+   "change": "Removed Texas Tribune (unplaced): it has refused the scanner with HTTP 403 since launch. Considered Newsmax as a right-leaning replacement (Pew 2025: 15% Rep, 1% Dem), but it drops the scanner's connection when it identifies itself; we do not disguise the scanner, so it is not added.",
+   "by": "Heston's call"
+  },
+  {
+   "date": "2026-10-18",
+   "change": "Added section feeds (health, science, climate) for NPR, New York Times, ABC News, CBS News, Fox News, New York Post and Breitbart; see _note_sections."
+  }
+ ]
 }
