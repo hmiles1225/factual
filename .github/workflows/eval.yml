@@ -8,7 +8,7 @@ on:
     inputs:
       checkers:
         description: "Comma-separated: claude, gemini, claude-capped (Opus reading 8,000 tokens a page)"
-        default: "claude,gemini,claude-capped"
+        default: "claude,gemini"
       only:
         description: "Case ids, comma-separated (blank = all 50)"
         default: ""

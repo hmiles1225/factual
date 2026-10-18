@@ -219,6 +219,9 @@ def check_claude(claim, model=CLAUDE_MODEL):
         resp = client.messages.create(
             model=model,
             max_tokens=16000,
+            # Each research step re-sends the conversation so far. With caching on, web search and
+            # fetch results are cached as they arrive, so later steps pay 10% for what came before.
+            cache_control={"type": "ephemeral"},
             system=system,
             messages=messages,
             tools=[{"type": "web_search_20260209", "name": "web_search", "max_uses": 8},

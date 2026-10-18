@@ -86,7 +86,8 @@ def attempt(case, checker, model, rep, vdir, timeout_s):
         "meta": {"pair": case["pair"], "lean": case["tags"][1], "gold": case["expected"]["verdict"],
                  "verdict": r["verdict"], "verdict_raw": r["verdict_raw"], "tries": tries,
                  "quotes": f"{r['quotes_verified']}/{r['quotes_total']}", "guard_notes": r["guard_notes"],
-                 "numbers_unsourced": r["numbers_unsourced"], "web_fetches": r.get("web_fetches", 0)},
+                 "numbers_unsourced": r["numbers_unsourced"], "web_fetches": r.get("web_fetches", 0),
+                 "fetch_cap": r.get("fetch_cap"), "usage_raw": r.get("usage_raw")},
     }
     with lock, open(vdir / "results.jsonl", "a") as f:
         f.write(json.dumps(row) + "\n")
@@ -108,7 +109,7 @@ def main():
     ap.add_argument("--reps", type=int, default=1)
     ap.add_argument("--only", default="", help="comma-separated case ids")
     ap.add_argument("--workers", type=int, default=4)
-    ap.add_argument("--timeout-s", type=int, default=420)
+    ap.add_argument("--timeout-s", type=int, default=600)
     a = ap.parse_args()
     C.load_env()
 
