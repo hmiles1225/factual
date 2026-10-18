@@ -70,7 +70,8 @@ jobs:
           print("only=" + r.get("only", ""))
           print("reps=" + str(r.get("reps", 1)))
           print("claude_variant=" + r.get("claude_variant", "v3"))
-          print("reverify=" + " ".join(r.get("reverify", [])))
+          rv = r.get("reverify", [])
+          print("reverify=" + ";".join(" ".join(x) if isinstance(x, list) else x for x in (rv if rv and isinstance(rv[0], list) else ([rv] if rv else []))))
           print("second_from=" + r.get("second_from", "v1"))
           PY
           else
@@ -94,7 +95,11 @@ jobs:
 
       - name: Re-verify saved answers (no model judging; fetches pages only)
         if: always() && steps.cfg.outputs.reverify != ''
-        run: python eval/reverify.py ${{ steps.cfg.outputs.reverify }}
+        env:
+          PAIRS: ${{ steps.cfg.outputs.reverify }}
+        run: |
+          IFS=';' read -ra list <<< "$PAIRS"
+          for pair in "${list[@]}"; do echo "== reverify $pair"; python eval/reverify.py $pair; done
 
       - name: Claude second opinion on Gemini's Doesn't hold up
         if: always() && contains(steps.cfg.outputs.checkers, 'claude-second')

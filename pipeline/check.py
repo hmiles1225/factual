@@ -205,6 +205,16 @@ PIPE_USAGE = []
 
 
 def quote_found(quote, text):
+    if _quote_found(quote, text):
+        return True
+    # PDF text extraction breaks spacing ("5 57 fatal", "fatalinjuries"). Compare with all
+    # whitespace removed: the words must still match exactly, only the gaps may differ.
+    squash = lambda s: re.sub(r"\s+", "", s)
+    q = squash(norm(quote))
+    return len(q) >= 20 and q in squash(text)
+
+
+def _quote_found(quote, text):
     q = norm(quote)
     if len(q) < 12:
         return False

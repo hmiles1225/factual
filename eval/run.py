@@ -23,6 +23,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "pipeline"))
+sys.path.insert(0, str(ROOT / "eval"))
 import check as C  # noqa: E402
 
 FLOW = Path(os.environ.get("FACTUAL_EVAL_FLOW", ROOT / ".claude/hillclimb/claim-check"))
@@ -110,6 +111,8 @@ def main():
     ap.add_argument("--only", default="", help="comma-separated case ids")
     ap.add_argument("--only-from", default="", help="pick cases from another variant's results ...")
     ap.add_argument("--when", default="", help="... where that variant's verdict was this (e.g. \"Doesn't hold up\")")
+    ap.add_argument("--budget-usd", type=float, default=float(os.environ.get("FACTUAL_BUDGET_USD", "5")),
+                    help="stop scheduling new cases once this run's billed spend reaches this (default $5)")
     ap.add_argument("--workers", type=int, default=4)
     ap.add_argument("--timeout-s", type=int, default=600)
     a = ap.parse_args()
@@ -136,17 +139,42 @@ def main():
     model = MODELS[a.checker]
     print(f"{a.variant}: {model}, {len(todo)} attempts to run ({len(done)} already done)")
     t0 = time.time()
+    # Hard spend cap. Counts every billed attempt, including ones that errored after the call
+    # (their usage is in the error row when the call completed). An attempt whose usage is unknown
+    # (crash or timeout mid-call) is charged at the most expensive attempt seen so far.
+    import summarize as S
+    spent, worst = 0.0, 0.0
+    stopped = False
     with cf.ThreadPoolExecutor(a.workers) as pool:
-        futs = {pool.submit(attempt, c, a.checker, model, k, vdir, a.timeout_s): (c, k) for c, k in todo}
-        for fut in cf.as_completed(futs):
-            c, k = futs[fut]
-            row = fut.result()
-            if "failure" in row:
-                print(f"  ERROR {c['prompt_id']} rep{k}: {row['failure']}: {row['detail'][:140]}")
-            else:
-                g = row["grade"]
-                print(f"  {'ok ' if g['correct'] else 'MISS'} {c['prompt_id']:<5} gold={row['meta']['gold']:<16} got={row['meta']['verdict']!s:<16} quotes {row['meta']['quotes']}  {row['latency_s']}s")
-    print(f"wall clock {time.time() - t0:.0f}s")
+        queue = list(todo)
+        running = {}
+        while queue or running:
+            while queue and len(running) < a.workers and not stopped:
+                if spent + worst >= a.budget_usd:
+                    stopped = True
+                    print(f"  BUDGET: ${spent:.2f} spent of ${a.budget_usd:.2f}; not starting {len(queue)} more")
+                    break
+                c, k = queue.pop(0)
+                running[pool.submit(attempt, c, a.checker, model, k, vdir, a.timeout_s)] = (c, k)
+            if not running:
+                break
+            done_now, _ = cf.wait(running, return_when=cf.FIRST_COMPLETED)
+            for fut in done_now:
+                c, k = running.pop(fut)
+                row = fut.result()
+                usage = row.get("usage")
+                if usage:
+                    one = S.cost({"model": row.get("model") or model, "usage": usage, "web_searches": row.get("web_searches", 0)})
+                else:
+                    one = worst or 1.0
+                spent += one
+                worst = max(worst, one)
+                if "failure" in row:
+                    print(f"  ERROR {c['prompt_id']} rep{k}: {row['failure']}: {row['detail'][:140]}")
+                else:
+                    g = row["grade"]
+                    print(f"  {'ok ' if g['correct'] else 'MISS'} {c['prompt_id']:<5} gold={row['meta']['gold']:<16} got={row['meta']['verdict']!s:<16} quotes {row['meta']['quotes']}  {row['latency_s']}s  ${one:.2f}")
+    print(f"wall clock {time.time() - t0:.0f}s · estimated spend ${spent:.2f} (budget ${a.budget_usd:.2f})")
 
 
 if __name__ == "__main__":
