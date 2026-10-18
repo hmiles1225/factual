@@ -1,11 +1,11 @@
 # Caching rules live here, in the repo, not in hPanel.
 # Pages, code and scan data: the browser revalidates every time (a cheap 304 when unchanged).
-# Fonts: cached for a year. Their filenames carry a version, so a new font gets a new name.
+# Fonts and images: cached for a year. Their filenames carry a version or a content hash.
 <IfModule mod_headers.c>
   <FilesMatch "\.(html|js|css|json)$">
     Header set Cache-Control "no-cache"
   </FilesMatch>
-  <FilesMatch "\.woff2$">
+  <FilesMatch "\.(woff2|jpg|png|webp)$">
     Header set Cache-Control "public, max-age=31536000, immutable"
   </FilesMatch>
   Header set X-Content-Type-Options "nosniff"

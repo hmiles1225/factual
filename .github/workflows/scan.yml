@@ -89,4 +89,5 @@ jobs:
           }
           # The site first, then the data it reads.
           (cd web && find . -type f | sed 's|^\./||') | while read -r rel; do put "web/$rel" "$rel"; done
+          for f in data/images/*; do [ -f "$f" ] && put "$f" "data/images/$(basename "$f")"; done
           for f in data/*.json; do put "$f" "data/$(basename "$f")"; done

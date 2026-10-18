@@ -28,6 +28,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import check as C  # noqa: E402
+from images import image_for  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 LIBRARY_URL = "https://hestonmiles.com/factual/data/library.json"
@@ -43,7 +44,7 @@ RECHECK_AFTER_DAYS = 7
 OPUS_TYPICAL_USD = 0.51          # measured mean per Opus second opinion, 2026-10-17 eval
 SAME_CLAIM = 0.93                # embedding similarity at which two wordings are one claim
 MIN_OUTLETS_AGREED = 2           # an agreed fact needs at least this many outlets to state it
-BRIEF_VERSION = "2"              # bump when the brief instructions change, so cached briefs regenerate
+BRIEF_VERSION = "3"              # bump when the brief instructions change, so cached briefs regenerate
 PRICES = {"claude-opus-5-5": (4.00, 20.00, 0.010), "claude-haiku-5-5": (0.10, 0.50, 0), "claude-sonnet-5-5": (2.00, 10.00, 0),
           "gemini-3.8-flash": (0.75, 3.75, 0.0)}   # Gemini searches are tracked by count, not dollars
 
@@ -57,7 +58,9 @@ BRIEF_SCHEMA = _item({
         "checkable_claim": {"type": "string", "description": "If the difference turns on a checkable fact, that fact as one statement. Else empty."},
     }, ["point", "positions", "checkable_claim"])},
     "values_questions": {"type": "array", "items": {"type": "string"}},
-}, ["agreed", "differences", "values_questions"])
+    "main_subject": _item({"name": {"type": "string", "description": "Full name as commonly written, e.g. 'Ilhan Omar'."},
+                           "kind": {"type": "string", "enum": ["person", "organization", "place", "none"]}}, ["name", "kind"]),
+}, ["agreed", "differences", "values_questions", "main_subject"])
 
 BRIEF_PROMPT = """You are writing the neutral brief for one news story, from the numbered coverage
 below (each line: outlet, its audience lean, headline, and summary when there is one).
@@ -70,6 +73,8 @@ Write:
   article numbers that take it. If the difference turns on a checkable fact, also write that fact as
   one statement in checkable_claim; otherwise leave it empty.
 - values_questions: up to 2 questions about what should happen or what matters more, worded neutrally.
+- main_subject: the one person (or organization, or place) the story is mainly about, by full name.
+  Use kind "none" if there is no single clear subject.
 
 Rules:
 - Attribute every claim to whoever made it. If a person, party, agency or lawyer says something, write
@@ -201,6 +206,7 @@ def main():
     lib["spend"] = {d: v for d, v in lib["spend"].items() if d >= cutoff}
     claims = lib.setdefault("claims", {})
     briefs = lib.setdefault("briefs", {})
+    images = lib.setdefault("images", {})
     lib.pop("extractions", None)  # replaced by briefs
 
     def gemini_ok():
@@ -339,6 +345,16 @@ def main():
                 d["check"] = check_claim(d["checkable_claim"], story["sid"], said_by)
         story["brief"] = brief
         story["checks"] = [d["check"] for d in brief["differences"] if d.get("check")]
+        subj = brief.get("main_subject") or {}
+        if subj.get("name") and subj.get("kind") in ("person", "organization", "place"):
+            ikey = f"{subj['kind']}:{subj['name'].casefold()}"
+            if ikey not in images:
+                try:
+                    images[ikey] = image_for(subj["name"], subj["kind"])  # None is cached too: no safe image
+                except Exception as e:
+                    print(f"  image lookup failed for {subj['name']}: {e}")
+            if images.get(ikey):
+                story["image"] = images[ikey]
         if brief["agreed"]:
             summarized += 1
         print(f"  {story['sid']}: {len(brief['agreed'])} agreed, {len(brief['differences'])} differences")
@@ -385,7 +401,9 @@ def build_brief(raw, arts, lines, side_of, ask, charge):
             differences.append({"point": d["point"].strip(), "positions": positions,
                                 "checkable_claim": (d.get("checkable_claim") or "").strip(), "check": None})
     values = [q.strip() for q in raw.get("values_questions", [])[:2] if q.strip()]
-    return {"agreed": confirmed, "differences": differences, "values_questions": values}
+    subj = raw.get("main_subject") or {}
+    return {"agreed": confirmed, "differences": differences, "values_questions": values,
+            "main_subject": {"name": (subj.get("name") or "").strip(), "kind": subj.get("kind", "none")}}
 
 
 if __name__ == "__main__":

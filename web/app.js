@@ -60,8 +60,23 @@ function chip(verdict) {
 
 /* ---------- Today ---------- */
 
+// A license-verified photo with its caption: what, who made it, license, source. Text never sits on it.
+function figure(img, cls) {
+  const f = el("figure", cls);
+  const im = el("img");
+  im.src = img.src; im.alt = img.alt; im.loading = "lazy"; im.decoding = "async";
+  f.append(im);
+  const cap = el("figcaption");
+  const a = el("a", null, img.caption);
+  a.href = img.source; a.rel = "noopener";
+  cap.append(a);
+  f.append(cap);
+  return f;
+}
+
 function storyCard(story, i, data) {
   const li = el("li", i === 0 ? "story story-lead" : "story");
+  if (i === 0 && story.image) li.append(figure(story.image, "lead-photo"));
   const main = el("div", "story-main");
   main.append(el("p", "story-num", String(i + 1).padStart(2, "0")));
   const h = el("h2", "headline");
@@ -163,6 +178,7 @@ function renderStory(data) {
   $("story-meta").textContent = `${story.topic === "politics" ? "Politics · " : ""}Updated ${clock(data.scanned_at)}`;
   $("story-title").textContent = story.working_title;
   $("story-sub").append(el("p", "byline", `Headline from ${lead(story).source}`));
+  if (story.image) $("story-sub").append(figure(story.image, "story-photo"));
 
   const brief = story.brief;
   const agreed = (brief && brief.agreed) || [];
