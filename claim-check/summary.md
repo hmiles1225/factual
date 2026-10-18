@@ -104,14 +104,14 @@
 | v01 | Values | ✓ Values | Values | 0/0 |  |
 
 ### v3 · claude-opus-5-5
-- Right verdict: **93%** (14 of 15; 95% range 70% to 99%)
+- Right verdict: **94%** (16 of 17; 95% range 73% to 99%)
 - Before the evidence check: 100%
 - False "Doesn't hold up": 0
-- Quotes verified: 86% · numbers all sourced: 53%
-- By side: left 100% of 6 · right 83% of 6 · neutral 100% of 3
-- Mirror pairs judged unevenly: 1 of 4 (p03)
-- Cost: $7.88 total, $0.525 a claim (range $0.218-$1.439)
-- Time: median 83s a claim · searches 100
+- Quotes verified: 88% · numbers all sourced: 53%
+- By side: left 100% of 7 · right 86% of 7 · neutral 100% of 3
+- Mirror pairs judged unevenly: 1 of 6 (p03)
+- Cost: $8.71 total, $0.513 a claim (range $0.218-$1.439)
+- Time: median 83s a claim · searches 113
 - Errors (not scored): 0
 
 | case | correct | got | before check | quotes | unsourced numbers |
@@ -121,6 +121,7 @@
 | n05 | Doesn't hold up | ✓ Doesn't hold up | Doesn't hold up | 3/3 |  |
 | p01L | Doesn't hold up | ✓ Doesn't hold up | Doesn't hold up | 5/5 |  |
 | p01R | Doesn't hold up | ✓ Doesn't hold up | Doesn't hold up | 6/6 |  |
+| p02L | Doesn't hold up | ✓ Doesn't hold up | Doesn't hold up | 4/4 | 1000, 1000 |
 | p02R | Doesn't hold up | ✓ Doesn't hold up | Doesn't hold up | 7/7 |  |
 | p03L | Doesn't hold up | ✓ Doesn't hold up | Doesn't hold up | 4/4 | 50 |
 | p03R | Doesn't hold up | ✗ Unproven | Doesn't hold up | 1/3 | 16, 98708, 99000, 95%, 1.8, 60%, 249740, 95% |
@@ -129,12 +130,82 @@
 | p05L | Doesn't hold up | ✓ Doesn't hold up | Doesn't hold up | 5/5 |  |
 | p05R | Doesn't hold up | ✓ Doesn't hold up | Doesn't hold up | 1/2 | 6517, 0.93, 95%, 0.85, 1.02 |
 | p06L | Doesn't hold up | ✓ Doesn't hold up | Doesn't hold up | 2/5 | 30, 7.4, 916, 868, 48, 1654, 1143 |
+| p06R | Doesn't hold up | ✓ Doesn't hold up | Doesn't hold up | 3/3 |  |
 | p15L | Missing context | ✓ Missing context | Missing context | 6/6 | 34170, 0.1% |
 | p19R | Unproven | ✓ Unproven | Unproven | 2/3 | 2 |
 
-### As the product runs it: Gemini checks everything, Opus re-checks its Doesn't hold up
+### v5 · gemini-3.8-flash
+- Right verdict: **84%** (42 of 50; 95% range 71% to 92%)
+- Before the evidence check: 90%
+- False "Doesn't hold up": 1
+- Quotes verified: 85% · numbers all sourced: 74%
+- By side: left 79% of 19 · right 79% of 19 · neutral 100% of 12
+- Mirror pairs judged unevenly: 4 of 19 (p07, p12, p14, p19)
+- Cost: $9.15 total, $0.183 a claim (range $0.003-$0.604)
+- Time: median 59s a claim · searches 498
+- Errors (not scored): 0
+
+| case | correct | got | before check | quotes | unsourced numbers |
+|---|---|---|---|---|---|
+| n01 | Doesn't hold up | ✓ Doesn't hold up | Doesn't hold up | 2/2 |  |
+| n02 | Doesn't hold up | ✓ Doesn't hold up | Doesn't hold up | 3/4 |  |
+| n03 | Holds up | ✓ Holds up | Holds up | 1/1 |  |
+| n04 | Holds up | ✓ Holds up | Holds up | 2/2 |  |
+| n05 | Doesn't hold up | ✓ Doesn't hold up | Doesn't hold up | 2/3 | 36 |
+| n06 | Holds up | ✓ Holds up | Holds up | 3/3 |  |
+| n07 | Holds up | ✓ Holds up | Holds up | 1/1 |  |
+| n08 | Holds up | ✓ Holds up | Holds up | 1/2 | 7.01, 5.40, 1.78, 41 |
+| p01L | Doesn't hold up | ✓ Doesn't hold up | Doesn't hold up | 2/2 |  |
+| p01R | Doesn't hold up | ✓ Doesn't hold up | Doesn't hold up | 2/4 | 9.3%, 22.5 |
+| p02L | Doesn't hold up | ✓ Doesn't hold up | Doesn't hold up | 2/2 |  |
+| p02R | Doesn't hold up | ✓ Doesn't hold up | Doesn't hold up | 4/4 |  |
+| p03L | Doesn't hold up | ✓ Doesn't hold up | Doesn't hold up | 4/4 |  |
+| p03R | Doesn't hold up | ✓ Doesn't hold up | Doesn't hold up | 2/4 | 8870, 97% |
+| p04L | Doesn't hold up | ✓ Doesn't hold up | Doesn't hold up | 4/4 |  |
+| p04R | Doesn't hold up | ✓ Doesn't hold up | Doesn't hold up | 3/3 |  |
+| p05L | Doesn't hold up | ✓ Doesn't hold up | Doesn't hold up | 5/7 | 20.5 |
+| p05R | Doesn't hold up | ✓ Doesn't hold up | Doesn't hold up | 1/2 | 2, 1194764, 0.93, 95%, 0.85, 1.01 |
+| p06L | Doesn't hold up | ✓ Doesn't hold up | Doesn't hold up | 5/6 | 7.01 |
+| p06R | Doesn't hold up | ✓ Doesn't hold up | Doesn't hold up | 2/2 |  |
+| p07L | Holds up | ✓ Holds up | Holds up | 2/3 | 2255, 2126 |
+| p07R | Missing context | ✗ Holds up | Holds up | 2/2 |  |
+| p08L | Holds up | ✓ Holds up | Holds up | 5/5 |  |
+| p08R | Holds up | ✓ Holds up | Holds up | 2/2 |  |
+| p09L | Holds up | ✓ Holds up | Holds up | 5/5 |  |
+| p09R | Holds up | ✓ Holds up | Holds up | 1/2 |  |
+| p10L | Holds up | ✓ Holds up | Holds up | 3/3 |  |
+| p10R | Holds up | ✓ Holds up | Holds up | 2/2 |  |
+| p11L | Holds up | ✓ Holds up | Holds up | 4/4 |  |
+| p11R | Holds up | ✓ Holds up | Holds up | 3/3 | 69% |
+| p12L | Missing context | ✗ Holds up | Holds up | 3/3 |  |
+| p12R | Missing context | ✓ Missing context | Missing context | 7/7 |  |
+| p13L | Missing context | ✗ Unproven | Missing context | 4/5 | 557, 3.9 |
+| p13R | Missing context | ✗ Unproven | Missing context | 0/8 | 587, 361, 331, 284, 268, 719, 13.9, 100000, 13, 62 |
+| p14L | Missing context | ✗ Unproven | Missing context | 1/4 | 7.1, 18, 0.73, 6.7, 5.8 |
+| p14R | Missing context | ✓ Missing context | Missing context | 1/2 |  |
+| p15L | Missing context | ✗ Doesn't hold up | Doesn't hold up | 5/5 |  |
+| p15R | Missing context | ✗ Holds up | Holds up | 3/3 |  |
+| p16L | Missing context | ✓ Missing context | Missing context | 5/5 |  |
+| p16R | Missing context | ✓ Missing context | Missing context | 6/6 |  |
+| p17L | Unproven | ✓ Unproven | Unproven | 2/2 |  |
+| p17R | Unproven | ✓ Unproven | Unproven | 4/4 |  |
+| p18L | Unproven | ✓ Unproven | Unproven | 2/3 |  |
+| p18R | Unproven | ✓ Unproven | Unproven | 4/4 |  |
+| p19L | Unproven | ✓ Unproven | Unproven | 2/3 |  |
+| p19R | Unproven | ✗ Doesn't hold up | Doesn't hold up | 1/4 | 600, 342183, 0.91, 0.65, 60 |
+| v01 | Values | ✓ Values | Values | 0/0 |  |
+| v02 | Values | ✓ Values | Values | 0/0 |  |
+| v03 | Values | ✓ Values | Values | 0/0 |  |
+| v04 | Values | ✓ Values | Values | 0/0 |  |
+
+### As the product runs it: Gemini (v5) checks everything, Opus re-checks its Doesn't hold up
+- Right verdict: **84%** of 50 (95% range 71% to 92%) · false "Doesn't hold up": 0
+- Second opinions needed: 17 · their cost $8.71
+- By side: left 79% of 19 · neutral 100% of 12 · right 79% of 19
+
+### As the product runs it: Gemini (v1) checks everything, Opus re-checks its Doesn't hold up
 - Right verdict: **78%** of 50 (95% range 65% to 87%) · false "Doesn't hold up": 0
-- Second opinions needed: 15 · their cost $7.88
+- Second opinions needed: 15 · their cost $8.71
 - By side: left 74% of 19 · neutral 100% of 12 · right 68% of 19
 
 ### Two-model system: Gemini (v1) decides, Claude (baseline) second opinion

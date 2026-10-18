@@ -1,0 +1,197 @@
+[
+ {
+  "role": "system",
+  "content": "You are the claim checker for fACTUAL, a news app with no human editor. Nobody reviews your\nanswer before readers see it, so accuracy matters more than completeness.\n\nHow to work:\n1. Decide first whether the claim is about facts or about values. A values claim (what should\n   happen, what matters more) gets the verdict \"Values\" and needs no evidence.\n2. For a factual claim, search for primary sources: the agency dataset, the official count, the\n   study itself, the court filing. News outlets are not evidence; use them only to find the primary\n   source.\n3. Find the NEWEST release of every dataset you use. Search explicitly for a newer release before\n   relying on a figure, and say in newest_data what you checked. Today's date is 2026-10-18.\n4. Use only what you read in pages you retrieved during this task. Do not use facts from memory,\n   even ones you are sure of. If you could not retrieve support for a point, leave it out.\n5. Every evidence quote must be copied word for word from the page at that exact URL. Code will\n   re-read the page and drop any quote it cannot find. Quote the sentence that carries the number.\n6. Every number you write in \"finding\" must appear in one of your quotes.\n7. Write \"steelman\" first: the strongest honest reason a reasonable person believes the claim.\n   Never mock. Rate the claim, never the person or group who says it.\n\nThe verdict rules below are fACTUAL's published method. Follow them exactly.\n\n# Verdicts\n\nEvery checked claim gets exactly one of four verdicts. Each one is always shown as a glyph and a\nword, never as color alone.\n\n## The test\n\n**Is the claim true as stated, checked against the newest evidence?**\n\nThere is one test, and no claim gets an exception to it. \"The newest evidence\" means the latest release\nof each dataset, found by a freshness check at the time the claim is checked.\n\n| Verdict | Means |\n| --- | --- |\n| Holds up | True as stated, on the newest evidence. |\n| Missing context | True as stated, but it leaves out something that changes the picture. |\n| Doesn't hold up | Not true as stated. Overstated and out-of-date claims count. |\n| Unproven | Not enough evidence either way, yet. |\n\n## Tie-breakers\n\n- **Overstated is Doesn't hold up.** \"Measles cases are at an all-time high\" is not true as stated,\n  even though 2025 had the most cases in over 30 years.\n- **Out of date is Doesn't hold up.** \"Only half a percent of people are transgender\" is not true as\n  stated: the newest Williams Institute estimate is 0.8% of U.S. adults. Someone repeating an older\n  figure is not lying, so the steelman says where the old figure came from.\n- **Missing context needs the claim to be true as stated.** It is for claims that are accurate but\n  leave out something that changes the picture, such as a total with no rate.\n- **Mixed evidence is Unproven,** and the text says \"The evidence is mixed.\" Never force certainty.\n- **A forecast is Unproven.** A prediction stated as fact (\"this would save money\", \"this will cost\n  a million jobs\") cannot be checked yet. It carries the reasoning flag \"Forecast, not a finding\" and\n  shows the range of credible estimates.\n- **Doesn't hold up needs two model families to agree.** If they disagree, the claim publishes as\n  Unproven.\n\n## How every check reads\n\n1. **Why this sounds right.** The steelman comes first, before the verdict.\n2. **The verdict,** glyph and word.\n3. **What the evidence shows.** The rationale never opens with a word that sounds like a verdict\n   (\"Out of date\", \"Yes\", \"Wrong\").\n4. **Based on,** naming the sources and their release dates.\n\nClaims are rated. People and groups never are.\n\n## Outlets are not evidence\n\nA verdict rests on primary sources: the dataset, the study, the filing, the official count. No news\noutlet's reporting settles a verdict, whichever side it leans.\n\nOutlets appear in two places instead:\n\n- **Coverage.** Which outlets covered the story, read from their own feeds over the same 48 hours.\n- **Also reported by.** When an outlet's article states the same verified fact, the check lists it,\n  for example \"Also reported by Fox News, CNN and MS NOW.\" Code confirms the figure or quote appears\n  in that article. Readers can see the fact is not one side's fact.\n\n## Values are not verdicts\n\nSome disagreements are about what matters more, not what is true. Those get no verdict. They go\nin \"Still open\" and are left to the reader.\n"
+ },
+ {
+  "role": "user",
+  "content": "Check this claim:\n\n\"Millions of noncitizens voted in the 2020 election.\"\n\nReturn the JSON object described by the schema."
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"import json\\nqs=[\\\"Georgia citizenship audit noncitizen voter registration 2022 Raffensperger results\\\",\\\"noncitizen voting 2020 election audit found\\\",\\\"SAVE noncitizen voters identified 2025 USCIS\\\",\\\"Brennan Center noncitizen voting 2016 survey election officials 30 suspected\\\",\\\"Ohio Secretary of State noncitizen voters referred 2024\\\",\\\"noncitizen voting 2026 audit results\\\"]\\nfor q in qs:\\n    r=await web_search({\\\"query\\\":q})\\n    print(\\\"==\\\",q)\\n    for x in r[:6]:\\n        print(x.get('title'),x.get('url'),x.get('page_age'))\\n\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_search",
+  "content": "{\n  \"query\": \"Georgia citizenship audit noncitizen voter registration 2022 Raffensperger results\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "search results:\nhttps://sos.ga.gov/news/citizenship-audit-finds-1634-noncitizens-attempted-register-vote\nhttps://www.yahoo.com/news/georgia-gop-secretary-state-audit-145849669.html\nhttps://georgiarecorder.com/briefs/georgia-gop-secretary-of-state-reports-audit-found-20-noncitizens-registered-to-vote-out-of-8-2m/\nhttps://sos.ga.gov/news/raffensperger-launches-additional-citizens-only-voting-election-security-measures\nhttps://www.newsweek.com/georgia-citizenship-audit-finds-just-20-noncitizens-registered-vote-1973967\nhttps://www.ajc.com/politics/election-audit-shows-20-noncitizens-registered-to-vote-in-georgia/NRORAL7Z3RDSNMQ3QDLVEARPSY/\nhttps://www.ms.now/top-stories/latest/georgia-brad-raffensperger-noncitizen-voting-audit-rcna176887\nhttps://www.foxnews.com/politics/pressure-grows-georgia-secretary-state-release-results-noncitizen-voter-roll-audit\nhttps://www.pressreader.com/usa/the-catoosa-county-news/20220420/281779927674465"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"r=await web_search({\\\"query\\\":qs[0]})\\nprint(type(r), str(r)[:500])\\n\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_search",
+  "content": "{\n  \"query\": \"Georgia citizenship audit noncitizen voter registration 2022 Raffensperger results\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "search results:\nhttps://sos.ga.gov/news/citizenship-audit-finds-1634-noncitizens-attempted-register-vote\nhttps://www.yahoo.com/news/georgia-gop-secretary-state-audit-145849669.html\nhttps://georgiarecorder.com/briefs/georgia-gop-secretary-of-state-reports-audit-found-20-noncitizens-registered-to-vote-out-of-8-2m/\nhttps://sos.ga.gov/news/raffensperger-launches-additional-citizens-only-voting-election-security-measures\nhttps://www.newsweek.com/georgia-citizenship-audit-finds-just-20-noncitizens-registered-vote-1973967\nhttps://www.ajc.com/politics/election-audit-shows-20-noncitizens-registered-to-vote-in-georgia/NRORAL7Z3RDSNMQ3QDLVEARPSY/\nhttps://www.ms.now/top-stories/latest/georgia-brad-raffensperger-noncitizen-voting-audit-rcna176887\nhttps://www.foxnews.com/politics/pressure-grows-georgia-secretary-state-release-results-noncitizen-voter-roll-audit\nhttps://www.pressreader.com/usa/the-catoosa-county-news/20220420/281779927674465"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"res={}\\nasync def s(q):\\n    r=json.loads(await web_search({\\\"query\\\":q}))\\n    res[q]=r\\n    print(\\\"==\\\",q)\\n    for x in r[:6]:\\n        if isinstance(x,dict): print(' ',x.get('title'),x.get('url'),x.get('page_age'))\\nfor q in qs: await s(q)\\n\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_search",
+  "content": "{\n  \"query\": \"Georgia citizenship audit noncitizen voter registration 2022 Raffensperger results\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "search results:\nhttps://sos.ga.gov/news/citizenship-audit-finds-1634-noncitizens-attempted-register-vote\nhttps://www.yahoo.com/news/georgia-gop-secretary-state-audit-145849669.html\nhttps://georgiarecorder.com/briefs/georgia-gop-secretary-of-state-reports-audit-found-20-noncitizens-registered-to-vote-out-of-8-2m/\nhttps://sos.ga.gov/news/raffensperger-launches-additional-citizens-only-voting-election-security-measures\nhttps://www.newsweek.com/georgia-citizenship-audit-finds-just-20-noncitizens-registered-vote-1973967\nhttps://www.ajc.com/politics/election-audit-shows-20-noncitizens-registered-to-vote-in-georgia/NRORAL7Z3RDSNMQ3QDLVEARPSY/\nhttps://www.ms.now/top-stories/latest/georgia-brad-raffensperger-noncitizen-voting-audit-rcna176887\nhttps://www.foxnews.com/politics/pressure-grows-georgia-secretary-state-release-results-noncitizen-voter-roll-audit\nhttps://www.pressreader.com/usa/the-catoosa-county-news/20220420/281779927674465"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_search",
+  "content": "{\n  \"query\": \"noncitizen voting 2020 election audit found\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "search results:\nhttps://fairelectionscenter.org/voting-by-noncitizens-is-a-non-issue/\nhttps://www.votebeat.org/national/2026/08/20/trump-census-bureau-noncitizen-voters-2020-election-methodology/\nhttps://www.census.gov/library/publications/2026/dir/noncitizen-voting-in-the-2020-election.html\nhttps://www.nbcnews.com/politics/elections/experts-cast-doubt-findings-census-report-noncitizen-voting-rcna593830\nhttps://fairelectionscenter.org/media/fact-check-claim-that-voting-noncitizens-affected-2020-election-outcome-is-unverified/\nhttps://www.dailysignal.com/2026/08/11/noncitizen-voting-cases/\nhttps://www.cnn.com/2026/08/20/politics/flawed-census-report-alleged-noncitizen-voting\nhttps://cis.org/Arthur/Did-24000-and-Counting-Aliens-Really-Vote-2020-Election\nhttps://npr.org/2024/10/12/nx-s1-5147789/voting-election-2024-noncitizen-fact-check-trump"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_search",
+  "content": "{\n  \"query\": \"SAVE noncitizen voters identified 2025 USCIS\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "search results:\nhttps://www.npr.org/2025/09/10/nx-s1-5477367/save-election-citizenship-data-trump\nhttps://fairelectionscenter.org/wp-content/uploads/2025/12/2025-12-01-Fair-Elections-re-DHS-SAVE-SORN.pdf\nhttps://bipartisanpolicy.org/article/evaluating-how-the-uscis-save-system-performs-in-practice-evidence-from-election-offices/\nhttps://bipartisanpolicy.org/article/five-things-to-know-about-the-save-act/\nhttps://www.sos.state.tx.us/about/newsreleases/2025/102025.shtml\nhttps://www.npr.org/2026/09/25/nx-s1-5976804/supreme-court-trump-save-noncitizen-voting\nhttps://npr.org/2025/12/10/nx-s1-5588384/save-voting-data-us-citizens\nhttps://www.texastribune.org/2026/02/13/save-voter-citizenship-tool-mistakes-confusion/\nhttps://www.yahoo.com/news/articles/jester-says-240-potential-noncitizens-222900163.html"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_search",
+  "content": "{\n  \"query\": \"Brennan Center noncitizen voting 2016 survey election officials 30 suspected\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "search results:\nhttps://www.brennancenter.org/our-work/research-reports/noncitizen-voting-vanishingly-rare\nhttps://www.congress.gov/118/meeting/house/117312/witnesses/HHRG-118-HA00-Wstate-WaldmanM-20240516-SD001.pdf\nhttps://protectdemocracy.org/work/noncitizen-voting-lies-explained/\nhttps://www.brennancenter.org/our-work/research-reports/noncitizen-voting-missing-millions\nhttps://www.brennancenter.org/our-work/research-reports/resources-voter-fraud-claims\nhttps://minnesotareformer.com/2026/10/07/noncitizens-trying-to-vote-vanishingly-rare/\nhttps://time.com/article/2026/09/29/trump-non-citizen-voting-voter-fraud-claims/\nhttps://www.brennancenter.org/our-work/research-reports/10-voter-fraud-lies-debunked\nhttps://www.brennancenter.org/our-work/analysis-opinion/damage-conspiracy-theories-about-noncitizen-voting\nhttps://abcnews.com/US/election-fact-check-noncitizens-vote-instances-vanishingly-rare/story?id=115025674"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_search",
+  "content": "{\n  \"query\": \"Ohio Secretary of State noncitizen voters referred 2024\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "search results:\nhttps://www.ohiosos.gov/media-center/press-releases/2024/2024-08-21/\nhttps://www.foxnews.com/us/ohio-refers-over-100-non-citizen-registered-voters-state-ag-prosecution\nhttps://www.ohiosos.gov/media-center/press-releases/2024/2024-08-01/\nhttps://www.statenews.org/government-politics/2024-08-27/almost-600-of-8m-people-on-ohios-voting-rolls-found-to-be-non-citizens\nhttps://www.foxnews.com/politics/election-investigation-uncovers-alleged-illegal-voting-noncitizens-double-voters-multiple-states\nhttps://politifact.com/article/2026/jul/17/Mullin-dhs-250000-noncitizen-voters-Trump/\nhttps://abcnews.com/US/election-fact-check-noncitizens-vote-instances-vanishingly-rare/story?id=115025674\nhttps://www.foxnews.com/politics/ohio-uncovers-over-1000-noncitizens-appearing-registered-vote-sends-cases-doj-prosecution\nhttps://www.foxnews.com/politics/ohio-secretary-state-sues-biden-administration-obstructing-removal-non-citizen-registered-voters\nhttps://www.foxnews.com/politics/oregon-dmv-admits-wrongfully-registering-hundreds-non-citizens-vote.print"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_search",
+  "content": "{\n  \"query\": \"noncitizen voting 2026 audit results\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "search results:\nhttps://www.votebeat.org/pennsylvania/2026/04/17/penndot-motor-voter-audit-tim-defoor-noncitizen/\nhttps://bipartisanpolicy.org/article/evaluating-how-the-uscis-save-system-performs-in-practice-evidence-from-election-offices/\nhttps://electioninnovation.org/research/claims-noncitizen-registration-voting-analysis-tracker/\nhttps://www.americanimmigrationcouncil.org/blog/myths-about-noncitizen-voting-heritage-foundation-data/\nhttps://www.votebeat.org/michigan/2026/09/02/auditor-general-report-voter-roll-noncitizens-2026-election/\nhttps://bipartisanpolicy.org/article/four-things-to-know-about-noncitizen-voting/\nhttps://www.sltrib.com/news/politics/2026/05/27/utah-election-audit-fine-no/\nhttps://www.cnn.com/2026/10/07/politics/dhs-ice-voter-fraud-investigation-undercover\nhttps://www.ksl.com/article/51503158/new-audit-finds-small-handful-of-noncitizens-on-utah-voter-rolls"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"async def f(u):\\n    r=await web_fetch({\\\"url\\\":u})\\n    if isinstance(r,str): r=json.loads(r)\\n    if isinstance(r,list): r=r[0]\\n    return r.get('content','') if isinstance(r,dict) else str(r)\\nc=await f(\\\"https://www.census.gov/library/publications/2026/dir/noncitizen-voting-in-the-2020-election.html\\\")\\nprint(len(c)); print(c[:5000])\\n\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_fetch",
+  "content": "{\n  \"url\": \"https://www.census.gov/library/publications/2026/dir/noncitizen-voting-in-the-2020-election.html\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "fetched https://www.census.gov/library/publications/2026/dir/noncitizen-voting-in-the-2020-election.html (23167 chars)"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"r=await web_fetch({\\\"url\\\":\\\"https://www.census.gov/library/publications/2026/dir/noncitizen-voting-in-the-2020-election.html\\\"})\\nprint(type(r), str(r)[:3000])\\n\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_fetch",
+  "content": "{\n  \"url\": \"https://www.census.gov/library/publications/2026/dir/noncitizen-voting-in-the-2020-election.html\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "fetched https://www.census.gov/library/publications/2026/dir/noncitizen-voting-in-the-2020-election.html (23167 chars)"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"async def f(u):\\n    r=json.loads(await web_fetch({\\\"url\\\":u}))\\n    c=r.get('content')\\n    if isinstance(c,dict):\\n        s=c.get('source',{}); return s.get('data','') if isinstance(s,dict) else str(c)\\n    return str(c) if c else str(r)[:500]\\nc=await f(\\\"https://www.census.gov/library/publications/2026/dir/noncitizen-voting-in-the-2020-election.html\\\")\\ni=c.find('Skip Main'); \\nimport re\\nfor m in re.finditer(r'noncitizen|percent|vot',c): pass\\nidx=c.find('This brief')\\nprint(c[idx-200:idx+4000])\\n\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_fetch",
+  "content": "{\n  \"url\": \"https://www.census.gov/library/publications/2026/dir/noncitizen-voting-in-the-2020-election.html\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "fetched https://www.census.gov/library/publications/2026/dir/noncitizen-voting-in-the-2020-election.html (23167 chars)"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"for m in re.finditer(r'(?i)noncitizen',c):\\n    pass\\nidx=[m.start() for m in re.finditer(r'(?i)noncitizens? (vot|who)',c)]\\nprint(idx[:20])\\nj=c.find('Noncitizen Voting in the 2020 Election',c.find('title:')+200)\\nk=c.rfind('Noncitizen Voting in the 2020 Election')\\nprint(c[k-200:k+5000])\\n\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"print(c[16000:21000])\\n\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"p=await f(\\\"https://www.census.gov/content/dam/Census/library/publications/2026/dir/noncitizen-voting-in-the-2020-election.pdf\\\")\\nprint(len(p)); print(p[:8000])\\n\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_fetch",
+  "content": "{\n  \"url\": \"https://www.census.gov/content/dam/Census/library/publications/2026/dir/noncitizen-voting-in-the-2020-election.pdf\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "fetched https://www.census.gov/content/dam/Census/library/publications/2026/dir/noncitizen-voting-in-the-2020-election.pdf (169300 chars)"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"import base64,io\\nfrom pypdf import PdfReader\\nb=base64.b64decode(p)\\nt=\\\"\\\\n\\\".join(pg.extract_text() for pg in PdfReader(io.BytesIO(b)).pages)\\nprint(len(t)); print(t[:6000])\\n\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"print(t[6000:15665])\\n\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"for q in [\\\"Census Bureau noncitizen voting 2020 update remaining 32 million records\\\",\\\"Census Bureau noncitizen voters report October 2026\\\",\\\"Richman Chattha Earnest noncitizens vote CCES estimate\\\",\\\"Ansolabehere Luks Schaffner perils of cherry picking low frequency events noncitizen\\\"]:\\n    await s(q)\\n\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"print(list(res.keys())[-3:])\\n\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"for q,r in res.items():\\n    for x in r[:6]:\\n        if isinstance(x,dict) and any(k in x['url'] for k in ['sos.ga.gov/news/citizenship','votebeat.org/national/2026/08','georgiarecorder','electioninnovation']):\\n            print('##',x['url']); print(x['content'][:2500])\\n\"\n}"
+ },
+ {
+  "role": "assistant",
+  "content": "{\"fact_or_values\":\"fact\",\"verdict\":\"Doesn't hold up\",\"steelman\":\"Noncitizen voting does happen. A federal analysis released this year found noncitizen voters in 2020 in every state it listed. Most states don't check every voter's citizenship against federal records, so it's reasonable to worry that a lot of cases go unnoticed. The same report says millions of voter records haven't been analyzed yet, which makes it easy to assume the final count could be much larger. Prominent officials have also repeated the claim.\",\"finding\":\"The newest and largest federal check is a U.S. Census Bureau analysis released in August 2026. It matched 2020 voter records against immigration, visa, Social Security and tax records. Of the nearly 160 million people who voted in 2020, it identified over 128 million as citizens and over 24,000 as noncitizens 'with high confidence.' That is tens of thousands, not millions. Over 32 million voter records have not been analyzed yet, so the final count is not settled. But the count so far is far below millions. For the remaining records to add millions, noncitizens would have to show up among them far more often than among the records already checked. Outside experts have also questioned whether the 24,000 figure is too high. State checks point the same way. Georgia's first citizenship audit of its voter rolls found 1,634 people who had tried to register but could not be verified as citizens. Because of the state's existing checks, those people were held in pending status and could not vote. None of the primary sources retrieved for this check supports the claim that millions of noncitizens voted in 2020.\",\"reasoning_flags\":[],\"newest_data\":\"The main source is the U.S. Census Bureau brief 'Noncitizen Voting in the 2020 Election, A Beginning Analysis,' published August 18, 2026. Both the web page and the full PDF were read. When the page was retrieved on 2026-10-16, it still said 'Page Last Revised - August 18, 2026.' Searches for 2026 audits and reports on noncitizen voting (Census, SAVE, state audits) turned up nothing newer that analyzes the remaining 32 million records. A last, more targeted search for a Census follow-up could not run because the search tool's usage limit had been reached, so a release in the past few weeks can't be fully ruled out. For state-level context, this check uses Georgia's citizenship audit, announced March 28, 2022. A 2024 Georgia audit was found only through news coverage and is not used as evidence.\",\"evidence\":[{\"url\":\"https://www.census.gov/library/publications/2026/dir/noncitizen-voting-in-the-2020-election.html\",\"publisher\":\"U.S. Census Bureau\",\"published\":\"2026-08-18\",\"quote\":\"Nearly 160 million voters cast ballots in the 2020 general election. The Census Bureau\u2019s beginning analysis readily determined with high confidence that over 128 million of these voter records represented citizens, and that over 24,000 of these voter records represented noncitizens at the time of the election. Over 32 million voter records remain to be analyzed.\",\"role\":\"contradicts\"},{\"url\":\"https://sos.ga.gov/news/citizenship-audit-finds-1634-noncitizens-attempted-register-vote\",\"publisher\":\"Georgia Secretary of State\",\"published\":\"2022-03-28\",\"quote\":\"The review found that 1,634 people who had attempted to register to vote were not able to be verified by U.S. Citizenship and Immigration Services\u2019 (USCIS) Systematic Alien Verification for Entitlements (SAVE) program.\",\"role\":\"context\"},{\"url\":\"https://sos.ga.gov/news/citizenship-audit-finds-1634-noncitizens-attempted-register-vote\",\"publisher\":\"Georgia Secretary of State\",\"published\":\"2022-03-28\",\"quote\":\"Due to Georgia\u2019s existing citizenship check procedures, the noncitizens identified in the citizenship check were placed into \u201cpending citizenship\u201d status and were not able to vote.\",\"role\":\"context\"}]}"
+ },
+ {
+  "role": "assistant",
+  "name": "evidence check",
+  "content": "{\n  \"verdict_from_model\": \"Doesn't hold up\",\n  \"verdict_after_check\": \"Doesn't hold up\",\n  \"guard_notes\": [],\n  \"numbers_unsourced\": [],\n  \"evidence\": [\n    {\n      \"url\": \"https://www.census.gov/library/publications/2026/dir/noncitizen-voting-in-the-2020-election.html\",\n      \"publisher\": \"U.S. Census Bureau\",\n      \"published\": \"2026-08-18\",\n      \"quote\": \"Nearly 160 million voters cast ballots in the 2020 general election. The Census Bureau\\u2019s beginning analysis readily determined with high confidence that over 128 million of these voter records represented citizens, and that over 24,000 of these voter records represented noncitizens at the time of the election. Over 32 million voter records remain to be analyzed.\",\n      \"role\": \"contradicts\",\n      \"verified\": true,\n      \"checked_by\": \"model fetch\"\n    },\n    {\n      \"url\": \"https://sos.ga.gov/news/citizenship-audit-finds-1634-noncitizens-attempted-register-vote\",\n      \"publisher\": \"Georgia Secretary of State\",\n      \"published\": \"2022-03-28\",\n      \"quote\": \"The review found that 1,634 people who had attempted to register to vote were not able to be verified by U.S. Citizenship and Immigration Services\\u2019 (USCIS) Systematic Alien Verification for Entitlements (SAVE) program.\",\n      \"role\": \"context\",\n      \"verified\": true,\n      \"checked_by\": \"anthropic fetch\"\n    },\n    {\n      \"url\": \"https://sos.ga.gov/news/citizenship-audit-finds-1634-noncitizens-attempted-register-vote\",\n      \"publisher\": \"Georgia Secretary of State\",\n      \"published\": \"2022-03-28\",\n      \"quote\": \"Due to Georgia\\u2019s existing citizenship check procedures, the noncitizens identified in the citizenship check were placed into \\u201cpending citizenship\\u201d status and were not able to vote.\",\n      \"role\": \"context\",\n      \"verified\": true,\n      \"checked_by\": \"anthropic fetch\"\n    }\n  ]\n}"
+ }
+]

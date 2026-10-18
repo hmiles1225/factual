@@ -1,0 +1,168 @@
+[
+ {
+  "role": "system",
+  "content": "You are the claim checker for fACTUAL, a news app with no human editor. Nobody reviews your\nanswer before readers see it, so accuracy matters more than completeness.\n\nHow to work:\n1. Decide first whether the claim is about facts or about values. A values claim (what should\n   happen, what matters more) gets the verdict \"Values\" and needs no evidence.\n2. For a factual claim, search for primary sources: the agency dataset, the official count, the\n   study itself, the court filing. News outlets are not evidence; use them only to find the primary\n   source.\n3. Find the NEWEST release of every dataset you use. Search explicitly for a newer release before\n   relying on a figure, and say in newest_data what you checked. Today's date is 2026-10-18.\n4. Use only what you read in pages you retrieved during this task. Do not use facts from memory,\n   even ones you are sure of. If you could not retrieve support for a point, leave it out.\n5. Every evidence quote must be copied word for word from the page at that exact URL. Code will\n   re-read the page and drop any quote it cannot find. Quote the sentence that carries the number.\n6. Every number you write in \"finding\" must appear in one of your quotes.\n7. Write \"steelman\" first: the strongest honest reason a reasonable person believes the claim.\n   Never mock. Rate the claim, never the person or group who says it.\n\nThe verdict rules below are fACTUAL's published method. Follow them exactly.\n\n# Verdicts\n\nEvery checked claim gets exactly one of four verdicts. Each one is always shown as a glyph and a\nword, never as color alone.\n\n## The test\n\n**Is the claim true as stated, checked against the newest evidence?**\n\nThere is one test, and no claim gets an exception to it. \"The newest evidence\" means the latest release\nof each dataset, found by a freshness check at the time the claim is checked.\n\n| Verdict | Means |\n| --- | --- |\n| Holds up | True as stated, on the newest evidence. |\n| Missing context | True as stated, but it leaves out something that changes the picture. |\n| Doesn't hold up | Not true as stated. Overstated and out-of-date claims count. |\n| Unproven | Not enough evidence either way, yet. |\n\n## Tie-breakers\n\n- **Overstated is Doesn't hold up.** \"Measles cases are at an all-time high\" is not true as stated,\n  even though 2025 had the most cases in over 30 years.\n- **Out of date is Doesn't hold up.** \"Only half a percent of people are transgender\" is not true as\n  stated: the newest Williams Institute estimate is 0.8% of U.S. adults. Someone repeating an older\n  figure is not lying, so the steelman says where the old figure came from.\n- **Missing context needs the claim to be true as stated.** It is for claims that are accurate but\n  leave out something that changes the picture, such as a total with no rate.\n- **Mixed evidence is Unproven,** and the text says \"The evidence is mixed.\" Never force certainty.\n- **A forecast is Unproven.** A prediction stated as fact (\"this would save money\", \"this will cost\n  a million jobs\") cannot be checked yet. It carries the reasoning flag \"Forecast, not a finding\" and\n  shows the range of credible estimates.\n- **Doesn't hold up needs two model families to agree.** If they disagree, the claim publishes as\n  Unproven.\n\n## How every check reads\n\n1. **Why this sounds right.** The steelman comes first, before the verdict.\n2. **The verdict,** glyph and word.\n3. **What the evidence shows.** The rationale never opens with a word that sounds like a verdict\n   (\"Out of date\", \"Yes\", \"Wrong\").\n4. **Based on,** naming the sources and their release dates.\n\nClaims are rated. People and groups never are.\n\n## Outlets are not evidence\n\nA verdict rests on primary sources: the dataset, the study, the filing, the official count. No news\noutlet's reporting settles a verdict, whichever side it leans.\n\nOutlets appear in two places instead:\n\n- **Coverage.** Which outlets covered the story, read from their own feeds over the same 48 hours.\n- **Also reported by.** When an outlet's article states the same verified fact, the check lists it,\n  for example \"Also reported by Fox News, CNN and MS NOW.\" Code confirms the figure or quote appears\n  in that article. Readers can see the fact is not one side's fact.\n\n## Values are not verdicts\n\nSome disagreements are about what matters more, not what is true. Those get no verdict. They go\nin \"Still open\" and are left to the reader.\n"
+ },
+ {
+  "role": "user",
+  "content": "Check this claim:\n\n\"CEOs now make 1,000 times what their typical worker makes.\"\n\nReturn the JSON object described by the schema."
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"import json\\nqs=[\\\"EPI CEO pay ratio 2025 report\\\",\\\"AFL-CIO Executive Paywatch 2026 CEO-to-worker pay ratio\\\",\\\"CEO pay ratio typical worker 2026\\\",\\\"Economic Policy Institute CEO compensation 2026\\\"]\\nfor q in qs:\\n    r=await web_search({\\\"query\\\":q})\\n    print(\\\"==\\\",q)\\n    for x in r[:6]:\\n        print(x.get('title'),x.get('url'),x.get('page_age'))\\n        print(x.get('content','')[:300].replace(\\\"\\\\n\\\",\\\" \\\"))\\n\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_search",
+  "content": "{\n  \"query\": \"EPI CEO pay ratio 2025 report\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "search results:\nhttps://www.epi.org/blog/ceo-pay-surged-in-2025-ceos-are-paid-325-times-as-much-as-the-typical-worker/\nhttps://www.cnbc.com/2025/10/03/epi-report-ceos-earn-nearly-300-times-as-much-as-workers.html\nhttps://www.epi.org/publication/ceo-pay/\nhttps://energyandpolicy.org/wp-content/uploads/2026/04/EPI-Exec-Comp-Report-2026.pdf\nhttps://www.sec.gov/Archives/edgar/data/1681459/000162828026019819/fti-20260319.htm\nhttps://www.sec.gov/Archives/edgar/data/1501585/000150158526000014/hii-20260320.htm\nhttps://www.epi.org/\nhttps://www.sec.gov/Archives/edgar/data/355948/000095017025111119/rell-20250825.htm\nhttps://www.sec.gov/Archives/edgar/data/1012100/000101210026000016/see-20251231.htm\nhttps://www.sec.gov/Archives/edgar/data/1529274/000152927426000023/alk-20260407.htm"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"r=await web_search({\\\"query\\\":\\\"EPI CEO pay ratio 2025 report\\\"})\\nprint(type(r), str(r)[:1500])\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_search",
+  "content": "{\n  \"query\": \"EPI CEO pay ratio 2025 report\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "search results:\nhttps://www.epi.org/blog/ceo-pay-surged-in-2025-ceos-are-paid-325-times-as-much-as-the-typical-worker/\nhttps://www.cnbc.com/2025/10/03/epi-report-ceos-earn-nearly-300-times-as-much-as-workers.html\nhttps://www.epi.org/publication/ceo-pay/\nhttps://energyandpolicy.org/wp-content/uploads/2026/04/EPI-Exec-Comp-Report-2026.pdf\nhttps://www.sec.gov/Archives/edgar/data/1681459/000162828026019819/fti-20260319.htm\nhttps://www.sec.gov/Archives/edgar/data/1501585/000150158526000014/hii-20260320.htm\nhttps://www.epi.org/\nhttps://www.sec.gov/Archives/edgar/data/355948/000095017025111119/rell-20250825.htm\nhttps://www.sec.gov/Archives/edgar/data/1012100/000101210026000016/see-20251231.htm\nhttps://www.sec.gov/Archives/edgar/data/1529274/000152927426000023/alk-20260407.htm"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"def s(q,n=6,c=300):\\n    r=await web_search({\\\"query\\\":q})\\n    try: r=json.loads(r)\\n    except: pass\\n    print(\\\"==\\\",q)\\n    for x in r[:n]:\\n        if isinstance(x,dict):\\n            print(x.get('title'),x.get('url'),x.get('page_age'))\\n            print(x.get('content','')[:c].replace(\\\"\\\\n\\\",\\\" \\\"))\\nfor q in [\\\"AFL-CIO Executive Paywatch 2026 CEO-to-worker pay ratio\\\",\\\"CEO pay 1,000 times typical worker\\\",\\\"Equilar AP CEO pay study 2026 median pay ratio\\\"]:\\n    await s(q)\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"async def s(q,n=6,c=300):\\n    r=await web_search({\\\"query\\\":q})\\n    try: r=json.loads(r)\\n    except: pass\\n    print(\\\"==\\\",q)\\n    for x in r[:n]:\\n        if isinstance(x,dict):\\n            print(x.get('title'),x.get('url'),x.get('page_age'))\\n            print(x.get('content','')[:c].replace(\\\"\\\\n\\\",\\\" \\\"))\\nfor q in [\\\"AFL-CIO Executive Paywatch 2026 CEO-to-worker pay ratio\\\",\\\"CEO pay 1,000 times typical worker\\\",\\\"Equilar AP CEO pay study 2026 median pay ratio\\\"]:\\n    await s(q)\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_search",
+  "content": "{\n  \"query\": \"AFL-CIO Executive Paywatch 2026 CEO-to-worker pay ratio\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "search results:\nhttps://aflcio.org/2026/8/13/12-things-you-need-know-afl-cios-2026-executive-paywatch-report\nhttps://aflcio.org/press/releases/afl-cio-report-shows-top-ceos-made-312-times-workers-pay-2025\nhttps://aflcio.org/paywatch\nhttps://aflcio.org/executive-paywatch\nhttps://nwlaborpress.org/2025/07/ceo-pay-now-285-times-the-average-workers/\nhttps://awf.labortools.com/listen/afl-cios-fred-redmond-on-ceo-pay-elon-musk-and-the-fight-ahead\nhttps://www.wnylabortoday.com/news/2026/08/16/labor-news-from-washington-d.c./the-national-afl-cio-s-2026-executive-paywatch-report-the-data-couldn-t-be-clearer-this-economy-is-working-for-greedy-ceos-not-for-working-people-average-ceo-to-worker-pay-ratio-increased-from-285-to-1-in-2024-to-312-to-1-in-2025\nhttps://www.peoplesworld.org/article/paywatch-ceo-worker-pay-gap-hits-record/\nhttps://maineaflcio.org/news/new-afl-cio-report-it-would-take-five-career-lifetimes-workers-earn-what-top\nhttps://mypersonalrecruiter.com/whats-the-salary-of-ceo/"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_search",
+  "content": "{\n  \"query\": \"CEO pay 1,000 times typical worker\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "search results:\nhttps://www.epi.org/publication/ceo-pay-in-2021/\nhttps://www.cnbc.com/2025/10/03/epi-report-ceos-earn-nearly-300-times-as-much-as-workers.html\nhttps://www.cnbc.com/2024/06/05/typical-ceo-makes-nearly-200-times-more-than-their-workers.html\nhttps://www.epi.org/blog/ceo-pay-surged-in-2025-ceos-are-paid-325-times-as-much-as-the-typical-worker/\nhttps://www.denver7.com/life/money/ceos-made-325-times-more-than-typical-workers-last-year-report-finds\nhttps://www.kxlf.com/life/money/ceos-made-325-times-more-than-typical-workers-last-year-report-finds\nhttps://www.epi.org/press/ceo-pay-jumped-nearly-6-in-2024-ceos-made-281-times-as-much-as-the-typical-worker/\nhttps://www.cnbc.com/2021/09/15/in-2020-top-ceos-earned-351-times-more-than-the-typical-worker.html\nhttps://www.epi.org/blog/ceo-pay-increased-in-2024-and-is-now-281-times-that-of-the-typical-worker-new-epi-landing-page-has-all-the-details/\nhttps://www.epi.org/publication/ceo-pay-in-2023/"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_search",
+  "content": "{\n  \"query\": \"Equilar AP CEO pay study 2026 median pay ratio\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "search results:\nhttps://www.equilar.com/reports/126-highest-paid-ceos-2026-equilar-100.html\nhttps://www.equilar.com/reports/127-equilar-associated-press-ceo-pay-study-2026.html\nhttps://www.equilar.com/reports/129-equilar-new-york-times-top-100-highest-paid-ceos-2026.html\nhttps://corpgov.law.harvard.edu/2026/06/04/ceo-pay-trends-a-post-proxy-season-recap-2/\nhttps://finance.yahoo.com/markets/stocks/articles/ap-equilar-calculated-ceo-pay-131602113.html\nhttps://www.usnews.com/news/us/articles/2026-05-27/how-ap-and-equilar-calculated-ceo-pay\nhttps://www.chron.com/business/article/how-ap-and-equilar-calculated-ceo-pay-22278442.php\nhttps://corpgov.law.harvard.edu/2025/06/08/ceo-pay-study/.\nhttps://www.businesswire.com/news/home/20250501436676/en\nhttps://corpgov.law.harvard.edu/2024/07/09/sp-500-ceo-pay-rebounds-after-decline-in-2022"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"async def f(u):\\n    r=await web_fetch({\\\"url\\\":u})\\n    try: r=json.loads(r)\\n    except: pass\\n    if isinstance(r,list): r=r[0]\\n    return r.get('content','') if isinstance(r,dict) else str(r)\\nimport re\\npages={}\\nfor u in [\\\"https://www.epi.org/blog/ceo-pay-surged-in-2025-ceos-are-paid-325-times-as-much-as-the-typical-worker/\\\",\\\"https://aflcio.org/press/releases/afl-cio-report-shows-top-ceos-made-312-times-workers-pay-2025\\\",\\\"https://aflcio.org/paywatch\\\",\\\"https://www.equilar.com/reports/127-equilar-associated-press-ceo-pay-study-2026.html\\\"]:\\n    pages[u]=await f(u)\\n    print(\\\"==\\\",u,len(pages[u]))\\n    print(pages[u][:3000])\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_fetch",
+  "content": "{\n  \"url\": \"https://www.epi.org/blog/ceo-pay-surged-in-2025-ceos-are-paid-325-times-as-much-as-the-typical-worker/\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "fetched https://www.epi.org/blog/ceo-pay-surged-in-2025-ceos-are-paid-325-times-as-much-as-the-typical-worker/ (34969 chars)"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"r=await web_fetch({\\\"url\\\":\\\"https://www.epi.org/blog/ceo-pay-surged-in-2025-ceos-are-paid-325-times-as-much-as-the-typical-worker/\\\"})\\nprint(type(r)); print(str(r)[:500])\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_fetch",
+  "content": "{\n  \"url\": \"https://www.epi.org/blog/ceo-pay-surged-in-2025-ceos-are-paid-325-times-as-much-as-the-typical-worker/\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "fetched https://www.epi.org/blog/ceo-pay-surged-in-2025-ceos-are-paid-325-times-as-much-as-the-typical-worker/ (34969 chars)"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"async def f(u):\\n    r=await web_fetch({\\\"url\\\":u})\\n    r=json.loads(r)\\n    if isinstance(r,list): r=r[0]\\n    c=r.get('content')\\n    if isinstance(c,dict): c=c.get('source',{}).get('data','')\\n    return c or str(r)\\npages={}\\nfor u in [\\\"https://www.epi.org/blog/ceo-pay-surged-in-2025-ceos-are-paid-325-times-as-much-as-the-typical-worker/\\\",\\\"https://aflcio.org/press/releases/afl-cio-report-shows-top-ceos-made-312-times-workers-pay-2025\\\",\\\"https://aflcio.org/paywatch\\\",\\\"https://www.equilar.com/reports/127-equilar-associated-press-ceo-pay-study-2026.html\\\"]:\\n    pages[u]=await f(u)\\n    t=pages[u]\\n    print(\\\"==\\\",u,len(t))\\n    for m in re.finditer(r'[^.\\\\n]*(times|-to-1|ratio|1,000|thousand)[^.\\\\n]*',t):\\n        print(\\\" -\\\",m.group(0).strip()[:300])\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_fetch",
+  "content": "{\n  \"url\": \"https://www.epi.org/blog/ceo-pay-surged-in-2025-ceos-are-paid-325-times-as-much-as-the-typical-worker/\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "fetched https://www.epi.org/blog/ceo-pay-surged-in-2025-ceos-are-paid-325-times-as-much-as-the-typical-worker/ (34969 chars)"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_fetch",
+  "content": "{\n  \"url\": \"https://aflcio.org/press/releases/afl-cio-report-shows-top-ceos-made-312-times-workers-pay-2025\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "fetched https://aflcio.org/press/releases/afl-cio-report-shows-top-ceos-made-312-times-workers-pay-2025 (13426 chars)"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_fetch",
+  "content": "{\n  \"url\": \"https://aflcio.org/paywatch\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "fetched https://aflcio.org/paywatch (24234 chars)"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_fetch",
+  "content": "{\n  \"url\": \"https://www.equilar.com/reports/127-equilar-associated-press-ceo-pay-study-2026.html\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "fetched https://www.equilar.com/reports/127-equilar-associated-press-ceo-pay-study-2026.html (16888 chars)"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"t=pages[\\\"https://aflcio.org/paywatch\\\"]\\nfor k in [\\\"5,387\\\",\\\"43,154\\\",\\\"198-to-1\\\",\\\"312-to-1\\\",\\\"2,522,203-to-1\\\",\\\"11,139\\\"]:\\n    i=t.find(k); print(\\\"--\\\",k); print(t[max(0,i-700):i+300])\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"t=pages[\\\"https://www.epi.org/blog/ceo-pay-surged-in-2025-ceos-are-paid-325-times-as-much-as-the-typical-worker/\\\"]\\nfor k in [\\\"Posted\\\",\\\"hit 325-to-1\\\",\\\"granted\\\",\\\"Musk\\\"]:\\n    for m in re.finditer(k,t):\\n        i=m.start(); print(\\\"--\\\",k); print(t[max(0,i-300):i+400].replace(\\\"\\\\n\\\",\\\" \\\")); break\\ne=pages[\\\"https://www.equilar.com/reports/127-equilar-associated-press-ceo-pay-study-2026.html\\\"]\\ni=e.find(\\\"200:1\\\"); print(e[i-500:i+200])\\nfor m in re.finditer(r'(May|June|April) \\\\d+, 2026',e): print(m.group(0))\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"p=pages[\\\"https://aflcio.org/press/releases/afl-cio-report-shows-top-ceos-made-312-times-workers-pay-2025\\\"]\\ni=p.find(\\\"made 312 times the wage\\\"); print(p[i-300:i+200])\\nfor m in re.finditer(r'(August|Aug\\\\.?) \\\\d+, 2026|2026-08-\\\\d+',p): print(m.group(0))\"\n}"
+ },
+ {
+  "role": "assistant",
+  "content": "{\"fact_or_values\":\"fact\",\"verdict\":\"Doesn't hold up\",\"steelman\":\"Some 2025 CEO pay packages were record-breaking, and one widely reported S&P 500 average does exceed 1,000-to-1. The AFL-CIO found that, once Elon Musk's Tesla package is counted, the average CEO-to-worker pay ratio across S&P 500 companies was in the thousands. A person who saw that headline figure, or the very high ratios at single companies, could reasonably come away thinking CEOs now make 1,000 times what workers make.\",\"finding\":\"The three main 2025 measures put the gap between top CEOs and typical workers at roughly 200 to 325 times, not 1,000. The Economic Policy Institute found that the CEO-to-worker pay ratio at the top 350 U.S. firms hit 325-to-1 in 2025. The AFL-CIO found that S&P 500 CEOs made 312 times the median U.S. worker's wage in 2025. The Equilar/Associated Press study found that the median S&P 500 CEO pay ratio was 200:1 in 2025. The only widely reported figure above 1,000 is the AFL-CIO's average that includes Musk, which was 5,387-to-1. That average is pulled up by one Tesla pay package. Without Musk, the AFL-CIO itself reports 312-to-1. EPI says it left the Musk package out of its measure because it was not paid and likely never will be. A ratio driven by one outlier does not describe CEOs in general, so the claim overstates the gap by about three to five times.\",\"reasoning_flags\":[],\"newest_data\":\"I used three sources, all covering 2025 pay: the EPI analysis posted September 17, 2026; the AFL-CIO 2026 Executive Paywatch, released August 13, 2026; and the Equilar/AP CEO Pay Study 2026, published in May 2026. My searches for newer releases of all three found nothing more recent. CEO pay for 2026 will not be disclosed until the 2027 proxy season.\",\"evidence\":[{\"url\":\"https://www.epi.org/blog/ceo-pay-surged-in-2025-ceos-are-paid-325-times-as-much-as-the-typical-worker/\",\"publisher\":\"Economic Policy Institute\",\"published\":\"2026-09-17\",\"quote\":\"CEO pay rose 14.0% at the top 350 U.S. firms in 2025 as the CEO-to-worker pay ratio hit 325-to-1.\",\"role\":\"contradicts\"},{\"url\":\"https://aflcio.org/press/releases/afl-cio-report-shows-top-ceos-made-312-times-workers-pay-2025\",\"publisher\":\"AFL-CIO\",\"published\":\"2026-08-13\",\"quote\":\"S&P 500 CEOs took home an average pay of $22.8 million in 2025 and made 312 times the wage of the median U.S. worker, up from 285 times in 2024\",\"role\":\"contradicts\"},{\"url\":\"https://www.equilar.com/reports/127-equilar-associated-press-ceo-pay-study-2026.html\",\"publisher\":\"Equilar\",\"published\":\"2026-05\",\"quote\":\"Since CEO compensation packages outpaced general wage growth, the median CEO Pay Ratio climbed to 200:1 in 2025, a notable increase from the 189:1 ratio reported in 2024.\",\"role\":\"contradicts\"},{\"url\":\"https://aflcio.org/paywatch\",\"publisher\":\"AFL-CIO Executive Paywatch 2026\",\"published\":\"2026-08-13\",\"quote\":\"The average CEO-to-worker pay ratio across S&P 500 Index companies was 5,387-to-1 in 2025.\",\"role\":\"context\"}]}"
+ },
+ {
+  "role": "assistant",
+  "name": "evidence check",
+  "content": "{\n  \"verdict_from_model\": \"Doesn't hold up\",\n  \"verdict_after_check\": \"Doesn't hold up\",\n  \"guard_notes\": [],\n  \"numbers_unsourced\": [\n    \"1000\",\n    \"1000\"\n  ],\n  \"evidence\": [\n    {\n      \"url\": \"https://www.epi.org/blog/ceo-pay-surged-in-2025-ceos-are-paid-325-times-as-much-as-the-typical-worker/\",\n      \"publisher\": \"Economic Policy Institute\",\n      \"published\": \"2026-09-17\",\n      \"quote\": \"CEO pay rose 14.0% at the top 350 U.S. firms in 2025 as the CEO-to-worker pay ratio hit 325-to-1.\",\n      \"role\": \"contradicts\",\n      \"verified\": true,\n      \"checked_by\": \"model fetch\"\n    },\n    {\n      \"url\": \"https://aflcio.org/press/releases/afl-cio-report-shows-top-ceos-made-312-times-workers-pay-2025\",\n      \"publisher\": \"AFL-CIO\",\n      \"published\": \"2026-08-13\",\n      \"quote\": \"S&P 500 CEOs took home an average pay of $22.8 million in 2025 and made 312 times the wage of the median U.S. worker, up from 285 times in 2024\",\n      \"role\": \"contradicts\",\n      \"verified\": true,\n      \"checked_by\": \"model fetch\"\n    },\n    {\n      \"url\": \"https://www.equilar.com/reports/127-equilar-associated-press-ceo-pay-study-2026.html\",\n      \"publisher\": \"Equilar\",\n      \"published\": \"2026-05\",\n      \"quote\": \"Since CEO compensation packages outpaced general wage growth, the median CEO Pay Ratio climbed to 200:1 in 2025, a notable increase from the 189:1 ratio reported in 2024.\",\n      \"role\": \"contradicts\",\n      \"verified\": true,\n      \"checked_by\": \"model fetch\"\n    },\n    {\n      \"url\": \"https://aflcio.org/paywatch\",\n      \"publisher\": \"AFL-CIO Executive Paywatch 2026\",\n      \"published\": \"2026-08-13\",\n      \"quote\": \"The average CEO-to-worker pay ratio across S&P 500 Index companies was 5,387-to-1 in 2025.\",\n      \"role\": \"context\",\n      \"verified\": true,\n      \"checked_by\": \"model fetch\"\n    }\n  ]\n}"
+ }
+]
