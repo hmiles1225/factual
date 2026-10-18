@@ -82,6 +82,38 @@ Coverage:
 {coverage}"""
 
 
+SUPPORT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "established": {"type": "string", "enum": ["all", "part", "none"]},
+        "missing": {"type": "string", "description": "The part of the claim the quotes do not establish, if any."},
+    },
+    "required": ["established", "missing"],
+    "additionalProperties": False,
+}
+SUPPORT_PROMPT = """Below is a claim and some quotes, each copied word for word from its source page.
+Using ONLY these quotes, not anything you know, decide whether they establish every part of the claim
+exactly as it is stated. Pay attention to strong words: a quote saying someone left or was asked to
+reconsider does not establish that they were fired; a total does not establish a record.
+
+Answer "all" only if every part of the claim, as worded, is stated in the quotes. Answer "part" if some
+of it is and some is not, and say what is missing. Answer "none" if the quotes do not support it.
+
+Claim: {claim}
+
+Quotes:
+{quotes}"""
+
+
+def support_check(claim, evidence):
+    """Holds up must follow from the verified quotes alone. Returns (ok, missing, usage)."""
+    quotes = "\n".join(f"- \"{e['quote']}\" ({e['publisher']})" for e in evidence if e.get("role") in ("supports", "context"))
+    if not quotes:
+        return False, "no verified quote supports it", {}
+    out, usage = gemini_json(SUPPORT_PROMPT.replace("{claim}", claim).replace("{quotes}", quotes), SUPPORT_SCHEMA)
+    return out["established"] == "all", out.get("missing", ""), usage
+
+
 def cost_usd(model, usage, searches=0):
     p = next((v for k, v in PRICES.items() if model and model.startswith(k)), (4.0, 20.0, 0.01))
     u = usage or {}
@@ -193,6 +225,26 @@ def main():
             charge_anthropic(u["model"], u)
         C.PIPE_USAGE.clear()
 
+    def apply_support_check(record):
+        if record["verdict"] != C.HU or "support" in record:
+            return
+        if spend["gemini_usd"] >= GEMINI_DAILY_USD + 0.10:  # small reserve: this guard is cheap and protects readers
+            return
+        try:
+            ok, missing, usage = support_check(record["claim"], record["evidence"])
+        except Exception as e:
+            print(f"  support check failed: {e}")
+            return
+        spend["gemini_usd"] = round(spend["gemini_usd"] + UNDERCOUNT * cost_usd(C.GEMINI_MODEL, usage), 4)
+        record["support"] = "all" if ok else "partial"
+        if not ok:
+            record["verdict"] = C.UN
+            record["note"] = f"the sources confirm part of this claim, not all of it as stated: {missing}".rstrip(": ")
+            print(f"  Holds up -> Unproven (support check): {record['claim'][:70]}")
+
+    for rec in claims.values():  # claims checked before this guard existed
+        apply_support_check(rec)
+
     top = [s for s in data["stories"] if s.get("related_to") is None][:TOP_STORIES]
     new_this_scan = 0
     for story in top:
@@ -258,6 +310,7 @@ def main():
             k = existing or key_of(cl["claim"])
             record = public_record(cl, first, second, verdict, note, sorted(set((rec or {}).get("stories", [])) | {story["sid"]}))
             record["said_by"] = cl["said_by"]
+            apply_support_check(record)
             claims[k] = record
             story_keys.append(k)
             print(f"  {verdict:<16} {cl['claim'][:80]}")
