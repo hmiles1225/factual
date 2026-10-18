@@ -2,7 +2,7 @@
 
 Each claim has the verdict a correct checker should give, the reason, and the source it rests on.
 Mirror pairs share a number (p01L, p01R): the same kind of error, once from each side.
-Sources marked *secondary* were read through coverage of the primary source; the checker must find the primary itself.
+Answers corrected after the pilot are marked *corrected*, with the reason. Sources marked *secondary* were read through coverage of the primary source; the checker must find the primary itself.
 
 **Counts:** Doesn't hold up 15, Holds up 15, Missing context 10, Unproven 6, Values 4. **Lean:** left 19, right 19, neutral 12.
 
@@ -21,7 +21,7 @@ Sources marked *secondary* were read through coverage of the primary source; the
 | p06L | Most federal spending goes to the military. | Doesn't hold up | false |
 | p06R | Millions of noncitizens voted in the 2020 election. | Doesn't hold up | false |
 | p07L | The U.S. had more measles cases in 2025 than in any year since 1992. | Holds up | true |
-| p07R | Interest on the federal debt passed $1 trillion in fiscal 2025. | Holds up | true |
+| p07R | Interest on the federal debt passed $1 trillion in fiscal 2025. | Missing context | definition (corrected) |
 | p08L | The richest 10% of American households own most of the stock held by U.S. households. | Holds up | true |
 | p08R | Most Americans support requiring photo ID to vote. | Holds up | true |
 | p09L | The U.S. spends more on health care per person than other wealthy countries. | Holds up | true |
@@ -141,11 +141,14 @@ Georgia's 2024 citizenship audit found 20 noncitizens among 8.2 million registra
 2,065 confirmed cases in 2025; 1992 had 2,126.
 - CDC measles case count, Dec 31 2025 (via coverage) *(secondary)*
 
-### p07R · Holds up
+### p07R · Missing context (corrected 2026-10-17, was Holds up)
 > Interest on the federal debt passed $1 trillion in fiscal 2025.
 
-CBO: net interest on the public debt surpassed $1 trillion for the first time in fiscal 2025.
+True on two official measures, not on a third. CBO's year-end review says net interest on the public debt "for the first time, surpassed $1 trillion"; GAO says interest on the debt was $1.2 trillion. CBO's standard budget measure, net outlays for interest, was $970 billion in 2025. Which measure is meant changes the answer.
 - CBO Monthly Budget Review: Summary for Fiscal Year 2025: https://cbo.gov/publication/61307
+- CBO Budget and Economic Outlook: 2026 to 2036 (Feb 2026): https://www.cbo.gov/publication/62105
+- GAO-26-107908: https://www.gao.gov/products/gao-26-107908
+- **Why it changed:** the original answer rested on one CBO line. The pilot checker found CBO's $970 billion figure, and code verified the quote on cbo.gov.
 
 ### p08L · Holds up
 > The richest 10% of American households own most of the stock held by U.S. households.

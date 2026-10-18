@@ -35,16 +35,35 @@ def cost(row):
     return (tokens_in * p["in"] + u["output_tokens"] * p["out"]) / 1e6 + row.get("web_searches", 0) * p["search"]
 
 
+GOLD = {c["prompt_id"]: c["expected"]["verdict"] for c in map(json.loads, (ROOT / "eval/claims.jsonl").read_text().splitlines())}
+
+
+def regrade(row):
+    """Score against the current answer key, so a corrected answer applies to past runs too."""
+    gold, v = GOLD[row["prompt_id"]], row["meta"]["verdict"]
+    row["meta"]["gold"] = gold
+    row["grade"]["correct"] = float(v == gold)
+    row["grade"]["raw_correct"] = float(row["meta"]["verdict_raw"] == gold)
+    row["grade"]["false_conviction"] = float(v == DHU and gold in ("Holds up", "Missing context", "Values"))
+    return row
+
+
 def load(variant):
     path = FLOW / variant / "results.jsonl"
-    rows = [json.loads(line) for line in path.read_text().splitlines() if line.strip()] if path.exists() else []
+    rows = [regrade(json.loads(line)) for line in path.read_text().splitlines() if line.strip()] if path.exists() else []
     errs = FLOW / variant / "errors.jsonl"
     nerr = len(errs.read_text().splitlines()) if errs.exists() else 0
     return rows, nerr
 
 
-def ci(p, n):
-    return 1.96 * math.sqrt(p * (1 - p) / n) if n else float("nan")
+def wilson(k, n, z=1.96):
+    """95% range for a rate. Stays honest at small n and at 0 or 100%, where the simple formula says ±0."""
+    if not n:
+        return float("nan"), float("nan")
+    p = k / n
+    centre = (p + z * z / (2 * n)) / (1 + z * z / n)
+    half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / (1 + z * z / n)
+    return max(0.0, centre - half), min(1.0, centre + half)
 
 
 def report(variant, rows, nerr):
@@ -64,7 +83,7 @@ def report(variant, rows, nerr):
     costs = [cost(r) for r in rows]
     lines = [
         f"### {variant} · {ok[0]['model']}",
-        f"- Right verdict: **{acc:.0%}** ({sum(r['grade']['correct'] for r in ok):.0f} of {n}, ±{ci(acc, n):.0%} at 95%)",
+        f"- Right verdict: **{acc:.0%}** ({sum(r['grade']['correct'] for r in ok):.0f} of {n}; 95% range {wilson(round(acc * n), n)[0]:.0%} to {wilson(round(acc * n), n)[1]:.0%})",
         f"- Before the evidence check: {mean('raw_correct'):.0%}",
         f"- False \"Doesn't hold up\": {sum(r['grade']['false_conviction'] for r in ok):.0f}",
         f"- Quotes verified: {mean('quotes_verified'):.0%} · numbers all sourced: {mean('numbers_ok'):.0%}",

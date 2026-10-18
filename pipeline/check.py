@@ -167,8 +167,8 @@ def verify(result, fetched_docs=None):
     checked, notes = [], []
     for ev in out.get("evidence", []):
         url = ev.get("url", "")
-        text = fetched_docs.get(url)
-        how = "model fetch"
+        text = fetched_docs.get(url) or None
+        how, info = "model fetch", ""
         if text is None:
             text, info = fetch_page(url)
             how = "our fetch"
