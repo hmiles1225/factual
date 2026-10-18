@@ -38,6 +38,8 @@ MAX_NEW_PER_SCAN = 4
 MAX_NEW_PER_DAY = 25
 ANTHROPIC_DAILY_USD = 1.00
 GEMINI_DAILY_USD = 1.50
+# One-off raises, approved by Heston for a specific date only. Expires by itself.
+GEMINI_EXTRA_USD = {"2026-10-18": 0.75}   # fill Today with 5 summarized stories after the brief rework
 GEMINI_DAILY_SEARCHES = 150      # Google gives 5,000 free a month across Gemini 3 models
 UNDERCOUNT = 1.7                 # our cost log ran this far under the real bill (2026-10-17)
 RECHECK_AFTER_DAYS = 7
@@ -211,8 +213,10 @@ def main():
     images = lib.setdefault("images", {})
     lib.pop("extractions", None)  # replaced by briefs
 
+    gemini_cap = GEMINI_DAILY_USD + GEMINI_EXTRA_USD.get(today, 0.0)
+
     def gemini_ok():
-        return spend["gemini_usd"] < GEMINI_DAILY_USD
+        return spend["gemini_usd"] < gemini_cap
 
     def charge_gemini(usage, searches=0):
         spend["gemini_usd"] = round(spend["gemini_usd"] + UNDERCOUNT * cost_usd(C.GEMINI_MODEL, usage), 4)
@@ -245,7 +249,7 @@ def main():
 
     def support_ok(record):
         """Holds up must follow from the verified quotes alone."""
-        if record["verdict"] != C.HU or "support" in record or spend["gemini_usd"] >= GEMINI_DAILY_USD + 0.10:
+        if record["verdict"] != C.HU or "support" in record or spend["gemini_usd"] >= gemini_cap + 0.10:
             return
         quotes = "\n".join(f"- \"{e['quote']}\" ({e['publisher']})" for e in record["evidence"] if e.get("role") in ("supports", "context"))
         if quotes:
@@ -369,7 +373,7 @@ def main():
     (ROOT / "data/library.json").write_text(json.dumps(lib, indent=1))
     stories_path.write_text(json.dumps(data, indent=1))
     print(f"check_today: {state['new_this_scan']} new claims · today anthropic ${spend['anthropic_usd']:.2f}/{ANTHROPIC_DAILY_USD:.2f} · "
-          f"gemini ${spend['gemini_usd']:.2f}/{GEMINI_DAILY_USD:.2f}, searches {spend['gemini_searches']}/{GEMINI_DAILY_SEARCHES}")
+          f"gemini ${spend['gemini_usd']:.2f}/{gemini_cap:.2f}, searches {spend['gemini_searches']}/{GEMINI_DAILY_SEARCHES}")
     return 0
 
 
