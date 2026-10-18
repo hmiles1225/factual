@@ -127,11 +127,6 @@ function renderToday(data) {
   $("scanline").textContent = `Scanned ${data.articles_scanned} articles from ${ok} of ${feeds.length} outlets at ${clock(data.scanned_at)} · scans run hourly`;
 
   leadStories.forEach((s, i) => $("stories").append(storyCard(s, i, data)));
-  if (leadStories.some(s => (s.checks || []).length)) {
-    $("preview-title").textContent = "Early version: checked by AI, no human editor";
-    $("preview-title").nextElementSibling.textContent =
-      "Claims in these stories are checked by AI against primary sources, and every quote shown was found on its source page by our code. No person reviews a check before it appears. A Doesn't hold up needs two different AI models to agree. Stories still waiting say so.";
-  }
   const leadBasis = $("lead-basis");
   leadBasis.replaceWith(basisLine(`which events the most outlets covered, with left, center and right each counting equally however many outlets each side has. ${plural(data.count, "story was", "stories were")} covered by two or more outlets; ${data.opinion_excluded} opinion pieces were kept out.`));
 
