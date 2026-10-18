@@ -46,7 +46,7 @@ RECHECK_AFTER_DAYS = 7
 OPUS_TYPICAL_USD = 0.51          # measured mean per Opus second opinion, 2026-10-17 eval
 SAME_CLAIM = 0.93                # embedding similarity at which two wordings are one claim
 MIN_OUTLETS_AGREED = 2           # an agreed fact needs at least this many outlets to state it
-BRIEF_VERSION = "4"              # bump when the brief instructions change, so cached briefs regenerate
+BRIEF_VERSION = "5"              # bump when the brief instructions change, so cached briefs regenerate
 PRICES = {"claude-opus-5-5": (4.00, 20.00, 0.010), "claude-haiku-5-5": (0.10, 0.50, 0), "claude-sonnet-5-5": (2.00, 10.00, 0),
           "gemini-3.8-flash": (0.75, 3.75, 0.0)}   # Gemini searches are tracked by count, not dollars
 
@@ -56,8 +56,11 @@ BRIEF_SCHEMA = _item({
     "agreed": {"type": "array", "items": _item({"fact": {"type": "string"}, "articles": _ints}, ["fact", "articles"])},
     "differences": {"type": "array", "items": _item({
         "point": {"type": "string", "description": "What the coverage differs on, in neutral words."},
-        "positions": {"type": "array", "items": _item({"says": {"type": "string"}, "articles": _ints}, ["says", "articles"])},
-        "checkable_claim": {"type": "string", "description": "If the difference turns on a checkable fact, that fact as one statement. Else empty."},
+        "positions": {"type": "array", "items": _item({
+            "says": {"type": "string"}, "articles": _ints,
+            "checkable_claim": {"type": "string", "description": "A checkable factual claim this side makes, as one statement, attributed. Else empty."},
+        }, ["says", "articles", "checkable_claim"])},
+        "checkable_claim": {"type": "string", "description": "Deprecated; leave empty."},
     }, ["point", "positions", "checkable_claim"])},
     "values_questions": {"type": "array", "items": {"type": "string"}},
     "main_subject": _item({"name": {"type": "string", "description": "Full name as commonly written, e.g. 'Ilhan Omar'."},
@@ -70,10 +73,12 @@ below (each line: outlet, its audience lean, headline, and summary when there is
 Write:
 - agreed: up to 4 facts that several outlets report. Plain, neutral sentences. Prefer facts reported
   by outlets of different leans. List every article number that states the fact.
-- differences: up to 2 points where the coverage differs: in what happened, in a disputed fact, or in
-  what it emphasizes. Name the point neutrally, then give each position in neutral words with the
-  article numbers that take it. If the difference turns on a checkable fact, also write that fact as
-  one statement in checkable_claim; otherwise leave it empty.
+- differences: up to 3 points where the coverage differs, especially where left-leaning and
+  right-leaning outlets tell it differently (the lean of each outlet is shown in the coverage list): in
+  what happened, in a disputed fact, in context left out, or in emphasis. Name the point neutrally, then
+  give each position in neutral words with the article numbers that take it. For each position, if it
+  rests on a checkable factual claim, write that claim as one attributed statement in its
+  checkable_claim, so each side's facts can be checked the same way; otherwise leave it empty.
 - values_questions: up to 2 questions about what should happen or what matters more, worded neutrally.
 - main_subject: the one person (or organization, or place) the story is mainly about, by full name.
   Use kind "none" if there is no single clear subject.
@@ -180,7 +185,7 @@ def public_record(claim, first, second, verdict, note, story_ids, said_by):
     return {
         "claim": claim, "verdict": verdict, "steelman": out.get("steelman", ""), "finding": finding,
         "sentences_dropped": dropped, "reasoning_flags": out.get("reasoning_flags", []), "newest_data": out.get("newest_data", ""),
-        "evidence": ev, "checked_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "evidence": ev, "figures": first.get("figures", []), "checked_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "checked_by": first["model"], "second_opinion": (second or {}).get("model"), "second_verdict": (second or {}).get("verdict"),
         "note": note, "stories": story_ids, "said_by": said_by,
         "model_verdict": first["verdict_raw"], "pending_second": note == "second opinion waiting for budget",
@@ -346,11 +351,14 @@ def main():
             continue
         # Factual differences are checked against primary sources (cached in the library).
         for d in brief["differences"]:
-            if d.get("checkable_claim") and not d.get("check"):
+            if d.get("checkable_claim") and not d.get("check"):  # briefs written before per-side claims
                 said_by = sorted({o for p in d["positions"] for o in p["outlets"]})
                 d["check"] = check_claim(d["checkable_claim"], story["sid"], said_by)
+            for pos in d["positions"]:  # each side's factual claim, checked the same way
+                if pos.get("checkable_claim") and not pos.get("check"):
+                    pos["check"] = check_claim(pos["checkable_claim"], story["sid"], pos["outlets"])
         story["brief"] = brief
-        story["checks"] = [d["check"] for d in brief["differences"] if d.get("check")]
+        story["checks"] = [k for d in brief["differences"] for k in [d.get("check")] + [p.get("check") for p in d["positions"]] if k]
         subj = brief.get("main_subject") or {}
         if subj.get("name") and subj.get("kind") in ("person", "organization", "place"):
             ikey = f"{subj['kind']}:{subj['name'].casefold()}"
@@ -407,7 +415,8 @@ def build_brief(raw, arts, lines, side_of, ask, charge):
 
     differences = []
     for d in raw.get("differences", [])[:2]:
-        positions = [{"says": p["says"].strip(), "outlets": outlets(valid(p["articles"]))} for p in d.get("positions", [])[:3]]
+        positions = [{"says": p["says"].strip(), "outlets": outlets(valid(p["articles"])),
+                      "checkable_claim": (p.get("checkable_claim") or "").strip(), "check": None} for p in d.get("positions", [])[:3]]
         positions = [p for p in positions if p["says"] and p["outlets"]]
         if d.get("point", "").strip() and positions:
             differences.append({"point": d["point"].strip(), "positions": positions,

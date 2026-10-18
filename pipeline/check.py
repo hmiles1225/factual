@@ -45,6 +45,21 @@ SCHEMA = {
         "finding": {"type": "string", "description": "What the evidence shows, in plain sentences. Never opens with a verdict-like word."},
         "reasoning_flags": {"type": "array", "items": {"type": "string", "enum": FLAGS}},
         "newest_data": {"type": "string", "description": "Which dataset release or study you relied on, its date, and how you confirmed no newer release exists."},
+        "figures": {
+            "type": "array",
+            "description": "Up to 3 key numbers from your evidence quotes, each copied exactly as it appears in the quote.",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "value": {"type": "string", "description": "The number exactly as written in the quote, e.g. '4.1' or '200,000' or '9.3%'."},
+                    "unit": {"type": "string", "description": "Short unit or noun, e.g. 'murders per 100,000 people'."},
+                    "label": {"type": "string", "description": "What it measures and when, in a few words."},
+                    "quote": {"type": "integer", "description": "1-based index of the evidence item whose quote contains this number."},
+                },
+                "required": ["value", "unit", "label", "quote"],
+                "additionalProperties": False,
+            },
+        },
         "evidence": {
             "type": "array",
             "items": {
@@ -61,7 +76,7 @@ SCHEMA = {
             },
         },
     },
-    "required": ["fact_or_values", "verdict", "steelman", "finding", "reasoning_flags", "newest_data", "evidence"],
+    "required": ["fact_or_values", "verdict", "steelman", "finding", "reasoning_flags", "newest_data", "figures", "evidence"],
     "additionalProperties": False,
 }
 
@@ -81,7 +96,9 @@ How to work:
 5. Every evidence quote must be copied word for word from the page at that exact URL. Code will
    re-read the page and drop any quote it cannot find. Quote the sentence that carries the number.
 6. Every number you write in "finding" must appear in one of your quotes.
-7. Write "steelman" first: the strongest honest reason a reasonable person believes the claim.
+7. In "figures", list up to 3 key numbers from your quotes, each written exactly as it appears in
+   the quote it comes from. Code drops any figure not found in its quote.
+8. Write "steelman" first: the strongest honest reason a reasonable person believes the claim.
    Never mock. Rate the claim, never the person or group who says it.
 
 The verdict rules below are fACTUAL's published method. Follow them exactly.
@@ -271,6 +288,15 @@ def verify(result, fetched_docs=None):
     sourced = " ".join(norm(e["quote"]) for e in verified).replace(",", "")
     unsourced = [n for n in numbers_in(out.get("finding", "")) if n.casefold() not in sourced and n.rstrip("%") not in sourced]
 
+    # A figure is published only if its number appears in a quote that passed verification.
+    figures = []
+    for f in out.get("figures", [])[:3]:
+        i = f.get("quote", 0) - 1
+        if 0 <= i < len(checked) and checked[i]["verified"] and f.get("value") and \
+                f["value"].replace(",", "").casefold() in norm(checked[i]["quote"]).replace(",", ""):
+            figures.append({"value": f["value"], "unit": f.get("unit", ""), "label": f.get("label", ""),
+                            "source": checked[i]["publisher"], "url": checked[i]["url"]})
+
     verdict = out.get("verdict")
     if verdict in (HU, MC, DHU) and not [e for e in verified if e["role"] in ("supports", "contradicts")]:
         notes.append(f"downgraded from {verdict}: no verified supporting or contradicting evidence")
@@ -282,6 +308,7 @@ def verify(result, fetched_docs=None):
         "quotes_total": len(checked),
         "quotes_verified": len(verified),
         "numbers_unsourced": unsourced,
+        "figures": figures,
         "guard_notes": notes,
     })
     return result

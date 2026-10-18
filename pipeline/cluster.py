@@ -164,6 +164,8 @@ def main():
 
     feeds = json.loads((ROOT / "pipeline/feeds.json").read_text())
     side = {f["source"]: side_of(f) for f in feeds["feeds"]}
+    # Audience lean, 0 = all Democratic users, 1 = all Republican users (Pew), for the spectrum charts.
+    lean = {f["source"]: round(f["pew"]["rep"] / (f["pew"]["rep"] + f["pew"]["dem"]), 3) for f in feeds["feeds"] if f.get("pew")}
     working = {f["source"] for f in scan.get("feeds", []) if f["ok"]}
     roster = {k: sorted(src for src in working if side.get(src, "unplaced") == k) for k in (*SIDES, "unplaced")}
 
@@ -220,7 +222,7 @@ def main():
     out = {
         "scanned_at": scan["fetched_at"],
         "articles_scanned": len(articles),
-        "feeds": [{**f, "side": side.get(f["source"], "unplaced")} for f in scan.get("feeds", [])],
+        "feeds": [{**f, "side": side.get(f["source"], "unplaced"), "lean": lean.get(f["source"])} for f in scan.get("feeds", [])],
         "method": {"model": MODEL, "threshold": THRESHOLD, "window_hours": WINDOW_HOURS, "linkage": "average", "related": RELATED,
                    "topic": "U.S. politics and U.S. policy abroad", "politics_margin": POLITICS_MARGIN},
         "placement": {"source": feeds["placement_source"], "left_below": LEFT_BELOW, "right_above": RIGHT_ABOVE,

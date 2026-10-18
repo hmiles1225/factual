@@ -40,15 +40,20 @@ const listNames = (names, max = 4) => names.length <= max
   ? names.join(", ").replace(/, ([^,]*)$/, " and $1")
   : `${names.slice(0, max).join(", ")} and ${names.length - max} more`;
 
-// Differences whose checked claim the evidence decided, and the ones it didn't.
-function decided(story, lib) {
-  return ((story.brief && story.brief.differences) || [])
-    .map(d => ({ d, c: claimOf(lib, d.check) }))
-    .filter(({ c }) => c && DECIDED.includes(c.verdict));
+// Every check attached to a story's differences: one per side's claim, plus older story-level ones.
+function checksIn(story, lib) {
+  const out = [];
+  for (const d of (story.brief && story.brief.differences) || []) {
+    for (const k of [d.check, ...d.positions.map(p => p.check)]) {
+      const c = claimOf(lib, k);
+      if (c) out.push(c);
+    }
+  }
+  return out;
 }
-function stillOpen(story, lib) {
-  return ((story.brief && story.brief.differences) || [])
-    .filter(d => !(claimOf(lib, d.check) && DECIDED.includes(claimOf(lib, d.check).verdict)));
+// For Today cards: only checks the evidence decided.
+function decided(story, lib) {
+  return checksIn(story, lib).filter(c => DECIDED.includes(c.verdict)).map(c => ({ c }));
 }
 
 function chip(verdict) {
@@ -70,91 +75,6 @@ const svgEl = (tag, attrs = {}) => {
 const hourLabel = d => d.toLocaleTimeString([], { hour: "numeric" }).replace(":00", "");
 const dayHour = d => d.toLocaleString([], { weekday: "short", hour: "numeric" });
 
-// Articles per time bin, from the first article to the scan.
-function binCoverage(articles, endIso, maxBins = 24) {
-  const times = articles.filter(a => a.published).map(a => ({ t: new Date(a.published).getTime(), a }));
-  if (!times.length) return [];
-  const end = new Date(endIso).getTime(), start = Math.min(...times.map(x => x.t));
-  const hour = 3600e3;
-  const size = Math.max(1, Math.ceil((end - start) / hour / maxBins)) * hour;
-  const n = Math.max(1, Math.ceil((end - start + 1) / size));
-  const bins = Array.from({ length: n }, (_, i) => ({ start: new Date(end - (n - i) * size), end: new Date(end - (n - i - 1) * size), items: [] }));
-  for (const x of times) bins[Math.min(n - 1, Math.max(0, Math.floor((x.t - (end - n * size)) / size)))].items.push(x.a);
-  return bins;
-}
-
-// Columns: <=24px, 4px rounded data-end square at the baseline, 2px surface gap.
-function columnPath(x, y, w, h, r = 4) {
-  if (h <= 0) return "";
-  const rr = Math.min(r, w / 2, h);
-  return `M${x},${y + h}V${y + rr}Q${x},${y} ${x + rr},${y}H${x + w - rr}Q${x + w},${y} ${x + w},${y + rr}V${y + h}Z`;
-}
-
-function coverageChart(story, scannedAt) {
-  const bins = binCoverage(story.articles, scannedAt);
-  if (bins.length < 2) return null;
-  const fig = el("figure", "chart");
-  fig.append(el("h3", "chart-title", "How the coverage built"));
-  const hours = Math.round((bins[1].start - bins[0].start) / 3600e3);
-  fig.append(el("p", "chart-sub", `Articles published, every ${hours === 1 ? "hour" : hours + " hours"}, up to the latest scan`));
-  const wrap = el("div", "chart-wrap");
-  const tip = el("div", "chart-tip");
-  tip.setAttribute("role", "status");
-  fig.append(wrap);
-  const max = Math.max(...bins.map(b => b.items.length));
-  const peak = bins.reduce((m, b, i) => (b.items.length > bins[m].items.length ? i : m), 0);
-
-  // Drawn at the container's real width, so 11px text stays 11px on a phone.
-  fig.draw = () => {
-    const W = Math.max(260, Math.round(wrap.clientWidth)), H = 150, pad = { t: 22, b: 26 };
-    const band = W / bins.length, bw = Math.max(2, Math.min(24, band - 2));
-    const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, width: W, height: H, class: "chart-svg", role: "group",
-      "aria-label": `Articles over time. Peak: ${max} articles around ${dayHour(bins[peak].start)}.` });
-    svg.append(svgEl("line", { x1: 0, x2: W, y1: H - pad.b + 0.5, y2: H - pad.b + 0.5, class: "chart-base" }));
-    bins.forEach((b, i) => {
-      const h = max ? (b.items.length / max) * (H - pad.t - pad.b) : 0;
-      const x = i * band + (band - bw) / 2, y = H - pad.b - h;
-      const g = svgEl("g", { class: "col", tabindex: 0, role: "img",
-        "aria-label": `${plural(b.items.length, "article", "articles")}, ${dayHour(b.start)} to ${hourLabel(b.end)}` });
-      g.append(svgEl("rect", { x: i * band, y: pad.t - 6, width: band, height: H - pad.t - pad.b + 6, class: "hit" }));
-      if (h > 0) g.append(svgEl("path", { d: columnPath(x, y, bw, h), class: "mark" }));
-      const show = () => {
-        tip.replaceChildren(el("strong", null, plural(b.items.length, "article", "articles")),
-          el("span", null, `${dayHour(b.start)} to ${hourLabel(b.end)}`));
-        const outs = [...new Set(b.items.map(a => a.source))].sort();
-        if (outs.length) tip.append(el("span", "chart-tip-src", listNames(outs, 3)));
-        tip.classList.add("on");
-        // Keep the tooltip inside the chart: centered on the column, clamped at both edges.
-        const tw = tip.offsetWidth, cx = x + bw / 2;
-        tip.style.left = `${Math.max(0, Math.min(W - tw, cx - tw / 2))}px`;
-      };
-      const hide = () => tip.classList.remove("on");
-      g.addEventListener("pointerenter", show); g.addEventListener("focus", show);
-      g.addEventListener("pointerleave", hide); g.addEventListener("blur", hide);
-      svg.append(g);
-    });
-    const label = svgEl("text", { x: Math.max(8, Math.min(W - 8, peak * band + band / 2)), y: pad.t - 8, class: "chart-label", "text-anchor": "middle" });
-    label.textContent = String(max);
-    const startLabel = svgEl("text", { x: 0, y: H - 8, class: "chart-axis" });
-    startLabel.textContent = dayHour(bins[0].start);
-    const endLabel = svgEl("text", { x: W, y: H - 8, class: "chart-axis", "text-anchor": "end" });
-    endLabel.textContent = "Latest scan";
-    svg.append(label, startLabel, endLabel);
-    wrap.replaceChildren(svg, tip);
-  };
-  let t;
-  window.addEventListener("resize", () => { clearTimeout(t); t = setTimeout(fig.draw, 120); });
-
-  // The same numbers as a table, for screen readers.
-  const table = el("table", "sr-only");
-  const head = el("tr");
-  head.append(el("th", null, "From"), el("th", null, "Articles"));
-  table.append(head);
-  for (const b of bins) { const r = el("tr"); r.append(el("td", null, dayHour(b.start)), el("td", null, String(b.items.length))); table.append(r); }
-  fig.append(table);
-  return fig;
-}
-
 // A meter: how many of the outlets covering the story state this fact.
 function agreementMeter(fact, total) {
   const n = fact.reported_by.length;
@@ -170,29 +90,93 @@ function agreementMeter(fact, total) {
   return wrap;
 }
 
-// Sparkline for a Today card: articles over the last 48 hours, in 12 bins.
-function sparkline(story, scannedAt) {
-  const end = new Date(scannedAt).getTime(), size = 4 * 3600e3, n = 12;
-  const counts = Array(n).fill(0);
-  for (const a of story.articles) {
-    if (!a.published) continue;
-    const i = n - 1 - Math.floor((end - new Date(a.published).getTime()) / size);
-    if (i >= 0 && i < n) counts[i]++;
+
+// Spectrum: each outlet is a dot on a left-to-right line, placed by its audience (Pew: share of
+// Republican users). Gray only; groups are told apart by fill vs hollow, never by color.
+const leanLabel = v => v < 0.4 ? "left-leaning" : v > 0.6 ? "right-leaning" : "center";
+function spectrum(points, legend, ariaLabel) {
+  // points: [{name, lean, style: "fill" | "hollow" | "ghost"}]
+  const fig = el("figure", "spectrum");
+  const wrap = el("div", "spectrum-wrap");
+  const tip = el("div", "chart-tip");
+  tip.setAttribute("role", "status");
+  fig.append(wrap);
+  if (legend && legend.length) {
+    const lg = el("div", "spectrum-legend");
+    for (const [style, text] of legend) { const k = el("span", "key"); k.append(el("i", `dot ${style}`), el("span", null, text)); lg.append(k); }
+    fig.append(lg);
   }
-  const max = Math.max(...counts);
-  if (!max) return null;
-  const W = 96, H = 24, band = W / n, bw = band - 2;
-  const peakAgo = (n - 1 - counts.indexOf(max)) * 4;
-  const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, class: "spark", role: "img",
-    "aria-label": `Coverage over the last 48 hours, most articles ${peakAgo ? `about ${peakAgo} hours ago` : "in the last 4 hours"}` });
-  counts.forEach((c, i) => {
-    const h = Math.max(c ? 3 : 1, (c / max) * H);
-    const r = svgEl("path", { d: columnPath(i * band + 1, H - h, bw, h, 2), class: c ? "mark" : "empty" });
-    const t = svgEl("title"); t.textContent = `${plural(c, "article", "articles")}, ${(n - i) * 4} to ${(n - i - 1) * 4} hours ago`;
-    r.append(t);
-    svg.append(r);
-  });
-  return svg;
+  fig.draw = () => {
+    const W = Math.max(260, Math.round(wrap.clientWidth)), padX = 14, axisY = 34, r = 6;
+    const x = v => padX + v * (W - 2 * padX);
+    // Simple stacking so dots never hide each other: each row holds dots at least 2r+3 apart.
+    const rows = [], placed = [];
+    for (const p of [...points].sort((a, b) => a.lean - b.lean)) {
+      const px = x(p.lean);
+      let row = rows.findIndex(last => px - last >= 2 * r + 3);
+      if (row < 0) { rows.push(px); row = rows.length - 1; } else rows[row] = px;
+      placed.push({ ...p, px, py: axisY - 12 - row * (2 * r + 3) });
+    }
+    const top = Math.min(...placed.map(p => p.py)) - r - 6;
+    const H = axisY + 22 - Math.min(0, top);
+    const shift = Math.max(0, -top);
+    const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, width: W, height: H, class: "chart-svg", role: "group", "aria-label": ariaLabel });
+    const ay = axisY + shift;
+    svg.append(svgEl("line", { x1: padX, x2: W - padX, y1: ay + 0.5, y2: ay + 0.5, class: "chart-base" }));
+    for (const [v, t, anchor] of [[0, "Left", "start"], [0.5, "Center", "middle"], [1, "Right", "end"]]) {
+      svg.append(svgEl("line", { x1: x(v), x2: x(v), y1: ay - 3, y2: ay + 4, class: "chart-base" }));
+      const lab = svgEl("text", { x: x(v), y: ay + 18, class: "chart-axis", "text-anchor": anchor });
+      lab.textContent = t;
+      svg.append(lab);
+    }
+    for (const p of placed) {
+      const g = svgEl("g", { class: "dotg", tabindex: 0, role: "img",
+        "aria-label": `${p.name}: ${p.note || leanLabel(p.lean)} (audience ${Math.round(p.lean * 100)}% Republican)` });
+      g.append(svgEl("circle", { cx: p.px, cy: p.py + shift, r: 12, class: "hit" }));
+      g.append(svgEl("circle", { cx: p.px, cy: p.py + shift, r, class: `dot ${p.style}` }));
+      const show = () => {
+        tip.replaceChildren(el("strong", null, p.name), el("span", null, `${p.note ? p.note + " · " : ""}audience ${Math.round(p.lean * 100)}% Republican`));
+        tip.classList.add("on");
+        const tw = tip.offsetWidth;
+        tip.style.left = `${Math.max(0, Math.min(W - tw, p.px - tw / 2))}px`;
+        tip.style.top = `${p.py + shift - 12}px`;
+      };
+      const hide = () => tip.classList.remove("on");
+      g.addEventListener("pointerenter", show); g.addEventListener("focus", show);
+      g.addEventListener("pointerleave", hide); g.addEventListener("blur", hide);
+      svg.append(g);
+    }
+    wrap.replaceChildren(svg, tip);
+  };
+  let t;
+  window.addEventListener("resize", () => { clearTimeout(t); t = setTimeout(fig.draw, 120); });
+  return fig;
+}
+
+// Name a group of outlets by where their audiences sit, from Pew data, never by hand.
+function sideName(outlets, leanOf) {
+  const vals = outlets.map(o => leanOf[o]).filter(v => v != null);
+  if (!vals.length) return "Outlets";
+  const left = vals.filter(v => v < 0.4).length, right = vals.filter(v => v > 0.6).length;
+  if (left === vals.length) return "Left-leaning outlets";
+  if (right === vals.length) return "Right-leaning outlets";
+  if (left && right) return "Outlets on both sides";
+  const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
+  return avg < 0.4 ? "Mostly left-leaning outlets" : avg > 0.6 ? "Mostly right-leaning outlets" : "Center and mixed outlets";
+}
+
+// "By the numbers": figures the checker found, each verified in code to appear in its quote.
+function statTiles(figures) {
+  const row = el("div", "stats");
+  for (const f of figures) {
+    const t = el("div", "stat");
+    t.append(el("span", "stat-value", f.value), el("span", "stat-unit", f.unit), el("span", "stat-label", f.label));
+    const a = el("a", "stat-src", `${f.source} ↗`);
+    a.href = f.url; a.rel = "noopener";
+    t.append(a);
+    row.append(t);
+  }
+  return row;
 }
 
 /* ---------- Today ---------- */
@@ -238,11 +222,7 @@ function storyCard(story, i, data) {
   }
 
   const foot = el("div", "story-foot");
-  const meta = el("span", "foot-meta");
-  const spark = sparkline(story, data.scanned_at);
-  if (spark) meta.append(spark);
-  meta.append(el("span", "sources-line", `${plural(story.articles.length, "article", "articles")} · ${listNames(story.sources, 3)}`));
-  foot.append(meta);
+  foot.append(el("span", "sources-line", `${plural(story.articles.length, "article", "articles")} · ${listNames(story.sources, 3)}`));
   const more = el("a", "read-more", "Read the story");
   more.href = storyHref(story);
   foot.append(more);
@@ -274,23 +254,22 @@ function renderToday(data) {
 
 /* ---------- One story ---------- */
 
-function claimDetails(d, c) {
+function claimDetails(c) {
   const det = el("details", "check-row");
   const sum = el("summary");
   sum.append(chip(c.verdict), el("span", "check-claim", c.claim));
   det.append(sum);
   const body = el("div", "check-body");
   if (c.steelman) body.append(el("p", "why", `Why this sounds right: ${c.steelman}`));
+  if (c.figures && c.figures.length) body.append(statTiles(c.figures));
   if (c.finding) body.append(el("p", "finding", c.finding));
   if (c.note) body.append(el("p", "check-note", c.note));
-  const said = d.positions.map(p => `${listNames(p.outlets, 3)}: ${p.says}`).join(" · ");
-  if (said) body.append(el("p", "who-said", said));
   if (c.evidence && c.evidence.length) {
     const ul = el("ul", "evidence");
     for (const e of c.evidence) {
       const li = el("li");
-      li.append(el("span", "ev-quote", `“${e.quote}”`));
-      const src = el("a", "ev-src", `${e.publisher}${e.published ? ", " + e.published : ""} ↗`);
+      li.append(el("span", "ev-quote", `\u201c${e.quote}\u201d`));
+      const src = el("a", "ev-src", `${e.publisher}${e.published ? ", " + e.published : ""} \u2197`);
       src.href = e.url;
       src.rel = "noopener";
       li.append(src);
@@ -302,6 +281,47 @@ function claimDetails(d, c) {
   body.append(el("p", "check-meta", `Checked ${stamp(c.checked_at)} by ${by}. Every quote above was found on its source page.`));
   det.append(body);
   return det;
+}
+
+// Does a disagreement follow the left-right line? Read from where each version's outlets sit, never by hand.
+function splitLine(pos, leanOf) {
+  const avg = p => { const v = p.outlets.map(o => leanOf[o]).filter(x => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+  const [a, b] = pos.map(avg);
+  if (a == null || b == null) return null;
+  const shared = pos[0].outlets.filter(o => pos[1].outlets.includes(o));
+  const both = shared.length ? ` ${listNames(shared, 3)} reported both.` : "";
+  if (Math.min(a, b) < 0.45 && Math.max(a, b) > 0.55) {
+    const left = a < b ? 1 : 2;
+    return `This one splits along left and right: version ${left} comes mostly from left-leaning outlets, version ${3 - left} from right-leaning ones.${both}`;
+  }
+  const n = [sideName(pos[0].outlets, leanOf), sideName(pos[1].outlets, leanOf)];
+  const same = n[0] === n[1] && /^(Left|Right)-leaning/.test(n[0]) ? n[0].toLowerCase() : "outlets with similar audiences";
+  return `Not a left-right split: both versions come from ${same}.${both}`;
+}
+
+// One disagreement: the point, whether it is partisan, and each version with where its outlets sit and its claim checked.
+function differenceBlock(d, lib, leanOf) {
+  const art = el("article", "diff");
+  art.append(el("h3", "diff-point", d.point));
+  const pos = d.positions.slice(0, 2);
+  const line = pos.length === 2 ? splitLine(pos, leanOf) : null;
+  if (line) art.append(el("p", "diff-split", line));
+  const cols = el("div", "sides");
+  pos.forEach((p, i) => {
+    const col = el("div", "side");
+    col.append(el("p", "side-name", `Version ${i + 1} \u00b7 ${sideName(p.outlets, leanOf)}`), el("p", "side-says", p.says));
+    const pts = p.outlets.filter(o => leanOf[o] != null).map(o => ({ name: o, lean: leanOf[o], style: "fill", note: `version ${i + 1}` }));
+    if (pts.length) col.append(spectrum(pts, null, `Version ${i + 1} outlets by audience: ${p.outlets.join(", ")}`));
+    col.append(el("p", "side-outlets", listNames(p.outlets, 4)));
+    const c = claimOf(lib, p.check);
+    if (c) col.append(claimDetails(c));
+    else if (p.checkable_claim) col.append(el("p", "side-pending", "Checking this version\u2019s claim against primary sources."));
+    cols.append(col);
+  });
+  art.append(cols);
+  const shared = claimOf(lib, d.check);  // older briefs: one claim for the whole difference
+  if (shared) art.append(claimDetails(shared));
+  return art;
 }
 
 function renderStory(data) {
@@ -339,38 +359,49 @@ function renderStory(data) {
     s1.append(el("p", "story-text muted", "Being summarized. The facts the coverage agrees on will appear here."));
   }
   body.append(s1);
-  const chart = coverageChart(story, data.scanned_at);
-  if (chart) { const sc = el("section", "block"); sc.append(chart); body.append(sc); chart.draw(); }
 
-  // 2. True or not: only what the evidence decided.
-  const rows = decided(story, data.library);
-  if (rows.length) {
-    const s2 = el("section", "block");
-    s2.append(el("h2", "block-title", "True or not"));
-    for (const { d, c } of rows) s2.append(claimDetails(d, c));
-    body.append(s2);
+  // 2. Who covered it: every outlet we read, placed by its audience; filled if it covered this story.
+  const leanOf = Object.fromEntries((data.feeds || []).filter(f => f.lean != null).map(f => [f.source, f.lean]));
+  const placed = (data.feeds || []).filter(f => f.ok && f.lean != null);
+  if (placed.length) {
+    const sc = el("section", "block");
+    sc.append(el("h2", "block-title", "Who covered it"));
+    const covered = new Set(story.sources);
+    const fig = spectrum(placed.map(f => ({ name: f.source, lean: f.lean, style: covered.has(f.source) ? "fill" : "ghost",
+      note: covered.has(f.source) ? "covered this" : "did not cover this" })),
+      [["fill", "Covered this story"], ["ghost", "Did not"]],
+      `Outlets that covered this story, placed by audience: ${story.sources.join(", ")}`);
+    sc.append(fig);
+    const unplaced = story.sources.filter(o => leanOf[o] == null);
+    const who = sideName(story.sources, leanOf);
+    if (/^(Left|Right)-leaning/.test(who)) fig.before(el("p", "diff-split", `Only ${who.toLowerCase()} covered this story.`));
+    sc.append(el("p", "block-note", `Each dot is an outlet we read, placed by the share of its regular audience who are Republican (Pew Research Center, 2025).${unplaced.length ? ` Also covered by ${listNames(unplaced, 4)}, which Pew did not survey.` : ""}`));
+    body.append(sc);
+    fig.draw();
   }
 
-  // 3. Still open: disagreements the evidence hasn't settled, and values questions.
-  const open = stillOpen(story, data.library);
-  const values = (brief && brief.values_questions) || [];
-  if (open.length || values.length) {
+  // 3. Where left and right differ, with each side's factual claim checked where possible.
+  const diffs = (brief && brief.differences) || [];
+  if (diffs.length) {
     const s3 = el("section", "block");
-    s3.append(el("h2", "block-title", "Still open"));
-    const ul = el("ul", "open-list");
-    for (const d of open) {
-      const li = el("li");
-      li.append(el("p", "open-point", d.point));
-      li.append(el("p", "open-sides", d.positions.map(p => `${listNames(p.outlets, 3)}: ${p.says}`).join(" · ")));
-      ul.append(li);
+    s3.append(el("h2", "block-title", "Where the coverage differs"));
+    for (const d of diffs) {
+      const blockEl = differenceBlock(d, data.library, leanOf);
+      s3.append(blockEl);
     }
-    for (const q of values) {
-      const li = el("li");
-      li.append(el("p", "open-point", q), el("p", "open-sides", "A values question. That’s yours to decide."));
-      ul.append(li);
-    }
-    s3.append(ul);
     body.append(s3);
+    s3.querySelectorAll(".spectrum").forEach(f => f.draw && f.draw());
+  }
+
+  // Values questions are the reader's to decide.
+  const values = (brief && brief.values_questions) || [];
+  if (values.length) {
+    const sv = el("section", "block");
+    sv.append(el("h2", "block-title", "Yours to decide"));
+    const ul = el("ul", "open-list");
+    for (const q of values) { const li = el("li"); li.append(el("p", "open-point", q)); ul.append(li); }
+    sv.append(ul, el("p", "block-note", "Values questions get no verdict. The facts above are the same whichever way you answer."));
+    body.append(sv);
   }
 
   // 4. Sources, folded away.
