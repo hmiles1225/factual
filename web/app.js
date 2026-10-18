@@ -58,6 +58,143 @@ function chip(verdict) {
   return c;
 }
 
+
+/* ---------- Charts: built only from data the scan has. Ink and gray only: yellow and
+   vermilion mean Holds up and Doesn't hold up, so a chart never borrows them. ---------- */
+const SVGNS = "http://www.w3.org/2000/svg";
+const svgEl = (tag, attrs = {}) => {
+  const n = document.createElementNS(SVGNS, tag);
+  for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+  return n;
+};
+const hourLabel = d => d.toLocaleTimeString([], { hour: "numeric" }).replace(":00", "");
+const dayHour = d => d.toLocaleString([], { weekday: "short", hour: "numeric" });
+
+// Articles per time bin, from the first article to the scan.
+function binCoverage(articles, endIso, maxBins = 24) {
+  const times = articles.filter(a => a.published).map(a => ({ t: new Date(a.published).getTime(), a }));
+  if (!times.length) return [];
+  const end = new Date(endIso).getTime(), start = Math.min(...times.map(x => x.t));
+  const hour = 3600e3;
+  const size = Math.max(1, Math.ceil((end - start) / hour / maxBins)) * hour;
+  const n = Math.max(1, Math.ceil((end - start + 1) / size));
+  const bins = Array.from({ length: n }, (_, i) => ({ start: new Date(end - (n - i) * size), end: new Date(end - (n - i - 1) * size), items: [] }));
+  for (const x of times) bins[Math.min(n - 1, Math.max(0, Math.floor((x.t - (end - n * size)) / size)))].items.push(x.a);
+  return bins;
+}
+
+// Columns: <=24px, 4px rounded data-end square at the baseline, 2px surface gap.
+function columnPath(x, y, w, h, r = 4) {
+  if (h <= 0) return "";
+  const rr = Math.min(r, w / 2, h);
+  return `M${x},${y + h}V${y + rr}Q${x},${y} ${x + rr},${y}H${x + w - rr}Q${x + w},${y} ${x + w},${y + rr}V${y + h}Z`;
+}
+
+function coverageChart(story, scannedAt) {
+  const bins = binCoverage(story.articles, scannedAt);
+  if (bins.length < 2) return null;
+  const fig = el("figure", "chart");
+  fig.append(el("h3", "chart-title", "How the coverage built"));
+  const hours = Math.round((bins[1].start - bins[0].start) / 3600e3);
+  fig.append(el("p", "chart-sub", `Articles published, every ${hours === 1 ? "hour" : hours + " hours"}, up to the latest scan`));
+  const wrap = el("div", "chart-wrap");
+  const tip = el("div", "chart-tip");
+  tip.setAttribute("role", "status");
+  fig.append(wrap);
+  const max = Math.max(...bins.map(b => b.items.length));
+  const peak = bins.reduce((m, b, i) => (b.items.length > bins[m].items.length ? i : m), 0);
+
+  // Drawn at the container's real width, so 11px text stays 11px on a phone.
+  fig.draw = () => {
+    const W = Math.max(260, Math.round(wrap.clientWidth)), H = 150, pad = { t: 22, b: 26 };
+    const band = W / bins.length, bw = Math.max(2, Math.min(24, band - 2));
+    const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, width: W, height: H, class: "chart-svg", role: "group",
+      "aria-label": `Articles over time. Peak: ${max} articles around ${dayHour(bins[peak].start)}.` });
+    svg.append(svgEl("line", { x1: 0, x2: W, y1: H - pad.b + 0.5, y2: H - pad.b + 0.5, class: "chart-base" }));
+    bins.forEach((b, i) => {
+      const h = max ? (b.items.length / max) * (H - pad.t - pad.b) : 0;
+      const x = i * band + (band - bw) / 2, y = H - pad.b - h;
+      const g = svgEl("g", { class: "col", tabindex: 0, role: "img",
+        "aria-label": `${plural(b.items.length, "article", "articles")}, ${dayHour(b.start)} to ${hourLabel(b.end)}` });
+      g.append(svgEl("rect", { x: i * band, y: pad.t - 6, width: band, height: H - pad.t - pad.b + 6, class: "hit" }));
+      if (h > 0) g.append(svgEl("path", { d: columnPath(x, y, bw, h), class: "mark" }));
+      const show = () => {
+        tip.replaceChildren(el("strong", null, plural(b.items.length, "article", "articles")),
+          el("span", null, `${dayHour(b.start)} to ${hourLabel(b.end)}`));
+        const outs = [...new Set(b.items.map(a => a.source))].sort();
+        if (outs.length) tip.append(el("span", "chart-tip-src", listNames(outs, 3)));
+        tip.classList.add("on");
+        // Keep the tooltip inside the chart: centered on the column, clamped at both edges.
+        const tw = tip.offsetWidth, cx = x + bw / 2;
+        tip.style.left = `${Math.max(0, Math.min(W - tw, cx - tw / 2))}px`;
+      };
+      const hide = () => tip.classList.remove("on");
+      g.addEventListener("pointerenter", show); g.addEventListener("focus", show);
+      g.addEventListener("pointerleave", hide); g.addEventListener("blur", hide);
+      svg.append(g);
+    });
+    const label = svgEl("text", { x: Math.max(8, Math.min(W - 8, peak * band + band / 2)), y: pad.t - 8, class: "chart-label", "text-anchor": "middle" });
+    label.textContent = String(max);
+    const startLabel = svgEl("text", { x: 0, y: H - 8, class: "chart-axis" });
+    startLabel.textContent = dayHour(bins[0].start);
+    const endLabel = svgEl("text", { x: W, y: H - 8, class: "chart-axis", "text-anchor": "end" });
+    endLabel.textContent = "Latest scan";
+    svg.append(label, startLabel, endLabel);
+    wrap.replaceChildren(svg, tip);
+  };
+  let t;
+  window.addEventListener("resize", () => { clearTimeout(t); t = setTimeout(fig.draw, 120); });
+
+  // The same numbers as a table, for screen readers.
+  const table = el("table", "sr-only");
+  const head = el("tr");
+  head.append(el("th", null, "From"), el("th", null, "Articles"));
+  table.append(head);
+  for (const b of bins) { const r = el("tr"); r.append(el("td", null, dayHour(b.start)), el("td", null, String(b.items.length))); table.append(r); }
+  fig.append(table);
+  return fig;
+}
+
+// A meter: how many of the outlets covering the story state this fact.
+function agreementMeter(fact, total) {
+  const n = fact.reported_by.length;
+  const wrap = el("div", "meter-row");
+  const track = el("span", "meter-track");
+  track.setAttribute("role", "img");
+  track.setAttribute("aria-label", `Stated by ${n} of ${total} outlets covering this story: ${fact.reported_by.join(", ")}`);
+  const fill = el("span", "meter-fill");
+  fill.style.width = `${Math.min(100, (n / Math.max(total, 1)) * 100)}%`;
+  track.append(fill);
+  track.title = fact.reported_by.join(", ");
+  wrap.append(track, el("span", "meter-text", `Stated by ${n} of ${total} outlets`));
+  return wrap;
+}
+
+// Sparkline for a Today card: articles over the last 48 hours, in 12 bins.
+function sparkline(story, scannedAt) {
+  const end = new Date(scannedAt).getTime(), size = 4 * 3600e3, n = 12;
+  const counts = Array(n).fill(0);
+  for (const a of story.articles) {
+    if (!a.published) continue;
+    const i = n - 1 - Math.floor((end - new Date(a.published).getTime()) / size);
+    if (i >= 0 && i < n) counts[i]++;
+  }
+  const max = Math.max(...counts);
+  if (!max) return null;
+  const W = 96, H = 24, band = W / n, bw = band - 2;
+  const peakAgo = (n - 1 - counts.indexOf(max)) * 4;
+  const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, class: "spark", role: "img",
+    "aria-label": `Coverage over the last 48 hours, most articles ${peakAgo ? `about ${peakAgo} hours ago` : "in the last 4 hours"}` });
+  counts.forEach((c, i) => {
+    const h = Math.max(c ? 3 : 1, (c / max) * H);
+    const r = svgEl("path", { d: columnPath(i * band + 1, H - h, bw, h, 2), class: c ? "mark" : "empty" });
+    const t = svgEl("title"); t.textContent = `${plural(c, "article", "articles")}, ${(n - i) * 4} to ${(n - i - 1) * 4} hours ago`;
+    r.append(t);
+    svg.append(r);
+  });
+  return svg;
+}
+
 /* ---------- Today ---------- */
 
 // A license-verified photo with its caption: what, who made it, license, source. Text never sits on it.
@@ -101,7 +238,11 @@ function storyCard(story, i, data) {
   }
 
   const foot = el("div", "story-foot");
-  foot.append(el("span", "sources-line", `${plural(story.articles.length, "article", "articles")} · ${listNames(story.sources, 3)}`));
+  const meta = el("span", "foot-meta");
+  const spark = sparkline(story, data.scanned_at);
+  if (spark) meta.append(spark);
+  meta.append(el("span", "sources-line", `${plural(story.articles.length, "article", "articles")} · ${listNames(story.sources, 3)}`));
+  foot.append(meta);
   const more = el("a", "read-more", "Read the story");
   more.href = storyHref(story);
   foot.append(more);
@@ -187,13 +328,19 @@ function renderStory(data) {
   const s1 = el("section", "block");
   s1.append(el("h2", "block-title", "The story"));
   if (agreed.length) {
-    s1.append(el("p", "story-text", agreed.map(f => f.fact).join(" ")));
-    const reporters = [...new Set(agreed.flatMap(f => f.reported_by))].sort();
-    s1.append(el("p", "block-note", `Reported across ${listNames(reporters, 6)}. Each line is stated by at least two of them.`));
+    const ul = el("ul", "facts");
+    for (const f of agreed) {
+      const li = el("li");
+      li.append(el("p", "story-text", f.fact), agreementMeter(f, story.sources.length));
+      ul.append(li);
+    }
+    s1.append(ul);
   } else {
     s1.append(el("p", "story-text muted", "Being summarized. The facts the coverage agrees on will appear here."));
   }
   body.append(s1);
+  const chart = coverageChart(story, data.scanned_at);
+  if (chart) { const sc = el("section", "block"); sc.append(chart); body.append(sc); chart.draw(); }
 
   // 2. True or not: only what the evidence decided.
   const rows = decided(story, data.library);
