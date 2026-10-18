@@ -338,6 +338,7 @@ function renderStory(data) {
   const brief = story.brief;
   const agreed = (brief && brief.agreed) || [];
 
+  const leanOf = Object.fromEntries((data.feeds || []).filter(f => f.lean != null).map(f => [f.source, f.lean]));
   // 1. Common ground: written only from facts both left- and right-leaning outlets report, none contradict.
   const s1 = el("section", "block");
   s1.append(el("h2", "block-title", "Common ground"));
@@ -347,7 +348,10 @@ function renderStory(data) {
     const by = [...new Set(shared.flatMap(f => f.reported_by))];
     s1.append(el("p", "block-note", `${shared.length > 1 ? "Every sentence above was" : "This was"} reported by both left- and right-leaning outlets, and no outlet we read contradicted it. Reported by ${listNames(by, 6)}.`));
   } else if (agreed.length) {
-    s1.append(el("p", "lede muted", "Nothing here has been reported by both left- and right-leaning outlets yet."));
+    const only = sideName(story.sources, leanOf);
+    s1.append(el("p", "lede muted", /^(Left|Right)-leaning/.test(only)
+      ? `Only ${only.toLowerCase()} covered this story, so there is no common ground to report yet.`
+      : "No fact is confirmed yet in the headlines or summaries of both left- and right-leaning outlets. What each side reports is below."));
   } else {
     s1.append(el("p", "lede muted", "Being summarized. What the coverage agrees on will appear here."));
   }
@@ -364,7 +368,6 @@ function renderStory(data) {
   body.append(s1);
 
   // 2. Who covered it: every outlet we read, placed by its audience; filled if it covered this story.
-  const leanOf = Object.fromEntries((data.feeds || []).filter(f => f.lean != null).map(f => [f.source, f.lean]));
   const placed = (data.feeds || []).filter(f => f.ok && f.lean != null);
   if (placed.length) {
     const sc = el("section", "block");

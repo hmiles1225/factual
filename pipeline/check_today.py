@@ -46,7 +46,7 @@ RECHECK_AFTER_DAYS = 7
 OPUS_TYPICAL_USD = 0.51          # measured mean per Opus second opinion, 2026-10-17 eval
 SAME_CLAIM = 0.93                # embedding similarity at which two wordings are one claim
 MIN_OUTLETS_AGREED = 2           # an agreed fact needs at least this many outlets to state it
-BRIEF_VERSION = "5"              # bump when the brief instructions change, so cached briefs regenerate
+BRIEF_VERSION = "6"              # bump when the brief instructions change, so cached briefs regenerate
 PRICES = {"claude-opus-5-5": (4.00, 20.00, 0.010), "claude-haiku-5-5": (0.10, 0.50, 0), "claude-sonnet-5-5": (2.00, 10.00, 0),
           "gemini-3.8-flash": (0.75, 3.75, 0.0)}   # Gemini searches are tracked by count, not dollars
 
@@ -72,7 +72,9 @@ below (each line: outlet, its audience lean, headline, and summary when there is
 
 Write:
 - agreed: up to 4 facts that several outlets report. Plain, neutral sentences. Prefer facts reported
-  by outlets of different leans. List every article number that states the fact.
+  by outlets of different leans. When left- and right-leaning outlets both report the same core event,
+  write that fact at the level of detail they share: leave out a number, quote or detail only some of
+  them give, or make that detail its own fact. List every article number that states the fact.
 - differences: up to 3 points where the coverage differs, especially where left-leaning and
   right-leaning outlets tell it differently (the lean of each outlet is shown in the coverage list): in
   what happened, in a disputed fact, in context left out, or in emphasis. Name the point neutrally, then
@@ -413,12 +415,13 @@ def build_brief(raw, arts, lines, side_of, ask, charge):
             dropped.append({"fact": f, "why": f"cited by {len(outlets(idx))} outlet(s)"})
     if agreed:
         facts = "\n".join(f"{j + 1}. {f}" for j, (f, _) in enumerate(agreed))
-        cited = sorted({i for _, idx in agreed for i in idx})
-        out, usage = ask(CONFIRM_PROMPT.replace("{facts}", facts).replace("{articles}", "\n".join(lines[i - 1] for i in cited)), CONFIRM_SCHEMA)
+        # Confirm against every article, not only the ones the brief cited: an outlet that states the
+        # fact counts whether or not the brief writer listed it. Missing one would hide common ground.
+        out, usage = ask(CONFIRM_PROMPT.replace("{facts}", facts).replace("{articles}", "\n".join(lines)), CONFIRM_SCHEMA)
         charge(usage)
         stated = {f["fact"]: valid(f["stated_by"]) for f in out.get("facts", [])}
         for j, (fact, idx) in enumerate(agreed):
-            by = [i for i in stated.get(j + 1, []) if i in idx]  # an outlet counts only if it was cited and states it
+            by = stated.get(j + 1, [])  # an outlet counts if its own headline or summary states it
             if len(outlets(by)) >= MIN_OUTLETS_AGREED:
                 confirmed.append({"fact": fact, "reported_by": outlets(by),
                                   "sides": sorted({side_of.get(o, "unplaced") for o in outlets(by)})})
