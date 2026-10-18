@@ -7,8 +7,8 @@ on:
   workflow_dispatch:
     inputs:
       checkers:
-        description: "Comma-separated: claude, gemini, claude-capped (Opus reading 8,000 tokens a page)"
-        default: "claude,gemini"
+        description: "Comma-separated: gemini, claude-second (Opus re-checks Gemini's Doesn't hold up), claude (all claims), claude-capped"
+        default: "gemini,claude-second"
       only:
         description: "Case ids, comma-separated (blank = all 50)"
         default: ""
@@ -62,6 +62,10 @@ jobs:
         env:
           FACTUAL_FETCH_CAP: "8000"
         run: python eval/run.py --checker claude --variant v2 --reps "${{ inputs.reps }}" --only "${{ inputs.only }}"
+
+      - name: Claude second opinion on Gemini's Doesn't hold up
+        if: always() && contains(inputs.checkers, 'claude-second')
+        run: python eval/run.py --checker claude --variant "${{ inputs.claude_variant }}" --reps "${{ inputs.reps }}" --only-from v1 --when "Doesn't hold up"
 
       - name: Summarize
         if: always()

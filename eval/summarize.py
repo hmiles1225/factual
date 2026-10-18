@@ -120,13 +120,42 @@ def system(primary, second, name):
             f"false \"Doesn't hold up\": {convictions}\n")
 
 
+def production(primary, second, name):
+    """The rule as the product runs it: the primary checks every claim; a Doesn't hold up stands
+    only if the second model, run on just those claims, agrees. No second answer means Unproven."""
+    a = {r["prompt_id"]: r for r in primary if r["status"] == "ok"}
+    b = {r["prompt_id"]: r for r in second if r["status"] == "ok"}
+    if not a:
+        return ""
+    right = convictions = rechecked = 0
+    by_lean = defaultdict(lambda: [0, 0])
+    for cid, r in a.items():
+        v = r["meta"]["verdict"]
+        if v == DHU:
+            rechecked += 1
+            v = DHU if cid in b and b[cid]["meta"]["verdict"] == DHU else UN
+        gold = r["meta"]["gold"]
+        right += v == gold
+        convictions += v == DHU and gold in ("Holds up", "Missing context", "Values")
+        by_lean[r["meta"]["lean"]][0] += v == gold
+        by_lean[r["meta"]["lean"]][1] += 1
+    lo, hi = wilson(right, len(a))
+    cost_b = sum(cost(r) for r in second)
+    sides = " · ".join(f"{k} {c / n:.0%} of {n}" for k, (c, n) in sorted(by_lean.items()))
+    return (f"### As the product runs it: {name}\n- Right verdict: **{right / len(a):.0%}** of {len(a)} "
+            f"(95% range {lo:.0%} to {hi:.0%}) · false \"Doesn't hold up\": {convictions}\n"
+            f"- Second opinions needed: {rechecked} · their cost ${cost_b:.2f}\n- By side: {sides}\n")
+
+
 if __name__ == "__main__":
     variants = sys.argv[1:] or ["baseline", "v1", "v2", "v3"]
     data = {v: load(v) for v in variants if (FLOW / v / "results.jsonl").exists()}
     out = ["# Claim-check eval summary", ""]
     for v, (rows, nerr) in data.items():
         out.append(report(v, rows, nerr))
-    claude_like = [v for v in variants if v != "v1"]
+    if "v1" in data and "v3" in data:
+        out.append(production(data["v1"][0], data["v3"][0], "Gemini checks everything, Opus re-checks its Doesn't hold up"))
+    claude_like = [v for v in variants if v not in ("v1", "v3") and v in data]
     if "v1" in data:
         for v in claude_like:
             out.append(system(data["v1"][0], data[v][0], f"Gemini (v1) decides, Claude ({v}) second opinion"))

@@ -108,6 +108,8 @@ def main():
     ap.add_argument("--variant", required=True, help="baseline or v<N>")
     ap.add_argument("--reps", type=int, default=1)
     ap.add_argument("--only", default="", help="comma-separated case ids")
+    ap.add_argument("--only-from", default="", help="pick cases from another variant's results ...")
+    ap.add_argument("--when", default="", help="... where that variant's verdict was this (e.g. \"Doesn't hold up\")")
     ap.add_argument("--workers", type=int, default=4)
     ap.add_argument("--timeout-s", type=int, default=600)
     a = ap.parse_args()
@@ -120,6 +122,11 @@ def main():
         missing = want - {c["prompt_id"] for c in cases}
         if missing:
             sys.exit(f"unknown case ids: {sorted(missing)}")
+    if a.only_from:
+        src = FLOW / a.only_from / "results.jsonl"
+        picked = {r["prompt_id"] for r in map(json.loads, src.read_text().splitlines()) if r["meta"]["verdict"] == a.when} if src.exists() else set()
+        cases = [c for c in cases if c["prompt_id"] in picked]
+        print(f"second opinion on {len(cases)} cases where {a.only_from} said {a.when!r}")
     vdir = FLOW / a.variant
     vdir.mkdir(parents=True, exist_ok=True)
     done = set()
