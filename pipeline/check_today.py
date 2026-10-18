@@ -77,8 +77,10 @@ Write:
   right-leaning outlets tell it differently (the lean of each outlet is shown in the coverage list): in
   what happened, in a disputed fact, in context left out, or in emphasis. Name the point neutrally, then
   give each position in neutral words with the article numbers that take it. For each position, if it
-  rests on a checkable factual claim, write that claim as one attributed statement in its
-  checkable_claim, so each side's facts can be checked the same way; otherwise leave it empty.
+  rests on a checkable factual claim about the world, write that claim as one statement in its
+  checkable_claim, attributed to whoever made it but never to the outlet (write "A federal judge
+  approved the warrant", not "The Daily Wire reports a federal judge approved the warrant"), so each
+  side's facts can be checked the same way; otherwise leave it empty.
 - values_questions: up to 2 questions about what should happen or what matters more, worded neutrally.
 - main_subject: the one person (or organization, or place) the story is mainly about, by full name.
   Use kind "none" if there is no single clear subject.
@@ -355,6 +357,8 @@ def main():
                 said_by = sorted({o for p in d["positions"] for o in p["outlets"]})
                 d["check"] = check_claim(d["checkable_claim"], story["sid"], said_by)
             for pos in d["positions"]:  # each side's factual claim, checked the same way
+                if pos.get("checkable_claim"):
+                    pos["checkable_claim"] = deattribute(pos["checkable_claim"], pos["outlets"])
                 if pos.get("checkable_claim") and not pos.get("check"):
                     pos["check"] = check_claim(pos["checkable_claim"], story["sid"], pos["outlets"])
         story["brief"] = brief
@@ -383,6 +387,14 @@ def main():
     print(f"check_today: {state['new_this_scan']} new claims · today anthropic ${spend['anthropic_usd']:.2f}/{ANTHROPIC_DAILY_USD:.2f} · "
           f"gemini ${spend['gemini_usd']:.2f}/{gemini_cap:.2f}, searches {spend['gemini_searches']}/{GEMINI_DAILY_SEARCHES}")
     return 0
+
+
+def deattribute(claim, outlets):
+    """'Breitbart reported that X' checks only what an outlet said. Check X itself."""
+    names = "|".join(re.escape(o) for o in sorted(outlets, key=len, reverse=True))
+    out = re.sub(rf"^(?:the\s+)?(?:{names})\s+(?:reported|reports|says|said|states|stated|writes|wrote)\s+(?:that\s+)?",
+                 "", claim.strip(), flags=re.I) if names else claim.strip()
+    return out[:1].upper() + out[1:]
 
 
 def build_brief(raw, arts, lines, side_of, ask, charge):

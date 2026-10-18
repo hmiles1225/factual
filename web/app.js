@@ -75,22 +75,6 @@ const svgEl = (tag, attrs = {}) => {
 const hourLabel = d => d.toLocaleTimeString([], { hour: "numeric" }).replace(":00", "");
 const dayHour = d => d.toLocaleString([], { weekday: "short", hour: "numeric" });
 
-// A meter: how many of the outlets covering the story state this fact.
-function agreementMeter(fact, total) {
-  const n = fact.reported_by.length;
-  const wrap = el("div", "meter-row");
-  const track = el("span", "meter-track");
-  track.setAttribute("role", "img");
-  track.setAttribute("aria-label", `Stated by ${n} of ${total} outlets covering this story: ${fact.reported_by.join(", ")}`);
-  const fill = el("span", "meter-fill");
-  fill.style.width = `${Math.min(100, (n / Math.max(total, 1)) * 100)}%`;
-  track.append(fill);
-  track.title = fact.reported_by.join(", ");
-  wrap.append(track, el("span", "meter-text", `Stated by ${n} of ${total} outlets`));
-  return wrap;
-}
-
-
 // Spectrum: each outlet is a dot on a left-to-right line, placed by its audience (Pew: share of
 // Republican users). Gray only; groups are told apart by fill vs hollow, never by color.
 const leanLabel = v => v < 0.4 ? "left-leaning" : v > 0.6 ? "right-leaning" : "center";
@@ -207,7 +191,7 @@ function storyCard(story, i, data) {
   main.append(h);
 
   const agreed = (story.brief && story.brief.agreed) || [];
-  if (agreed.length) main.append(el("p", "gist", agreed.slice(0, 2).map(f => f.fact).join(" ")));
+  if (agreed.length) main.append(el("p", "gist", [...agreed].sort((a, b) => acrossSides(b) - acrossSides(a)).slice(0, 2).map(f => f.fact).join(" ")));
   li.append(main);
 
   const rows = decided(story, data.library).slice(0, 2);
@@ -324,6 +308,16 @@ function differenceBlock(d, lib, leanOf) {
   return art;
 }
 
+// A fact is common ground when outlets on both the left and the right report it.
+const acrossSides = f => (f.sides || []).includes("left") && (f.sides || []).includes("right");
+function sidesLabel(sides) {
+  const s = (sides || []).filter(x => x !== "unplaced");
+  if (!s.length) return "Reported by outlets Pew did not survey";
+  const words = { left: "left-leaning", center: "center", right: "right-leaning" };
+  const list = ["left", "center", "right"].filter(x => s.includes(x)).map(x => words[x]);
+  return `Reported by ${list.join(" and ")} outlets${s.length === 1 ? " only" : ""}`;
+}
+
 function renderStory(data) {
   const sid = new URLSearchParams(location.search).get("s");
   const story = data.stories.find(s => s.sid === sid);
@@ -344,19 +338,28 @@ function renderStory(data) {
   const brief = story.brief;
   const agreed = (brief && brief.agreed) || [];
 
-  // 1. The story the coverage agrees on.
+  // 1. Common ground: written only from facts both left- and right-leaning outlets report, none contradict.
   const s1 = el("section", "block");
-  s1.append(el("h2", "block-title", "The story"));
-  if (agreed.length) {
+  s1.append(el("h2", "block-title", "Common ground"));
+  const shared = agreed.filter(acrossSides), oneSide = agreed.filter(f => !acrossSides(f));
+  if (shared.length) {
+    s1.append(el("p", "lede", shared.map(f => f.fact).join(" ")));
+    const by = [...new Set(shared.flatMap(f => f.reported_by))];
+    s1.append(el("p", "block-note", `${shared.length > 1 ? "Every sentence above was" : "This was"} reported by both left- and right-leaning outlets, and no outlet we read contradicted it. Reported by ${listNames(by, 6)}.`));
+  } else if (agreed.length) {
+    s1.append(el("p", "lede muted", "Nothing here has been reported by both left- and right-leaning outlets yet."));
+  } else {
+    s1.append(el("p", "lede muted", "Being summarized. What the coverage agrees on will appear here."));
+  }
+  if (oneSide.length) {
+    if (shared.length) s1.append(el("h3", "sub-title", "Also reported, from one side"));
     const ul = el("ul", "facts");
-    for (const f of agreed) {
+    for (const f of oneSide) {
       const li = el("li");
-      li.append(el("p", "story-text", f.fact), agreementMeter(f, story.sources.length));
+      li.append(el("p", "story-text", f.fact), el("p", "fact-sides", `${sidesLabel(f.sides)} \u00b7 ${listNames(f.reported_by, 4)} \u00b7 contradicted by none`));
       ul.append(li);
     }
     s1.append(ul);
-  } else {
-    s1.append(el("p", "story-text muted", "Being summarized. The facts the coverage agrees on will appear here."));
   }
   body.append(s1);
 
