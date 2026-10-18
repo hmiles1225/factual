@@ -121,15 +121,16 @@ def system(primary, second, name):
 
 
 if __name__ == "__main__":
-    variants = sys.argv[1:] or ["baseline", "v1"]
+    variants = sys.argv[1:] or ["baseline", "v1", "v2"]
     data = {v: load(v) for v in variants}
     out = ["# Claim-check eval summary", ""]
     for v, (rows, nerr) in data.items():
         out.append(report(v, rows, nerr))
-    if len(variants) == 2:
-        (a, _), (b, _) = data[variants[0]], data[variants[1]]
-        out.append(system(a, b, f"{variants[0]} decides, {variants[1]} second opinion"))
-        out.append(system(b, a, f"{variants[1]} decides, {variants[0]} second opinion"))
+    claude_like = [v for v in variants if v != "v1"]
+    if "v1" in data:
+        for v in claude_like:
+            out.append(system(data["v1"][0], data[v][0], f"Gemini (v1) decides, Claude ({v}) second opinion"))
+            out.append(system(data[v][0], data["v1"][0], f"Claude ({v}) decides, Gemini (v1) second opinion"))
     text = "\n".join(out)
     (FLOW / "summary.md").write_text(text)
     print(text)

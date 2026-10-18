@@ -6,11 +6,9 @@ name: eval
 on:
   workflow_dispatch:
     inputs:
-      checker:
-        description: "Which checker"
-        type: choice
-        options: [both, claude, gemini]
-        default: both
+      checkers:
+        description: "Comma-separated: claude, gemini, claude-capped (Opus reading 8,000 tokens a page)"
+        default: "claude,gemini,claude-capped"
       only:
         description: "Case ids, comma-separated (blank = all 50)"
         default: ""
@@ -48,17 +46,23 @@ jobs:
 
       - run: pip install -r requirements.txt
 
-      - name: Claude
-        if: inputs.checker != 'gemini'
+      - name: Claude (whole pages)
+        if: contains(format(',{0},', inputs.checkers), ',claude,')
         run: python eval/run.py --checker claude --variant baseline --reps "${{ inputs.reps }}" --only "${{ inputs.only }}"
 
       - name: Gemini
-        if: always() && inputs.checker != 'claude'
+        if: always() && contains(inputs.checkers, 'gemini')
         run: python eval/run.py --checker gemini --variant v1 --reps "${{ inputs.reps }}" --only "${{ inputs.only }}"
+
+      - name: Claude (8,000 tokens a page)
+        if: always() && contains(inputs.checkers, 'claude-capped')
+        env:
+          FACTUAL_FETCH_CAP: "8000"
+        run: python eval/run.py --checker claude --variant v2 --reps "${{ inputs.reps }}" --only "${{ inputs.only }}"
 
       - name: Summarize
         if: always()
-        run: python eval/summarize.py baseline v1 >> "$GITHUB_STEP_SUMMARY"
+        run: python eval/summarize.py baseline v1 v2 >> "$GITHUB_STEP_SUMMARY"
 
       - name: Commit results
         if: always()
@@ -68,5 +72,5 @@ jobs:
           git config user.email "eval@users.noreply.github.com"
           git add -A
           git diff --cached --quiet && { echo "nothing new"; exit 0; }
-          git commit -q -m "eval: ${{ inputs.checker }} ${{ inputs.only || 'all' }} (run ${{ github.run_id }})"
+          git commit -q -m "eval: ${{ inputs.checkers }} ${{ inputs.only || 'all' }} (run ${{ github.run_id }})"
           git push -q origin HEAD:eval-results

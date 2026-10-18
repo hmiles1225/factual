@@ -29,6 +29,9 @@ VERDICTS = [HU, MC, DHU, UN, VAL]
 FLAGS = ["Correlation, not cause", "Totals, not rates", "Picked dates", "Too small to tell", "Forecast, not a finding"]
 CLAUDE_MODEL = "claude-opus-5-5"
 GEMINI_MODEL = "gemini-3.8-flash"
+# Most of a check's cost is reading pages. A cap (tokens per fetched page) is the main cost lever;
+# 0 means read whole pages. The eval runs both settings to measure what the cap does to accuracy.
+FETCH_CAP = int(os.environ.get("FACTUAL_FETCH_CAP", "0"))
 UA = "fACTUAL-check/0.1 (+https://hestonmiles.com/factual/)"
 _CA = "/etc/ssl/cert.pem"
 SSL_CTX = ssl.create_default_context(cafile=_CA) if os.path.exists(_CA) else ssl.create_default_context()
@@ -219,7 +222,8 @@ def check_claude(claim, model=CLAUDE_MODEL):
             system=system,
             messages=messages,
             tools=[{"type": "web_search_20260209", "name": "web_search", "max_uses": 8},
-                   {"type": "web_fetch_20260209", "name": "web_fetch", "max_uses": 8}],
+                   {"type": "web_fetch_20260209", "name": "web_fetch", "max_uses": 8,
+                    **({"max_content_tokens": FETCH_CAP} if FETCH_CAP else {})}],
             output_config={"effort": "high", "format": {"type": "json_schema", "schema": SCHEMA}},
         )
         served = resp.model
@@ -251,7 +255,7 @@ def check_claude(claim, model=CLAUDE_MODEL):
             continue
         break
     text = next((b.text for b in reversed(resp.content) if b.type == "text"), "")
-    result = {"checker": "claude", "model": model, "served_model": served, "stop_reason": resp.stop_reason,
+    result = {"checker": "claude", "model": model, "served_model": served, "stop_reason": resp.stop_reason, "fetch_cap": FETCH_CAP,
               "usage": usage, "web_searches": searches, "web_fetches": fetches, "latency_s": round(time.time() - t0, 1),
               "trace": trace}
     if resp.stop_reason in ("refusal", "max_tokens"):
