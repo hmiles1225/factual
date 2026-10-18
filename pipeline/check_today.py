@@ -44,7 +44,7 @@ RECHECK_AFTER_DAYS = 7
 OPUS_TYPICAL_USD = 0.51          # measured mean per Opus second opinion, 2026-10-17 eval
 SAME_CLAIM = 0.93                # embedding similarity at which two wordings are one claim
 MIN_OUTLETS_AGREED = 2           # an agreed fact needs at least this many outlets to state it
-BRIEF_VERSION = "3"              # bump when the brief instructions change, so cached briefs regenerate
+BRIEF_VERSION = "4"              # bump when the brief instructions change, so cached briefs regenerate
 PRICES = {"claude-opus-5-5": (4.00, 20.00, 0.010), "claude-haiku-5-5": (0.10, 0.50, 0), "claude-sonnet-5-5": (2.00, 10.00, 0),
           "gemini-3.8-flash": (0.75, 3.75, 0.0)}   # Gemini searches are tracked by count, not dollars
 
@@ -81,8 +81,10 @@ Rules:
   who says it ("The Justice Department says about 200,000...", "Omar's attorneys say the search was
   unlawful"). Never state a claim someone made as a fact, and never present what an outlet reports
   someone saying as the outlet's own view.
-- Agreed facts are things that happened or were said on the record, stated with attribution where
-  someone made a claim. A disputed or one-sided assertion is a difference, not an agreed fact.
+- Agreed facts are what happened: the event itself (who did what, when, where) is almost always
+  agreed when several outlets report it, and should be listed. Attribute only claims someone makes
+  ("Her attorneys say the search was unlawful"). A disputed or one-sided assertion is a difference.
+  Most stories have at least two agreed facts.
 - Use only what is in the coverage below. Add nothing from your own knowledge. Do not judge which side
   is right. Do not use loaded words. Use only article numbers from the list.
 
@@ -380,7 +382,11 @@ def build_brief(raw, arts, lines, side_of, ask, charge):
 
     agreed = [(a["fact"].strip(), valid(a["articles"])) for a in raw.get("agreed", [])[:4] if a.get("fact", "").strip()]
     agreed = [(f, idx) for f, idx in agreed if len(outlets(idx)) >= MIN_OUTLETS_AGREED]
-    confirmed = []
+    confirmed, dropped = [], []
+    for a in raw.get("agreed", [])[:4]:
+        f, idx = a.get("fact", "").strip(), valid(a.get("articles", []))
+        if f and len(outlets(idx)) < MIN_OUTLETS_AGREED:
+            dropped.append({"fact": f, "why": f"cited by {len(outlets(idx))} outlet(s)"})
     if agreed:
         facts = "\n".join(f"{j + 1}. {f}" for j, (f, _) in enumerate(agreed))
         cited = sorted({i for _, idx in agreed for i in idx})
@@ -392,6 +398,8 @@ def build_brief(raw, arts, lines, side_of, ask, charge):
             if len(outlets(by)) >= MIN_OUTLETS_AGREED:
                 confirmed.append({"fact": fact, "reported_by": outlets(by),
                                   "sides": sorted({side_of.get(o, "unplaced") for o in outlets(by)})})
+            else:
+                dropped.append({"fact": fact, "why": f"confirmed in {len(outlets(by))} outlet(s): {', '.join(outlets(by))}"})
 
     differences = []
     for d in raw.get("differences", [])[:2]:
@@ -402,7 +410,7 @@ def build_brief(raw, arts, lines, side_of, ask, charge):
                                 "checkable_claim": (d.get("checkable_claim") or "").strip(), "check": None})
     values = [q.strip() for q in raw.get("values_questions", [])[:2] if q.strip()]
     subj = raw.get("main_subject") or {}
-    return {"agreed": confirmed, "differences": differences, "values_questions": values,
+    return {"agreed": confirmed, "dropped_agreed": dropped, "differences": differences, "values_questions": values,
             "main_subject": {"name": (subj.get("name") or "").strip(), "kind": subj.get("kind", "none")}}
 
 

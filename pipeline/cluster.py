@@ -22,6 +22,7 @@ side with more outlets in the list gets no more say than a side with fewer.
 """
 import hashlib
 import json
+from collections import Counter
 import re
 import sys
 from datetime import datetime
@@ -70,6 +71,24 @@ SIDES = ("left", "center", "right")
 # URL path segments and title prefixes that mark opinion, analysis or columns.
 OPINION_PATH = re.compile(r"/(opinion|opinions|commentary|columns?|columnists?|editorials?|op-?eds?|analysis|perspective)(/|-)", re.I)
 OPINION_TITLE = re.compile(r"^(opinion|analysis|commentary|editorial|column|op-ed)\s*[:|]", re.I)
+
+
+LIVE_STORIES = "https://hestonmiles.com/factual/data/stories.json"
+
+
+def previous_ids():
+    """article url -> story id from the scan now on the site. Empty if it can't be read."""
+    import ssl
+    import urllib.request
+    try:
+        ctx = ssl.create_default_context(cafile="/etc/ssl/cert.pem") if Path("/etc/ssl/cert.pem").exists() else ssl.create_default_context()
+        req = urllib.request.Request(LIVE_STORIES, headers={"User-Agent": "fACTUAL-scan/0.1 (+https://hestonmiles.com/factual/)"})
+        with urllib.request.urlopen(req, timeout=20, context=ctx) as r:
+            prev = json.loads(r.read())
+        return {a["url"]: st["sid"] for st in prev.get("stories", []) if st.get("sid") for a in st["articles"]}
+    except Exception as e:
+        print(f"  previous scan not readable ({e}); new ids")
+        return {}
 
 
 def side_of(feed):
@@ -148,6 +167,7 @@ def main():
     working = {f["source"] for f in scan.get("feeds", []) if f["ok"]}
     roster = {k: sorted(src for src in working if side.get(src, "unplaced") == k) for k in (*SIDES, "unplaced")}
 
+    prev_sid, used_sids = previous_ids(), set()
     stories = []
     for idx in clusters:
         arts = [news[i] for i in idx]
@@ -159,12 +179,16 @@ def main():
         lead = arts[int(np.argmax(vectors[idx] @ centre))]
         coverage = {k: [src for src in sources if side.get(src, "unplaced") == k] for k in (*SIDES, "unplaced")}
         shares = [len(coverage[k]) / len(roster[k]) if roster[k] else 0.0 for k in SIDES]
-        # Stable across hourly scans while the story's first article stays in the window,
-        # so a link to a story page keeps working.
+        # A story keeps its id from the last scan when most of its articles were in that story, so
+        # links keep working and its summary is not paid for again as old articles age out.
         first = min(arts, key=lambda a: (a["published"] or "", a["url"]))
+        votes = Counter(prev_sid[a["url"]] for a in arts if a["url"] in prev_sid)
+        carried = next((sid for sid, n in votes.most_common(1) if n >= max(2, 0.3 * len(arts)) and sid not in used_sids), None)
+        sid = carried or hashlib.sha1(first["url"].encode()).hexdigest()[:10]
+        used_sids.add(sid)
         stories.append({
             "_idx": idx,
-            "sid": hashlib.sha1(first["url"].encode()).hexdigest()[:10],
+            "sid": sid,
             "working_title": lead["title"],
             "outlets": len(sources),
             "sources": sources,
