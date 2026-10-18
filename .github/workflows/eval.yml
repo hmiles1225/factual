@@ -4,6 +4,11 @@
 name: eval
 
 on:
+  # Pushing eval/request.json starts a run with the settings in that file, so a run can be
+  # started without the Actions page. Shape: {"checkers": ..., "only": ..., "reps": ..., "claude_variant": ...}
+  push:
+    branches: [main]
+    paths: [eval/request.json]
   workflow_dispatch:
     inputs:
       checkers:
@@ -49,23 +54,45 @@ jobs:
 
       - run: pip install -r requirements.txt
 
+      - name: Settings
+        id: cfg
+        env:
+          IN_CHECKERS: ${{ inputs.checkers }}
+          IN_ONLY: ${{ inputs.only }}
+          IN_REPS: ${{ inputs.reps }}
+          IN_VARIANT: ${{ inputs.claude_variant }}
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          r = json.load(open("eval/request.json"))
+          print("checkers=" + r.get("checkers", "gemini,claude-second"))
+          print("only=" + r.get("only", ""))
+          print("reps=" + str(r.get("reps", 1)))
+          print("claude_variant=" + r.get("claude_variant", "v3"))
+          PY
+          else
+            printf 'checkers=%s\nonly=%s\nreps=%s\nclaude_variant=%s\n' "$IN_CHECKERS" "$IN_ONLY" "$IN_REPS" "$IN_VARIANT" >> "$GITHUB_OUTPUT"
+          fi
+          cat "$GITHUB_OUTPUT"
+
       - name: Claude
-        if: contains(format(',{0},', inputs.checkers), ',claude,')
-        run: python eval/run.py --checker claude --variant "${{ inputs.claude_variant }}" --reps "${{ inputs.reps }}" --only "${{ inputs.only }}"
+        if: contains(format(',{0},', steps.cfg.outputs.checkers), ',claude,')
+        run: python eval/run.py --checker claude --variant "${{ steps.cfg.outputs.claude_variant }}" --reps "${{ steps.cfg.outputs.reps }}" --only "${{ steps.cfg.outputs.only }}"
 
       - name: Gemini
-        if: always() && contains(inputs.checkers, 'gemini')
-        run: python eval/run.py --checker gemini --variant v1 --reps "${{ inputs.reps }}" --only "${{ inputs.only }}"
+        if: always() && contains(steps.cfg.outputs.checkers, 'gemini')
+        run: python eval/run.py --checker gemini --variant v1 --reps "${{ steps.cfg.outputs.reps }}" --only "${{ steps.cfg.outputs.only }}"
 
       - name: Claude (8,000 tokens a page)
-        if: always() && contains(inputs.checkers, 'claude-capped')
+        if: always() && contains(steps.cfg.outputs.checkers, 'claude-capped')
         env:
           FACTUAL_FETCH_CAP: "8000"
-        run: python eval/run.py --checker claude --variant v2 --reps "${{ inputs.reps }}" --only "${{ inputs.only }}"
+        run: python eval/run.py --checker claude --variant v2 --reps "${{ steps.cfg.outputs.reps }}" --only "${{ steps.cfg.outputs.only }}"
 
       - name: Claude second opinion on Gemini's Doesn't hold up
-        if: always() && contains(inputs.checkers, 'claude-second')
-        run: python eval/run.py --checker claude --variant "${{ inputs.claude_variant }}" --reps "${{ inputs.reps }}" --only-from v1 --when "Doesn't hold up"
+        if: always() && contains(steps.cfg.outputs.checkers, 'claude-second')
+        run: python eval/run.py --checker claude --variant "${{ steps.cfg.outputs.claude_variant }}" --reps "${{ steps.cfg.outputs.reps }}" --only-from v1 --when "Doesn't hold up"
 
       - name: Summarize
         if: always()
@@ -79,5 +106,5 @@ jobs:
           git config user.email "eval@users.noreply.github.com"
           git add -A
           git diff --cached --quiet && { echo "nothing new"; exit 0; }
-          git commit -q -m "eval: ${{ inputs.checkers }} ${{ inputs.only || 'all' }} (run ${{ github.run_id }})"
+          git commit -q -m "eval: ${{ steps.cfg.outputs.checkers }} ${{ steps.cfg.outputs.only || 'all' }} (run ${{ github.run_id }})"
           git push -q origin HEAD:eval-results
