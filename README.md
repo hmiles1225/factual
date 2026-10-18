@@ -12,7 +12,12 @@ The pipeline behind fACTUAL. Its method is public so anyone can check it.
    Opinion pieces never join news stories. Articles more than 72 hours apart are never grouped.
    The model, threshold and window are written into every `stories.json`.
 
-Checking (stage 3) is not built yet. The verdict rules it will follow are in `method/verdicts.md`. How outlets are
+3. **Check** (`pipeline/check_today.py`). For Today's top 5 stories, lists up to 3 checkable claims
+   in the coverage, checks new ones (Gemini 3.8 Flash; a Doesn't hold up also needs Claude Opus 5.5 to
+   agree), verifies every quote on its source page in code, and builds each story's verdict from its
+   checked claims. Checked claims are kept in `data/library.json` and reused. Daily spend is capped in code.
+
+The verdict rules it will follow are in `method/verdicts.md`. How outlets are
 balanced left, center and right is in `method/balance.md`.
 
 ## Privacy

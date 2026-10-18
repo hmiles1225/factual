@@ -102,8 +102,8 @@ def user_prompt(claim):
 
 def norm(text):
     text = html.unescape(text or "")
-    text = text.replace("­", "")
-    for a, b in (("‘", "'"), ("’", "'"), ("“", '"'), ("”", '"'), ("–", "-"), ("—", "-"), ("−", "-"), (" ", " ")):
+    text = text.replace("\u00ad", "")
+    for a, b in (("\u2018", "'"), ("\u2019", "'"), ("\u201c", '"'), ("\u201d", '"'), ("\u2013", "-"), ("\u2014", "-"), ("\u2212", "-"), ("\u00a0", " ")):
         text = text.replace(a, b)
     return re.sub(r"\s+", " ", text).strip().casefold()
 

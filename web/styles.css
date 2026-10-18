@@ -153,3 +153,41 @@ h1 { margin: 0; font: 500 2.25rem/1.1 var(--serif); letter-spacing: -0.015em; }
 .articles .art-meta { display: block; margin-top: 4px; font: 400 0.75rem/1.3 var(--mono); color: var(--ink-3); }
 .gap { margin: 16px 0 0; font-size: 0.875rem; color: var(--ink-2); }
 @media (min-width: 720px) { .story-title { font-size: 2.5rem; } }
+
+/* Verdict chips: glyph + word, never color alone. Yellow means Holds up and nothing else;
+   vermilion means Doesn't hold up and nothing else. */
+:root { --hi: #F5E663; --verm: #B3261E; }
+.chip { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 6px;
+  font: 600 0.8125rem/1.4 var(--sans); white-space: nowrap; vertical-align: baseline; }
+.chip-glyph { font-weight: 700; }
+.chip-hold { background: var(--hi); color: var(--ink); }
+.chip-ctx { border: 1.5px dashed var(--ink); color: var(--ink); padding: 1px 7px; }
+.chip-no { background: var(--verm); color: #fff; }
+.chip-unk { border: 1.5px solid var(--ink-2); color: var(--ink); padding: 1px 7px; }
+
+.card-claims { list-style: none; margin: 14px 0 0; padding: 0; }
+.card-claims li { display: flex; gap: 10px; align-items: baseline; padding: 6px 0; }
+.card-claim { font: italic 400 0.9375rem/1.4 var(--serif); }
+
+.verdict:not(.pending) h2 { margin-bottom: 4px; }
+.vgroup { padding-top: 12px; }
+.vgroup h3 { margin: 0 0 6px; font: 600 0.9375rem/1.3 var(--sans); }
+.vline { margin: 0 0 8px; font-size: 0.9375rem; line-height: 1.5; color: var(--ink); }
+.vclaim { font: italic 400 1rem/1.45 var(--serif); }
+.vnone { margin: 0 0 8px; font-size: 0.875rem; color: var(--ink-2); }
+.vtag { font: 600 0.75rem/1 var(--mono); letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-2); }
+
+.claims { margin-top: 32px; }
+.claims > h2 { margin: 0 0 8px; font: 500 1.5rem/1.2 var(--serif); }
+.claim-card { margin-top: 16px; padding: 18px 20px; background: var(--card); border: 1px solid var(--rule); border-radius: 18px; }
+.claim-text { margin: 0; font: italic 500 1.25rem/1.3 var(--serif); }
+.claim-card h3 { margin: 14px 0 4px; font: 600 0.8125rem/1.3 var(--sans); }
+.steelman { margin: 0; font-size: 0.9375rem; line-height: 1.5; color: var(--ink-2); }
+.claim-verdict { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 14px; }
+.flag { font: 500 0.75rem/1.3 var(--mono); padding: 2px 8px; border: 1px solid var(--rule); border-radius: 6px; color: var(--ink-2); }
+.finding { margin: 10px 0 0; font: 400 1.0625rem/1.5 var(--serif); }
+.claim-note { margin: 8px 0 0; font: 400 0.75rem/1.45 var(--mono); color: var(--ink-3); }
+.evidence { list-style: none; margin: 12px 0 0; padding: 0; }
+.evidence li { padding: 10px 0; border-top: 1px solid var(--rule); }
+.ev-quote { display: block; font: italic 400 0.9375rem/1.45 var(--serif); }
+.ev-src { display: inline-block; margin-top: 4px; font: 400 0.75rem/1.4 var(--mono); }

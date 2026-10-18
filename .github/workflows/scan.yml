@@ -24,7 +24,7 @@ permissions:
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     env:
       FASTEMBED_CACHE_PATH: ${{ github.workspace }}/.fastembed
     steps:
@@ -48,6 +48,14 @@ jobs:
 
       - name: Group into stories
         run: python pipeline/cluster.py
+
+      # Checks claims in Today's top 5 stories. Daily caps are in pipeline/check_today.py
+      # (Anthropic $1.00, Gemini $0.50 and 150 searches, 25 new claims). Never fails the scan.
+      - name: Check Today's claims
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python pipeline/check_today.py
 
       - name: Keep a copy of this run's output
         uses: actions/upload-artifact@v7
