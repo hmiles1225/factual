@@ -121,8 +121,8 @@ def system(primary, second, name):
 
 
 if __name__ == "__main__":
-    variants = sys.argv[1:] or ["baseline", "v1", "v2"]
-    data = {v: load(v) for v in variants}
+    variants = sys.argv[1:] or ["baseline", "v1", "v2", "v3"]
+    data = {v: load(v) for v in variants if (FLOW / v / "results.jsonl").exists()}
     out = ["# Claim-check eval summary", ""]
     for v, (rows, nerr) in data.items():
         out.append(report(v, rows, nerr))

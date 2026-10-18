@@ -15,6 +15,9 @@ on:
       reps:
         description: "Repetitions per case"
         default: "1"
+      claude_variant:
+        description: "Results folder for Claude (baseline = pilot without caching, v3 = with caching)"
+        default: "v3"
 
 concurrency:
   group: eval
@@ -46,9 +49,9 @@ jobs:
 
       - run: pip install -r requirements.txt
 
-      - name: Claude (whole pages)
+      - name: Claude
         if: contains(format(',{0},', inputs.checkers), ',claude,')
-        run: python eval/run.py --checker claude --variant baseline --reps "${{ inputs.reps }}" --only "${{ inputs.only }}"
+        run: python eval/run.py --checker claude --variant "${{ inputs.claude_variant }}" --reps "${{ inputs.reps }}" --only "${{ inputs.only }}"
 
       - name: Gemini
         if: always() && contains(inputs.checkers, 'gemini')
@@ -62,7 +65,7 @@ jobs:
 
       - name: Summarize
         if: always()
-        run: python eval/summarize.py baseline v1 v2 >> "$GITHUB_STEP_SUMMARY"
+        run: python eval/summarize.py baseline v1 v2 v3 >> "$GITHUB_STEP_SUMMARY"
 
       - name: Commit results
         if: always()
