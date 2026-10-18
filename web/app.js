@@ -1,294 +1,238 @@
-// Renders the latest scan from data/stories.json: Today (index.html) and one story
-// (story.html?s=<id>). Every string from a feed goes in through textContent, never
-// innerHTML, so a headline can't inject markup.
+// Renders the latest scan: Today (index.html) and one story (story.html?s=<id>).
+// Every string from a feed or a model goes in through textContent, never innerHTML,
+// so a headline or a claim can't inject markup.
+//
+// Reading order on every story: the story the coverage agrees on, then what's true or not
+// (only claims the evidence decided), then what's still open. Everything else is folded away.
 "use strict";
 
 const LEAD = 5;
-const WORDS = ["zero", "one", "two", "three", "four", "five"];
-const SIDES = [["left", "Left"], ["center", "Center"], ["right", "Right"]];
+const WORDS = ["no", "one", "two", "three", "four", "five"];
+const DECIDED = ["Holds up", "Missing context", "Doesn't hold up"];
 
+// Verdicts: always a glyph and a word, never color alone (Figma Foundations 5:119).
+const VERDICT = {
+  "Holds up": { cls: "hold", glyph: "✓" },
+  "Missing context": { cls: "ctx", glyph: "◐" },
+  "Doesn't hold up": { cls: "no", glyph: "✕" },
+  "Unproven": { cls: "unk", glyph: "?" },
+};
+const MODEL_NAMES = { "gemini-3.8-flash": "Gemini 3.8 Flash", "claude-opus-5-5": "Claude Opus 5.5" };
+
+const $ = id => document.getElementById(id);
 const el = (tag, cls, text) => {
   const n = document.createElement(tag);
   if (cls) n.className = cls;
   if (text != null) n.textContent = text;
   return n;
 };
-const $ = id => document.getElementById(id);
-
 const clock = iso => new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 const stamp = iso => {
   const d = new Date(iso);
-  const sameDay = d.toDateString() === new Date().toDateString();
-  return sameDay ? clock(iso) : d.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  return d.toDateString() === new Date().toDateString()
+    ? clock(iso) : d.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 };
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 const storyHref = story => `story.html?s=${encodeURIComponent(story.sid)}`;
+const lead = story => story.articles.find(a => a.title === story.working_title) || story.articles[0];
+const claimOf = (lib, key) => (lib && lib.claims && lib.claims[key]) || null;
+const listNames = (names, max = 4) => names.length <= max
+  ? names.join(", ").replace(/, ([^,]*)$/, " and $1")
+  : `${names.slice(0, max).join(", ")} and ${names.length - max} more`;
 
-// Verdicts: always a glyph and a word, never color alone (Figma Foundations 5:119).
-const VERDICT = {
-  "Holds up": { cls: "hold", glyph: "\u2713" },
-  "Missing context": { cls: "ctx", glyph: "\u25D0" },
-  "Doesn't hold up": { cls: "no", glyph: "\u2715" },
-  "Unproven": { cls: "unk", glyph: "?" },
-};
+// Differences whose checked claim the evidence decided, and the ones it didn't.
+function decided(story, lib) {
+  return ((story.brief && story.brief.differences) || [])
+    .map(d => ({ d, c: claimOf(lib, d.check) }))
+    .filter(({ c }) => c && DECIDED.includes(c.verdict));
+}
+function stillOpen(story, lib) {
+  return ((story.brief && story.brief.differences) || [])
+    .filter(d => !(claimOf(lib, d.check) && DECIDED.includes(claimOf(lib, d.check).verdict)));
+}
+
 function chip(verdict) {
   const v = VERDICT[verdict] || VERDICT.Unproven;
   const c = el("span", `chip chip-${v.cls}`);
-  c.append(el("span", "chip-glyph", v.glyph), document.createTextNode(verdict));
+  c.append(el("span", "chip-glyph", v.glyph), el("span", "chip-word", verdict));
   return c;
-}
-const claimOf = (lib, key) => (lib && lib.claims && lib.claims[key]) || null;
-const MODEL_NAMES = { "gemini-3.8-flash": "Gemini 3.8 Flash", "claude-opus-5-5": "Claude Opus 5.5" };
-const modelName = id => MODEL_NAMES[id] || id;
-
-// "Left 4 of 10 · Center 2 of 4 · Right 3 of 3": positions on a line, never teams or colors.
-function coverageLine(story, roster) {
-  const parts = SIDES.filter(([k]) => roster[k].length).map(([k, label]) => `${label} ${story.coverage[k].length} of ${roster[k].length}`);
-  const p = el("p", "sides", parts.join(" · "));
-  if (story.coverage.unplaced.length) p.append(el("span", "unplaced", ` · Unplaced: ${story.coverage.unplaced.join(", ")}`));
-  return p;
-}
-
-// The working title is one outlet's headline, so it is shown as their words.
-function lead(story) {
-  return story.articles.find(a => a.title === story.working_title) || story.articles[0];
-}
-
-function basisLine(text) {
-  const p = el("p", "basis");
-  p.append(el("b", null, "Based on "), document.createTextNode(text));
-  return p;
-}
-
-function unchecked() {
-  const p = el("p", "unchecked");
-  p.append(el("strong", null, "Not checked yet."), document.createTextNode(" No verdict until the claims are checked against their sources."));
-  return p;
-}
-
-function relatedList(story, all, label = "Related coverage") {
-  const rel = el("div", "related");
-  rel.append(el("p", "related-label", label));
-  const ul = el("ul");
-  for (const r of story.related.map(id => all[id])) {
-    const item = el("li");
-    const a = el("a", "title", r.working_title);
-    a.href = storyHref(r);
-    item.append(a, el("span", "attribution", ` Headline from ${lead(r).source} · ${plural(r.outlets, "outlet", "outlets")}`));
-    ul.append(item);
-  }
-  rel.append(ul);
-  return rel;
 }
 
 /* ---------- Today ---------- */
 
 function storyCard(story, i, data) {
-  const li = el("li", "story");
-  li.append(el("p", "story-meta", `${String(i + 1).padStart(2, "0")} · ${plural(story.outlets, "outlet", "outlets")}`));
+  const li = el("li", i === 0 ? "story story-lead" : "story");
+  const main = el("div", "story-main");
+  main.append(el("p", "story-num", String(i + 1).padStart(2, "0")));
   const h = el("h2", "headline");
   const a = el("a", null, story.working_title);
   a.href = storyHref(story);
   h.append(a);
-  li.append(h, el("p", "attribution", `Headline from ${lead(story).source}`), coverageLine(story, data.roster));
-  const checked = (story.checks || []).map(k => claimOf(data.library, k)).filter(Boolean);
-  if (checked.length) {
-    const ul = el("ul", "card-claims");
-    for (const c of checked) {
-      const item = el("li");
-      item.append(chip(c.verdict), el("span", "card-claim", c.claim));
-      ul.append(item);
+  main.append(h);
+
+  const agreed = (story.brief && story.brief.agreed) || [];
+  if (agreed.length) main.append(el("p", "gist", agreed.slice(0, 2).map(f => f.fact).join(" ")));
+  li.append(main);
+
+  const rows = decided(story, data.library).slice(0, 2);
+  if (rows.length) {
+    const ul = el("ul", "checks");
+    for (const { c } of rows) {
+      const r = el("li");
+      r.append(chip(c.verdict), el("span", "check-claim", c.claim));
+      ul.append(r);
     }
     li.append(ul);
-  } else {
-    li.append(unchecked());
   }
-  if (story.related.length) li.append(relatedList(story, data.stories));
-  li.append(basisLine(`${plural(story.articles.length, "article", "articles")} from ${story.sources.join(", ")}, grouped in the ${clock(data.scanned_at)} scan`));
-  return li;
-}
 
-function moreRow(story) {
-  const li = el("li");
-  const a = el("a", "title", story.working_title);
-  a.href = storyHref(story);
-  li.append(a, el("p", "attribution", `Headline from ${lead(story).source} · ${plural(story.outlets, "outlet", "outlets")}`));
+  const foot = el("div", "story-foot");
+  foot.append(el("span", "sources-line", `${plural(story.articles.length, "article", "articles")} · ${listNames(story.sources, 3)}`));
+  const more = el("a", "read-more", "Read the story");
+  more.href = storyHref(story);
+  foot.append(more);
+  li.append(foot);
   return li;
 }
 
 function renderToday(data) {
   const feeds = data.feeds || [];
-  const ok = feeds.filter(f => f.ok).length;
-  $("today-date").textContent = new Date(data.scanned_at).toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
+  $("today-date").textContent = "Politics · " + new Date(data.scanned_at).toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
+  $("scanline").textContent = `Updated ${clock(data.scanned_at)}`;
 
-  const top = data.stories.filter(s => s.related_to === null);
+  const top = data.stories.filter(s => s.related_to === null && s.topic === "politics");
   const leadStories = top.slice(0, LEAD);
   $("today-count").textContent = WORDS[leadStories.length] || String(leadStories.length);
-  $("scanline").textContent = `Scanned ${data.articles_scanned} articles from ${ok} of ${feeds.length} outlets at ${clock(data.scanned_at)} · scans run hourly`;
-
   leadStories.forEach((s, i) => $("stories").append(storyCard(s, i, data)));
-  const leadBasis = $("lead-basis");
-  leadBasis.replaceWith(basisLine(`which events the most outlets covered, with left, center and right each counting equally however many outlets each side has. ${plural(data.count, "story was", "stories were")} covered by two or more outlets; ${data.opinion_excluded} opinion pieces were kept out.`));
 
   const rest = top.slice(LEAD);
   if (rest.length) {
-    rest.forEach(s => $("more-list").append(moreRow(s)));
+    for (const s of rest) {
+      const li = el("li");
+      const a = el("a", "more-title", s.working_title);
+      a.href = storyHref(s);
+      li.append(a, el("span", "more-meta", `${lead(s).source} · ${plural(s.outlets, "outlet", "outlets")}`));
+      $("more-list").append(li);
+    }
     $("more").hidden = false;
   }
 
-  const fl = $("feeds");
-  for (const [k, label] of [...SIDES, ["unplaced", "Unplaced"]]) {
-    const group = feeds.filter(f => f.side === k);
-    if (!group.length) continue;
-    fl.append(el("li", "feed-side", label));
-    for (const f of group.sort((a, b) => a.source.localeCompare(b.source)))
-      fl.append(el("li", f.ok ? null : "fail", f.ok ? `${f.source} · ${f.articles}` : `${f.source} · not reachable this scan`));
-  }
-  const pl = data.placement;
-  $("feeds-basis").replaceWith(basisLine(`${pl.source.name} (survey of ${pl.source.survey}): the share of each outlet's regular audience who are Republican, among Republican and Democratic users. Under ${Math.round(pl.left_below * 100)}% is left, over ${Math.round(pl.right_above * 100)}% is right. Outlets Pew did not ask about are unplaced. Nothing is set by hand.`));
+  const ok = feeds.filter(f => f.ok).sort((a, b) => a.source.localeCompare(b.source));
+  $("feeds").append(el("p", "feeds-list", ok.map(f => f.source).join(", ")));
+  const down = feeds.filter(f => !f.ok).map(f => f.source);
+  if (down.length) $("feeds").append(el("p", "feeds-down", `Not reachable in the last scan: ${down.join(", ")}.`));
 }
 
 /* ---------- One story ---------- */
 
-function pendingVerdict() {
-  // Until a story's claims are checked, say so plainly rather than drawing empty sections.
-  const verdict = el("section", "verdict pending");
-  const vt = el("h2", null, "The verdict");
-  verdict.append(vt,
-    el("p", null, "Not checked yet. Once this story is checked, this is where you'll see what's true, what's not true and what's still open, followed by the numbers that put it in perspective. Each line will name its source."),
-    el("p", "pending-note", "Nothing here is filled in until then."));
-  return verdict;
-}
-
-// Built only from checked claims: nothing appears here that a claim below doesn't support.
-function verdictBlock(story, lib) {
-  const box = el("section", "verdict");
-  box.setAttribute("aria-labelledby", "verdict-title");
-  const h = el("h2", null, "The verdict");
-  h.id = "verdict-title";
-  box.append(h);
-  const groups = [["true", "What\u2019s true"], ["not_true", "What\u2019s not true"], ["open", "Still open"]];
-  for (const [k, label] of groups) {
-    const g = el("div", "vgroup");
-    g.append(el("h3", null, label));
-    const items = story.verdict[k] || [];
-    if (!items.length) g.append(el("p", "vnone", k === "not_true" ? "No checked claim here was found false." : "Nothing checked here."));
-    for (const it of items) {
-      const row = el("p", "vline");
-      if (it.values) {
-        row.append(el("span", "vtag", "Values question"), document.createTextNode(` ${it.values} That\u2019s yours to decide.`));
-      } else {
-        const c = claimOf(lib, it.key);
-        if (!c) continue;
-        const a = el("a", "vclaim", c.claim);
-        a.href = `#claim-${it.key}`;
-        row.append(chip(c.verdict), document.createTextNode(" "), a);
-      }
-      g.append(row);
+function claimDetails(d, c) {
+  const det = el("details", "check-row");
+  const sum = el("summary");
+  sum.append(chip(c.verdict), el("span", "check-claim", c.claim));
+  det.append(sum);
+  const body = el("div", "check-body");
+  if (c.steelman) body.append(el("p", "why", `Why this sounds right: ${c.steelman}`));
+  if (c.finding) body.append(el("p", "finding", c.finding));
+  if (c.note) body.append(el("p", "check-note", c.note));
+  const said = d.positions.map(p => `${listNames(p.outlets, 3)}: ${p.says}`).join(" · ");
+  if (said) body.append(el("p", "who-said", said));
+  if (c.evidence && c.evidence.length) {
+    const ul = el("ul", "evidence");
+    for (const e of c.evidence) {
+      const li = el("li");
+      li.append(el("span", "ev-quote", `“${e.quote}”`));
+      const src = el("a", "ev-src", `${e.publisher}${e.published ? ", " + e.published : ""} ↗`);
+      src.href = e.url;
+      src.rel = "noopener";
+      li.append(src);
+      ul.append(li);
     }
-    box.append(g);
+    body.append(ul);
   }
-  const sources = new Set(story.checks.flatMap(k => (claimOf(lib, k)?.evidence || []).map(e => e.url)));
-  const models = [...new Set(story.checks.flatMap(k => [claimOf(lib, k)?.checked_by, claimOf(lib, k)?.second_opinion]).filter(Boolean))];
-  box.append(basisLine(`${plural(story.verdict.checked, "checked claim", "checked claims")} and ${plural(sources.size, "source", "sources")}. Checked by ${models.map(modelName).join(" and ")}; every quote was found on its source page. No person reviews a check before it appears.`));
-  return box;
-}
-
-function claimCards(checks) {
-  const sec = el("section", "claims");
-  sec.setAttribute("aria-labelledby", "claims-title");
-  const h = el("h2", null, "Each claim, checked");
-  h.id = "claims-title";
-  sec.append(h);
-  for (const [key, c] of checks) {
-    const card = el("article", "claim-card");
-    card.id = `claim-${key}`;
-    card.append(el("p", "claim-text", `\u201c${c.claim}\u201d`));
-    if (c.said_by && c.said_by.length) card.append(el("p", "attribution", `In coverage from ${c.said_by.join(", ")}`));
-    if (c.steelman) {
-      card.append(el("h3", null, "Why this sounds right"), el("p", "steelman", c.steelman));
-    }
-    const vrow = el("div", "claim-verdict");
-    vrow.append(chip(c.verdict));
-    for (const f of c.reasoning_flags || []) vrow.append(el("span", "flag", f));
-    card.append(vrow);
-    if (c.finding) card.append(el("p", "finding", c.finding));
-    if (c.note) card.append(el("p", "claim-note", c.verdict === "Unproven" && c.model_verdict && c.model_verdict !== "Unproven"
-      ? `Shown as Unproven: ${c.note}.` : c.note));
-    if (c.evidence && c.evidence.length) {
-      const ul = el("ul", "evidence");
-      for (const e of c.evidence) {
-        const li = el("li");
-        li.append(el("span", "ev-quote", `\u201c${e.quote}\u201d`));
-        const src = el("a", "ev-src", `${e.publisher}${e.published ? " \u00b7 " + e.published : ""} \u2197`);
-        src.href = e.url;
-        src.rel = "noopener";
-        li.append(src);
-        ul.append(li);
-      }
-      card.append(ul);
-    }
-    card.append(basisLine(`${c.newest_data || "the sources above"} Checked ${stamp(c.checked_at)}.`));
-    sec.append(card);
-  }
-  return sec;
+  const by = [c.checked_by, c.second_opinion].filter(Boolean).map(m => MODEL_NAMES[m] || m).join(" and ");
+  body.append(el("p", "check-meta", `Checked ${stamp(c.checked_at)} by ${by}. Every quote above was found on its source page.`));
+  det.append(body);
+  return det;
 }
 
 function renderStory(data) {
   const sid = new URLSearchParams(location.search).get("s");
   const story = data.stories.find(s => s.sid === sid);
+  const body = $("story-body");
   if (!story) {
     $("story-title").textContent = "This story has moved off the latest scan.";
-    $("story-body").append(el("p", "lede", "Stories drop out once their coverage is more than 48 hours old."));
-    const back = el("a", null, "See today's stories");
+    const back = el("a", "read-more", "See today's stories");
     back.href = "./";
-    $("story-body").append(back);
+    body.append(back);
     return;
   }
   document.title = `${story.working_title} · fACTUAL`;
-  $("story-meta").textContent = `Updated ${clock(data.scanned_at)} · ${plural(story.outlets, "outlet", "outlets")}`;
+  $("story-meta").textContent = `${story.topic === "politics" ? "Politics · " : ""}Updated ${clock(data.scanned_at)}`;
   $("story-title").textContent = story.working_title;
-  const body = $("story-body");
-  body.append(el("p", "attribution", `Headline from ${lead(story).source}`), coverageLine(story, data.roster));
+  $("story-sub").append(el("p", "byline", `Headline from ${lead(story).source}`));
 
-  const checks = (story.checks || []).map(k => [k, claimOf(data.library, k)]).filter(([, c]) => c);
-  if (checks.length && story.verdict) {
-    body.append(verdictBlock(story, data.library), claimCards(checks));
+  const brief = story.brief;
+  const agreed = (brief && brief.agreed) || [];
+
+  // 1. The story the coverage agrees on.
+  const s1 = el("section", "block");
+  s1.append(el("h2", "block-title", "The story"));
+  if (agreed.length) {
+    s1.append(el("p", "story-text", agreed.map(f => f.fact).join(" ")));
+    const reporters = [...new Set(agreed.flatMap(f => f.reported_by))].sort();
+    s1.append(el("p", "block-note", `Reported across ${listNames(reporters, 6)}. Each line is stated by at least two of them.`));
   } else {
-    body.append(pendingVerdict());
+    s1.append(el("p", "story-text muted", "Being summarized. The facts the coverage agrees on will appear here."));
+  }
+  body.append(s1);
+
+  // 2. True or not: only what the evidence decided.
+  const rows = decided(story, data.library);
+  if (rows.length) {
+    const s2 = el("section", "block");
+    s2.append(el("h2", "block-title", "True or not"));
+    for (const { d, c } of rows) s2.append(claimDetails(d, c));
+    body.append(s2);
   }
 
-  const cov = el("section", "who");
-
-  cov.setAttribute("aria-labelledby", "who-title");
-  const ct = el("h2", null, "Who covered it");
-  ct.id = "who-title";
-  cov.append(ct, el("p", "who-note", "Each link opens the outlet's own site."));
-  for (const [k, label] of [...SIDES, ["unplaced", "Unplaced"]]) {
-    const arts = story.articles.filter(a => story.coverage[k].includes(a.source));
-    if (!arts.length) continue;
-    cov.append(el("h3", null, label));
-    const ul = el("ul", "articles");
-    for (const art of arts) {
+  // 3. Still open: disagreements the evidence hasn't settled, and values questions.
+  const open = stillOpen(story, data.library);
+  const values = (brief && brief.values_questions) || [];
+  if (open.length || values.length) {
+    const s3 = el("section", "block");
+    s3.append(el("h2", "block-title", "Still open"));
+    const ul = el("ul", "open-list");
+    for (const d of open) {
       const li = el("li");
-      li.append(el("span", "src", art.source));
-      const a = el("a", "title", art.title);
-      a.href = art.url;
-      a.rel = "noopener";
-      li.append(a);
-      const meta = el("span", "art-meta", art.published ? `${stamp(art.published)} · ` : "");
-      meta.append(document.createTextNode(`at ${new URL(art.url).hostname.replace(/^www\./, "")} ↗`));
-      li.append(meta);
+      li.append(el("p", "open-point", d.point));
+      li.append(el("p", "open-sides", d.positions.map(p => `${listNames(p.outlets, 3)}: ${p.says}`).join(" · ")));
       ul.append(li);
     }
-    cov.append(ul);
+    for (const q of values) {
+      const li = el("li");
+      li.append(el("p", "open-point", q), el("p", "open-sides", "A values question. That’s yours to decide."));
+      ul.append(li);
+    }
+    s3.append(ul);
+    body.append(s3);
   }
-  const missing = SIDES.filter(([k]) => data.roster[k].length && !story.coverage[k].length).map(([, label]) => label.toLowerCase());
-  if (missing.length) cov.append(el("p", "gap", `No ${missing.join(" or ")}-audience outlet in our list covered this in the last 48 hours.`));
-  body.append(cov);
 
-  if (story.related.length) body.append(relatedList(story, data.stories, "Related coverage of the same event"));
-  body.append(basisLine(`${plural(story.articles.length, "article", "articles")} from ${plural(story.outlets, "outlet", "outlets")}, grouped by meaning in the ${clock(data.scanned_at)} scan. Outlet sides from Pew Research Center audience data.`));
+  // 4. Sources, folded away.
+  const s4 = el("section", "block");
+  const det = el("details", "sources-all");
+  det.append(el("summary", null, `Sources: ${plural(story.articles.length, "article", "articles")} from ${listNames(story.sources, 3)}`));
+  const ul = el("ul", "articles");
+  for (const art of [...story.articles].sort((a, b) => a.source.localeCompare(b.source))) {
+    const li = el("li");
+    const a = el("a", null, art.title);
+    a.href = art.url;
+    a.rel = "noopener";
+    li.append(el("span", "src", art.source), a);
+    ul.append(li);
+  }
+  det.append(ul);
+  s4.append(det);
+  s4.append(el("p", "block-note", "Summaries and checks are written by AI from the coverage and from primary sources. No person reviews them before they appear."));
+  body.append(s4);
 }
 
 function fail() {

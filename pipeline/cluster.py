@@ -43,6 +43,28 @@ LEFT_BELOW, RIGHT_ABOVE = 0.40, 0.60
 # was related (one shooting, one sanctions waiver); no single merge threshold kept
 # distinct stories apart, so they are linked rather than merged.
 RELATED = 0.74
+
+# Today covers U.S. politics and U.S. policy abroad (Heston's call, 2026-10-18). A story is political
+# when its meaning is closer to these examples than to the non-political ones, by POLITICS_MARGIN.
+# Tuned by eye on the 2026-10-18 scan: celebrity trials, foreign wars and disasters fall out; Senate
+# debates, rallies, sanctions and agency actions stay in.
+POLITICS = [
+    "U.S. Congress passes a bill; senators and representatives vote", "The White House and the president announce a policy",
+    "U.S. election campaign, candidates, voters, polls and midterms", "A federal court rules on a Trump administration policy or a state law",
+    "Federal agency, Justice Department, FBI or Pentagon action on policy", "U.S. foreign policy: sanctions, tariffs, military aid, treaties",
+    "Government spending, the budget, taxes and the national debt", "Immigration and border policy decided by the U.S. government",
+    "Republicans and Democrats clash over legislation", "A White House official or cabinet member resigns or is fired",
+    "The president holds a campaign rally for midterm candidates", "Congressional or Senate candidates debate before the election",
+]
+NOT_POLITICS = [
+    "A shooting, crime or police investigation in a city", "A wildfire, storm, earthquake or accident kills people",
+    "Sports: a game, a team, a player, a championship", "Business, company earnings, a product launch, technology",
+    "Celebrity, entertainment, movies and music", "Religion: the Pope and the Vatican", "Health and science research findings",
+    "A foreign country's internal politics, protests or election abroad", "Weather and travel",
+    "A celebrity, athlete or murderer on trial; a judge sentences a defendant",
+    "A foreign separatist movement or referendum in Canada or Europe", "A war between other countries: battlefield news, drones, front lines",
+]
+POLITICS_MARGIN = 0.01
 SIDES = ("left", "center", "right")
 
 # URL path segments and title prefixes that mark opinion, analysis or columns.
@@ -151,6 +173,14 @@ def main():
             "articles": [{"source": a["source"], "title": a["title"], "url": a["url"], "published": a["published"]}
                          for a in sorted(arts, key=lambda a: a["published"] or "")],
         })
+    unit = lambda a: a / np.linalg.norm(a, axis=1, keepdims=True)
+    pol = unit(np.array(list(model.embed(POLITICS)), dtype=np.float32))
+    other = unit(np.array(list(model.embed(NOT_POLITICS)), dtype=np.float32))
+    titles = unit(np.array(list(model.embed([" ".join(a["title"] for a in st["articles"][:6]) for st in stories])), dtype=np.float32)) if stories else np.zeros((0, 384))
+    for st, v in zip(stories, titles):
+        score = float((pol @ v).max() - (other @ v).max())
+        st["politics_score"] = round(score, 3)
+        st["topic"] = "politics" if score > POLITICS_MARGIN else "other"
     stories.sort(key=lambda s: (s["balance_score"], s["outlets"], len(s["articles"])), reverse=True)
     for n, st in enumerate(stories):
         st["id"] = n
@@ -167,7 +197,8 @@ def main():
         "scanned_at": scan["fetched_at"],
         "articles_scanned": len(articles),
         "feeds": [{**f, "side": side.get(f["source"], "unplaced")} for f in scan.get("feeds", [])],
-        "method": {"model": MODEL, "threshold": THRESHOLD, "window_hours": WINDOW_HOURS, "linkage": "average", "related": RELATED},
+        "method": {"model": MODEL, "threshold": THRESHOLD, "window_hours": WINDOW_HOURS, "linkage": "average", "related": RELATED,
+                   "topic": "U.S. politics and U.S. policy abroad", "politics_margin": POLITICS_MARGIN},
         "placement": {"source": feeds["placement_source"], "left_below": LEFT_BELOW, "right_above": RIGHT_ABOVE,
                       "measure": "Republican users / (Republican + Democratic users)"},
         "roster": roster,
@@ -178,7 +209,8 @@ def main():
     (ROOT / "data/stories.json").write_text(json.dumps(out, indent=1))
     print(f"{len(stories)} stories covered by 2+ outlets -> data/stories.json ({opinion} opinion pieces kept out)\n")
     print("  roster: " + " · ".join(f"{k} {len(roster[k])}" for k in (*SIDES, "unplaced")) + "\n")
-    for s in [s for s in stories if s["related_to"] is None][:8]:
+    print(f"  politics: {sum(st['topic'] == 'politics' for st in stories)} of {len(stories)} stories\n")
+    for s in [s for s in stories if s["related_to"] is None and s["topic"] == "politics"][:8]:
         c = " ".join(f"{k[0].upper()}{len(s['coverage'][k])}/{len(roster[k])}" for k in SIDES)
         print(f"  {s['balance_score']:.2f}  {c}  {s['working_title'][:66]}")
         for r in s["related"]:

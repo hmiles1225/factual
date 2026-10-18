@@ -4,52 +4,58 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>fACTUAL</title>
-<meta name="description" content="The stories the most outlets are covering, grouped by meaning. Preview: not yet fact-checked.">
+<meta name="description" content="Today's most-covered political stories, with each claim checked against primary sources.">
 <meta name="theme-color" content="#F4F2EC">
 <link rel="preload" href="fonts/schibsted-grotesk-v7.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/newsreader-italic-v26.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="styles.css">
 <script src="app.js" defer></script>
 </head>
-<body>
+<body data-page="today">
 <a class="skip" href="#main">Skip to stories</a>
 
-<header class="top">
-  <p class="wordmark" aria-label="fACTUAL"><span class="f" aria-hidden="true">f</span><span aria-hidden="true">ACTUAL</span></p>
+<header class="masthead">
+  <div class="masthead-inner">
+    <a class="wordmark" href="./" aria-label="fACTUAL"><span class="f" aria-hidden="true">f</span><span aria-hidden="true">ACTUAL</span></a>
+    <p class="scanline" id="scanline" aria-live="polite">Loading the latest scan…</p>
+  </div>
 </header>
 
-<main id="main">
-  <p class="label" id="today-date"></p>
-  <h1>Today, in <span id="today-count">five</span> stories.</h1>
-  <p class="scanline" id="scanline" aria-live="polite">Loading the latest scan…</p>
+<main id="main" class="page">
+  <section class="intro" aria-labelledby="today-title">
+    <p class="kicker" id="today-date">Politics</p>
+    <h1 id="today-title">Today, in <span id="today-count">five</span> stories.</h1>
+    <p class="dek">The political stories the most outlets are covering. What they agree on first, then what holds up.</p>
+  </section>
 
-
-  <ol class="stories" id="stories" aria-label="Most-covered stories"></ol>
-  <p class="basis" id="lead-basis" hidden></p>
+  <ol class="stories" id="stories" aria-label="Today's most-covered political stories"></ol>
 
   <section class="more" id="more" hidden aria-labelledby="more-title">
-    <h2 id="more-title">Also covered by two or more outlets</h2>
+    <h2 id="more-title">Also covered today</h2>
     <ul class="more-list" id="more-list"></ul>
   </section>
 
   <section class="about" id="about" aria-labelledby="about-title">
     <h2 id="about-title">What this is</h2>
-    <p>fACTUAL reads the public news feeds of a fixed list of outlets every hour. It groups articles about the
-      same event by what they say, not by matching words. A story needs at least two outlets. Opinion pieces are
-      kept separate from news.</p>
-    <p>Claims in Today’s top stories are checked by AI against primary sources. Every quote shown was found on
-      its source page by our code, a Doesn’t hold up needs two different AI models to agree, and no person reviews
-      a check before it appears.</p>
-    <p>Headlines here are the outlets’ own words, shown in italic and named. We link to every article and never
-      republish article text.</p>
-    <p>The method, the outlet list and the code are public:
-      <a href="https://github.com/hmiles1225/factual">github.com/hmiles1225/factual</a>.</p>
-    <h3>For publishers</h3>
-    <p>Our scanner identifies itself as <code>fACTUAL-scan</code> and reads each feed once an hour. To ask a
-      question or request a change, <a href="https://github.com/hmiles1225/factual/issues">open an issue on GitHub</a>.</p>
-    <h3>Feeds in the last scan, by audience</h3>
-    <ul class="feeds" id="feeds"></ul>
-    <p class="basis" id="feeds-basis"></p>
+    <div class="about-cols">
+      <div>
+        <p>fACTUAL reads the public news feeds of a fixed list of outlets every hour and groups articles about the same
+          event by what they say. Today shows U.S. politics and U.S. policy abroad.</p>
+        <p>Claims in Today’s stories are checked by AI against primary sources. Every quote shown was found on its
+          source page by our code, a Doesn’t hold up needs two different AI models to agree, and no person reviews a
+          check before it appears.</p>
+        <p>Headlines are the outlets’ own words, shown in italic and named. We link to every article and never
+          republish article text. The method, the outlet list and the code are public:
+          <a href="https://github.com/hmiles1225/factual">github.com/hmiles1225/factual</a>.</p>
+        <h3>For publishers</h3>
+        <p>Our scanner identifies itself as <code>fACTUAL-scan</code> and reads each feed once an hour. To ask a
+          question or request a change, <a href="https://github.com/hmiles1225/factual/issues">open an issue on GitHub</a>.</p>
+      </div>
+      <div>
+        <h3>Outlets we read</h3>
+        <div id="feeds"></div>
+      </div>
+    </div>
   </section>
 </main>
 </body>
