@@ -32,6 +32,7 @@ import check as C  # noqa: E402
 ROOT = Path(__file__).resolve().parent.parent
 LIBRARY_URL = "https://hestonmiles.com/factual/data/library.json"
 TOP_STORIES = 5
+MAX_CANDIDATES = 8               # political stories tried, in rank order, to find 5 with a summary
 MAX_NEW_PER_SCAN = 4
 MAX_NEW_PER_DAY = 25
 ANTHROPIC_DAILY_USD = 1.00
@@ -300,8 +301,13 @@ def main():
         print(f"  {record['verdict']:<16} {text[:80]}")
         return k
 
-    top = [s for s in data["stories"] if s.get("related_to") is None and s.get("topic") == "politics"][:TOP_STORIES]
-    for story in top:
+    # Walk the political ranking until TOP_STORIES stories have a real summary (agreed facts),
+    # trying at most MAX_CANDIDATES. Only summarized stories are shown on Today.
+    candidates = [s for s in data["stories"] if s.get("related_to") is None and s.get("topic") == "politics"][:MAX_CANDIDATES]
+    summarized = 0
+    for story in candidates:
+        if summarized >= TOP_STORIES:
+            break
         arts = story["articles"][:14]
         lines = []
         for i, a in enumerate(arts):
@@ -333,6 +339,8 @@ def main():
                 d["check"] = check_claim(d["checkable_claim"], story["sid"], said_by)
         story["brief"] = brief
         story["checks"] = [d["check"] for d in brief["differences"] if d.get("check")]
+        if brief["agreed"]:
+            summarized += 1
         print(f"  {story['sid']}: {len(brief['agreed'])} agreed, {len(brief['differences'])} differences")
 
     live = {s["sid"] for s in data["stories"]}

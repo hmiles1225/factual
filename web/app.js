@@ -99,21 +99,15 @@ function renderToday(data) {
   $("today-date").textContent = "Politics · " + new Date(data.scanned_at).toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
   $("scanline").textContent = `Updated ${clock(data.scanned_at)}`;
 
-  const top = data.stories.filter(s => s.related_to === null && s.topic === "politics");
-  const leadStories = top.slice(0, LEAD);
-  $("today-count").textContent = WORDS[leadStories.length] || String(leadStories.length);
-  leadStories.forEach((s, i) => $("stories").append(storyCard(s, i, data)));
-
-  const rest = top.slice(LEAD);
-  if (rest.length) {
-    for (const s of rest) {
-      const li = el("li");
-      const a = el("a", "more-title", s.working_title);
-      a.href = storyHref(s);
-      li.append(a, el("span", "more-meta", `${lead(s).source} · ${plural(s.outlets, "outlet", "outlets")}`));
-      $("more-list").append(li);
-    }
-    $("more").hidden = false;
+  // Only stories with a written summary (agreed facts) are shown. Never a bare headline.
+  const summarized = data.stories.filter(s => s.related_to === null && s.topic === "politics" && s.brief && s.brief.agreed && s.brief.agreed.length);
+  const leadStories = summarized.slice(0, LEAD);
+  if (!leadStories.length) {
+    $("today-title").textContent = "Today’s stories are being summarized.";
+    $("stories").replaceWith(el("p", "dek", "Check back shortly. A story appears here once the coverage has been summarized."));
+  } else {
+    $("today-count").textContent = WORDS[leadStories.length] || String(leadStories.length);
+    leadStories.forEach((s, i) => $("stories").append(storyCard(s, i, data)));
   }
 
   const ok = feeds.filter(f => f.ok).sort((a, b) => a.source.localeCompare(b.source));
