@@ -70,9 +70,11 @@ jobs:
           print("only=" + r.get("only", ""))
           print("reps=" + str(r.get("reps", 1)))
           print("claude_variant=" + r.get("claude_variant", "v3"))
+          print("reverify=" + " ".join(r.get("reverify", [])))
+          print("second_from=" + r.get("second_from", "v1"))
           PY
           else
-            printf 'checkers=%s\nonly=%s\nreps=%s\nclaude_variant=%s\n' "$IN_CHECKERS" "$IN_ONLY" "$IN_REPS" "$IN_VARIANT" >> "$GITHUB_OUTPUT"
+            printf 'checkers=%s\nonly=%s\nreps=%s\nclaude_variant=%s\nreverify=\nsecond_from=v1\n' "$IN_CHECKERS" "$IN_ONLY" "$IN_REPS" "$IN_VARIANT" >> "$GITHUB_OUTPUT"
           fi
           cat "$GITHUB_OUTPUT"
 
@@ -90,13 +92,17 @@ jobs:
           FACTUAL_FETCH_CAP: "8000"
         run: python eval/run.py --checker claude --variant v2 --reps "${{ steps.cfg.outputs.reps }}" --only "${{ steps.cfg.outputs.only }}"
 
+      - name: Re-verify saved answers (no model judging; fetches pages only)
+        if: always() && steps.cfg.outputs.reverify != ''
+        run: python eval/reverify.py ${{ steps.cfg.outputs.reverify }}
+
       - name: Claude second opinion on Gemini's Doesn't hold up
         if: always() && contains(steps.cfg.outputs.checkers, 'claude-second')
-        run: python eval/run.py --checker claude --variant "${{ steps.cfg.outputs.claude_variant }}" --reps "${{ steps.cfg.outputs.reps }}" --only-from v1 --when "Doesn't hold up"
+        run: python eval/run.py --checker claude --variant "${{ steps.cfg.outputs.claude_variant }}" --reps "${{ steps.cfg.outputs.reps }}" --only-from "${{ steps.cfg.outputs.second_from }}" --when "Doesn't hold up"
 
       - name: Summarize
         if: always()
-        run: python eval/summarize.py baseline v1 v2 v3 >> "$GITHUB_STEP_SUMMARY"
+        run: python eval/summarize.py baseline v1 v2 v3 v5 >> "$GITHUB_STEP_SUMMARY"
 
       - name: Commit results
         if: always()

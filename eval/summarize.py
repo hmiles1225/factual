@@ -148,14 +148,15 @@ def production(primary, second, name):
 
 
 if __name__ == "__main__":
-    variants = sys.argv[1:] or ["baseline", "v1", "v2", "v3"]
+    variants = sys.argv[1:] or ["baseline", "v1", "v2", "v3", "v5"]
     data = {v: load(v) for v in variants if (FLOW / v / "results.jsonl").exists()}
     out = ["# Claim-check eval summary", ""]
     for v, (rows, nerr) in data.items():
         out.append(report(v, rows, nerr))
-    if "v1" in data and "v3" in data:
-        out.append(production(data["v1"][0], data["v3"][0], "Gemini checks everything, Opus re-checks its Doesn't hold up"))
-    claude_like = [v for v in variants if v not in ("v1", "v3") and v in data]
+    for g in ("v5", "v1"):
+        if g in data and "v3" in data:
+            out.append(production(data[g][0], data["v3"][0], f"Gemini ({g}) checks everything, Opus re-checks its Doesn't hold up"))
+    claude_like = [v for v in variants if v not in ("v1", "v3", "v5") and v in data]
     if "v1" in data:
         for v in claude_like:
             out.append(system(data["v1"][0], data[v][0], f"Gemini (v1) decides, Claude ({v}) second opinion"))

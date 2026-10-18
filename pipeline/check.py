@@ -118,6 +118,29 @@ def page_text(raw, content_type):
 
 
 _PAGE_CACHE = {}
+_RESOLVED = {}
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs):
+        return None
+
+
+def real_url(url):
+    """Gemini cites Google's grounding redirect links, not the source. A GET on one is refused (403);
+    a HEAD answers 302 with the real address in Location. Readers and the verifier both need that."""
+    if "vertexaisearch.cloud.google.com/grounding-api-redirect" not in url:
+        return url
+    if url not in _RESOLVED:
+        opener = urllib.request.build_opener(_NoRedirect, urllib.request.HTTPSHandler(context=SSL_CTX))
+        try:
+            opener.open(urllib.request.Request(url, method="HEAD", headers={"User-Agent": UA}), timeout=20)
+            _RESOLVED[url] = url
+        except urllib.error.HTTPError as e:
+            _RESOLVED[url] = e.headers.get("Location") or url
+        except Exception:
+            _RESOLVED[url] = url
+    return _RESOLVED[url]
 
 
 def fetch_page(url):
@@ -133,6 +156,52 @@ def fetch_page(url):
         out = (None, f"{type(e).__name__}: {e}"[:160])
     _PAGE_CACHE[url] = out
     return out
+
+
+# Many primary sources (cbo.gov, fbi.gov, cbp.gov) refuse every automated client but allow
+# Anthropic's web fetch tool. A small model is used only as a pipe: it calls the tool, and the page
+# text is read from the tool's result, never from anything the model writes. It judges nothing.
+FETCH_PIPES = [("claude-haiku-5-5", "web_fetch_20250910"), ("claude-sonnet-5-5", "web_fetch_20260209")]
+_PIPE_CACHE = {}
+
+
+def fetch_via_anthropic(url):
+    if url in _PIPE_CACHE:
+        return _PIPE_CACHE[url]
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        return None, "no Anthropic key for fetch"
+    import anthropic
+    client = anthropic.Anthropic(max_retries=3)
+    out, info = None, "fetch tool returned nothing"
+    for model, tool in FETCH_PIPES:
+        try:
+            resp = client.messages.create(
+                model=model, max_tokens=512,
+                tools=[{"type": tool, "name": "web_fetch", "max_uses": 1, "max_content_tokens": 100000}],
+                messages=[{"role": "user", "content": f"Use web_fetch to fetch exactly this URL, then reply DONE.\n{url}"}],
+            )
+        except anthropic.BadRequestError as e:
+            info = f"{model}: {e.message[:120]}"
+            continue
+        for block in resp.to_dict()["content"]:
+            if block.get("type") != "web_fetch_tool_result":
+                continue
+            src = ((block.get("content") or {}).get("content") or {}).get("source") or {}
+            if src.get("type") == "text" and src.get("data"):
+                out = norm(src["data"])
+            elif src.get("type") == "base64" and src.get("data"):
+                import base64
+                out = norm(page_text(base64.b64decode(src["data"]), src.get("media_type", "")))
+            else:
+                info = f"fetch tool error: {json.dumps(block.get('content'))[:120]}"
+        u = resp.usage
+        PIPE_USAGE.append({"model": resp.model, "input_tokens": u.input_tokens, "output_tokens": u.output_tokens})
+        break
+    _PIPE_CACHE[url] = (out, info if out is None else "anthropic fetch")
+    return _PIPE_CACHE[url]
+
+
+PIPE_USAGE = []
 
 
 def quote_found(quote, text):
@@ -169,12 +238,23 @@ def verify(result, fetched_docs=None):
     fetched_docs = fetched_docs or {}
     checked, notes = [], []
     for ev in out.get("evidence", []):
-        url = ev.get("url", "")
+        original = ev.get("url", "")
+        url = real_url(original)
+        if url != original:
+            ev = {**ev, "url": url, "cited_as": original}
         text = fetched_docs.get(url) or None
         how, info = "model fetch", ""
         if text is None:
             text, info = fetch_page(url)
             how = "our fetch"
+        if not (text and quote_found(ev.get("quote", ""), text)):
+            # Our client was refused, or read a page without the quote (often a JS shell).
+            # Try the page as Anthropic's fetcher sees it before calling the quote unverified.
+            alt, alt_info = fetch_via_anthropic(url)
+            if alt:
+                text, how = alt, "anthropic fetch"
+            elif text is None:
+                info = f"{info}; {alt_info}"
         ok = bool(text) and quote_found(ev.get("quote", ""), text)
         checked.append({**ev, "verified": ok, "checked_by": how if text else f"unreachable ({info})"})
     verified = [e for e in checked if e["verified"]]
