@@ -1,2 +1,2 @@
-Claude Opus 5.5 with prompt caching
-Same harness and prompt as baseline; adds top-level cache_control so research steps reuse earlier context at 10% of the input price. Answers should not change; cost should.
+v3's answers, re-verified with the current evidence check
+No model was called. Same answers as v3; only the verifier changed (Google grounding redirects resolved to real URLs).

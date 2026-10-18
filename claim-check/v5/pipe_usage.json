@@ -1,6 +1,6 @@
 {
- "fetches": 42,
- "usd": 0.128,
+ "fetches": 34,
+ "usd": 0.1125,
  "calls": [
   {
    "model": "claude-haiku-5-5",
@@ -15,12 +15,7 @@
   {
    "model": "claude-haiku-5-5",
    "input_tokens": 11401,
-   "output_tokens": 158
-  },
-  {
-   "model": "claude-haiku-5-5",
-   "input_tokens": 5049,
-   "output_tokens": 78
+   "output_tokens": 142
   },
   {
    "model": "claude-haiku-5-5",
@@ -40,12 +35,12 @@
   {
    "model": "claude-haiku-5-5",
    "input_tokens": 2385,
-   "output_tokens": 276
+   "output_tokens": 313
   },
   {
    "model": "claude-haiku-5-5",
-   "input_tokens": 2467,
-   "output_tokens": 363
+   "input_tokens": 2376,
+   "output_tokens": 351
   },
   {
    "model": "claude-haiku-5-5",
@@ -84,11 +79,6 @@
   },
   {
    "model": "claude-haiku-5-5",
-   "input_tokens": 14308,
-   "output_tokens": 112
-  },
-  {
-   "model": "claude-haiku-5-5",
    "input_tokens": 95046,
    "output_tokens": 100
   },
@@ -99,28 +89,18 @@
   },
   {
    "model": "claude-haiku-5-5",
-   "input_tokens": 11776,
-   "output_tokens": 108
-  },
-  {
-   "model": "claude-haiku-5-5",
-   "input_tokens": 21820,
-   "output_tokens": 143
-  },
-  {
-   "model": "claude-haiku-5-5",
    "input_tokens": 10439,
    "output_tokens": 98
   },
   {
    "model": "claude-haiku-5-5",
    "input_tokens": 12059,
-   "output_tokens": 165
+   "output_tokens": 196
   },
   {
    "model": "claude-haiku-5-5",
    "input_tokens": 2361,
-   "output_tokens": 271
+   "output_tokens": 272
   },
   {
    "model": "claude-haiku-5-5",
@@ -131,11 +111,6 @@
    "model": "claude-haiku-5-5",
    "input_tokens": 9300,
    "output_tokens": 84
-  },
-  {
-   "model": "claude-haiku-5-5",
-   "input_tokens": 31517,
-   "output_tokens": 91
   },
   {
    "model": "claude-haiku-5-5",
@@ -165,7 +140,7 @@
   {
    "model": "claude-haiku-5-5",
    "input_tokens": 634162,
-   "output_tokens": 168
+   "output_tokens": 134
   },
   {
    "model": "claude-haiku-5-5",
@@ -174,38 +149,23 @@
   },
   {
    "model": "claude-haiku-5-5",
-   "input_tokens": 12174,
-   "output_tokens": 73
-  },
-  {
-   "model": "claude-haiku-5-5",
    "input_tokens": 15335,
    "output_tokens": 96
   },
   {
    "model": "claude-haiku-5-5",
-   "input_tokens": 3186,
-   "output_tokens": 158
-  },
-  {
-   "model": "claude-haiku-5-5",
-   "input_tokens": 2553,
-   "output_tokens": 233
+   "input_tokens": 3047,
+   "output_tokens": 83
   },
   {
    "model": "claude-haiku-5-5",
    "input_tokens": 2539,
-   "output_tokens": 305
+   "output_tokens": 349
   },
   {
    "model": "claude-haiku-5-5",
    "input_tokens": 2376,
-   "output_tokens": 347
-  },
-  {
-   "model": "claude-haiku-5-5",
-   "input_tokens": 49325,
-   "output_tokens": 277
+   "output_tokens": 268
   },
   {
    "model": "claude-haiku-5-5",

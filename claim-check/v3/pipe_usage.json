@@ -1,0 +1,86 @@
+{
+ "fetches": 16,
+ "usd": 0.0152,
+ "calls": [
+  {
+   "model": "claude-haiku-5-5",
+   "input_tokens": 10355,
+   "output_tokens": 79
+  },
+  {
+   "model": "claude-haiku-5-5",
+   "input_tokens": 2400,
+   "output_tokens": 284
+  },
+  {
+   "model": "claude-haiku-5-5",
+   "input_tokens": 2421,
+   "output_tokens": 305
+  },
+  {
+   "model": "claude-haiku-5-5",
+   "input_tokens": 11401,
+   "output_tokens": 124
+  },
+  {
+   "model": "claude-haiku-5-5",
+   "input_tokens": 10439,
+   "output_tokens": 98
+  },
+  {
+   "model": "claude-haiku-5-5",
+   "input_tokens": 2419,
+   "output_tokens": 398
+  },
+  {
+   "model": "claude-haiku-5-5",
+   "input_tokens": 5135,
+   "output_tokens": 87
+  },
+  {
+   "model": "claude-haiku-5-5",
+   "input_tokens": 18900,
+   "output_tokens": 258
+  },
+  {
+   "model": "claude-haiku-5-5",
+   "input_tokens": 6218,
+   "output_tokens": 69
+  },
+  {
+   "model": "claude-haiku-5-5",
+   "input_tokens": 7861,
+   "output_tokens": 69
+  },
+  {
+   "model": "claude-haiku-5-5",
+   "input_tokens": 2376,
+   "output_tokens": 292
+  },
+  {
+   "model": "claude-haiku-5-5",
+   "input_tokens": 6142,
+   "output_tokens": 99
+  },
+  {
+   "model": "claude-haiku-5-5",
+   "input_tokens": 17488,
+   "output_tokens": 107
+  },
+  {
+   "model": "claude-haiku-5-5",
+   "input_tokens": 8393,
+   "output_tokens": 98
+  },
+  {
+   "model": "claude-haiku-5-5",
+   "input_tokens": 12429,
+   "output_tokens": 66
+  },
+  {
+   "model": "claude-haiku-5-5",
+   "input_tokens": 15437,
+   "output_tokens": 94
+  }
+ ]
+}
