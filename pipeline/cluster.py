@@ -20,6 +20,7 @@ Pew's audience numbers in feeds.json (never set by hand). A story's score is the
 over the three sides, of the share of that side's working outlets that covered it, so a
 side with more outlets in the list gets no more say than a side with fewer.
 """
+import hashlib
 import json
 import re
 import sys
@@ -136,8 +137,12 @@ def main():
         lead = arts[int(np.argmax(vectors[idx] @ centre))]
         coverage = {k: [src for src in sources if side.get(src, "unplaced") == k] for k in (*SIDES, "unplaced")}
         shares = [len(coverage[k]) / len(roster[k]) if roster[k] else 0.0 for k in SIDES]
+        # Stable across hourly scans while the story's first article stays in the window,
+        # so a link to a story page keeps working.
+        first = min(arts, key=lambda a: (a["published"] or "", a["url"]))
         stories.append({
             "_idx": idx,
+            "sid": hashlib.sha1(first["url"].encode()).hexdigest()[:10],
             "working_title": lead["title"],
             "outlets": len(sources),
             "sources": sources,
