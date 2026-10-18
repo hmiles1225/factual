@@ -42,6 +42,7 @@ RECHECK_AFTER_DAYS = 7
 OPUS_TYPICAL_USD = 0.51          # measured mean per Opus second opinion, 2026-10-17 eval
 SAME_CLAIM = 0.93                # embedding similarity at which two wordings are one claim
 MIN_OUTLETS_AGREED = 2           # an agreed fact needs at least this many outlets to state it
+BRIEF_VERSION = "2"              # bump when the brief instructions change, so cached briefs regenerate
 PRICES = {"claude-opus-5-5": (4.00, 20.00, 0.010), "claude-haiku-5-5": (0.10, 0.50, 0), "claude-sonnet-5-5": (2.00, 10.00, 0),
           "gemini-3.8-flash": (0.75, 3.75, 0.0)}   # Gemini searches are tracked by count, not dollars
 
@@ -69,8 +70,15 @@ Write:
   one statement in checkable_claim; otherwise leave it empty.
 - values_questions: up to 2 questions about what should happen or what matters more, worded neutrally.
 
-Rules: use only what is in the coverage below. Add nothing from your own knowledge. Do not judge
-which side is right. Do not use loaded words. Use only article numbers from the list.
+Rules:
+- Attribute every claim to whoever made it. If a person, party, agency or lawyer says something, write
+  who says it ("The Justice Department says about 200,000...", "Omar's attorneys say the search was
+  unlawful"). Never state a claim someone made as a fact, and never present what an outlet reports
+  someone saying as the outlet's own view.
+- Agreed facts are things that happened or were said on the record, stated with attribution where
+  someone made a claim. A disputed or one-sided assertion is a difference, not an agreed fact.
+- Use only what is in the coverage below. Add nothing from your own knowledge. Do not judge which side
+  is right. Do not use loaded words. Use only article numbers from the list.
 
 Coverage:
 {coverage}"""
@@ -300,7 +308,7 @@ def main():
             summ = (summaries.get(a["url"]) or "")[:300]
             lines.append(f"{i + 1}. {a['source']} ({side_of.get(a['source'], 'unplaced')}): {a['title']}" + (f" | {summ}" if summ else ""))
         coverage = "\n".join(lines)
-        digest = hashlib.sha1(coverage.encode()).hexdigest()[:16]
+        digest = hashlib.sha1((BRIEF_VERSION + coverage).encode()).hexdigest()[:16]
         cached = briefs.get(story["sid"])
         if cached and cached["digest"] == digest:
             brief = cached["brief"]
