@@ -1,0 +1,72 @@
+# Runs the claim-check eval on GitHub's servers with the repository's API keys, then commits
+# the results to the eval-results branch (not main, so a run never redeploys the site).
+# Start it from the Actions tab: eval > Run workflow.
+name: eval
+
+on:
+  workflow_dispatch:
+    inputs:
+      checker:
+        description: "Which checker"
+        type: choice
+        options: [both, claude, gemini]
+        default: both
+      only:
+        description: "Case ids, comma-separated (blank = all 50)"
+        default: ""
+      reps:
+        description: "Repetitions per case"
+        default: "1"
+
+concurrency:
+  group: eval
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      FACTUAL_EVAL_FLOW: ${{ github.workspace }}/results/claim-check
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/checkout@v7
+        with:
+          ref: eval-results
+          path: results
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Claude
+        if: inputs.checker != 'gemini'
+        run: python eval/run.py --checker claude --variant baseline --reps "${{ inputs.reps }}" --only "${{ inputs.only }}"
+
+      - name: Gemini
+        if: always() && inputs.checker != 'claude'
+        run: python eval/run.py --checker gemini --variant v1 --reps "${{ inputs.reps }}" --only "${{ inputs.only }}"
+
+      - name: Summarize
+        if: always()
+        run: python eval/summarize.py baseline v1 >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit results
+        if: always()
+        working-directory: results
+        run: |
+          git config user.name "fACTUAL eval"
+          git config user.email "eval@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && { echo "nothing new"; exit 0; }
+          git commit -q -m "eval: ${{ inputs.checker }} ${{ inputs.only || 'all' }} (run ${{ github.run_id }})"
+          git push -q origin HEAD:eval-results

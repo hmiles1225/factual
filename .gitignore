@@ -3,3 +3,4 @@ data/
 config.local.json
 __pycache__/
 .venv/
+.claude/
