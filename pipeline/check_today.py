@@ -46,13 +46,14 @@ RECHECK_AFTER_DAYS = 7
 OPUS_TYPICAL_USD = 0.51          # measured mean per Opus second opinion, 2026-10-17 eval
 SAME_CLAIM = 0.93                # embedding similarity at which two wordings are one claim
 MIN_OUTLETS_AGREED = 2           # an agreed fact needs at least this many outlets to state it
-BRIEF_VERSION = "6"              # bump when the brief instructions change, so cached briefs regenerate
+BRIEF_VERSION = "7"              # bump when the brief instructions change, so cached briefs regenerate
 PRICES = {"claude-opus-5-5": (4.00, 20.00, 0.010), "claude-haiku-5-5": (0.10, 0.50, 0), "claude-sonnet-5-5": (2.00, 10.00, 0),
           "gemini-3.8-flash": (0.75, 3.75, 0.0)}   # Gemini searches are tracked by count, not dollars
 
 _item = lambda props, req: {"type": "object", "properties": props, "required": req, "additionalProperties": False}
 _ints = {"type": "array", "items": {"type": "integer"}}
 BRIEF_SCHEMA = _item({
+    "common_ground": {"type": "array", "items": _item({"fact": {"type": "string"}, "articles": _ints}, ["fact", "articles"])},
     "agreed": {"type": "array", "items": _item({"fact": {"type": "string"}, "articles": _ints}, ["fact", "articles"])},
     "differences": {"type": "array", "items": _item({
         "point": {"type": "string", "description": "What the coverage differs on, in neutral words."},
@@ -65,12 +66,17 @@ BRIEF_SCHEMA = _item({
     "values_questions": {"type": "array", "items": {"type": "string"}},
     "main_subject": _item({"name": {"type": "string", "description": "Full name as commonly written, e.g. 'Ilhan Omar'."},
                            "kind": {"type": "string", "enum": ["person", "organization", "place", "none"]}}, ["name", "kind"]),
-}, ["agreed", "differences", "values_questions", "main_subject"])
+}, ["common_ground", "agreed", "differences", "values_questions", "main_subject"])
 
 BRIEF_PROMPT = """You are writing the neutral brief for one news story, from the numbered coverage
 below (each line: outlet, its audience lean, headline, and summary when there is one).
 
 Write:
+- common_ground: up to 2 facts that at least one left-leaning AND at least one right-leaning outlet
+  both state in their own headline or summary. Write each at the level of detail both sides give,
+  leaving out any number, quote or framing only one side uses. Even when the sides disagree on why or
+  how, they often agree on what happened (who did what, when): that is common ground. List every
+  article number that states it. Leave it empty if no fact is stated on both sides.
 - agreed: up to 4 facts that several outlets report. Plain, neutral sentences. Prefer facts reported
   by outlets of different leans. When left- and right-leaning outlets both report the same core event,
   write that fact at the level of detail they share: leave out a number, quote or detail only some of
@@ -406,10 +412,17 @@ def build_brief(raw, arts, lines, side_of, ask, charge):
     valid = lambda idx: sorted({i for i in idx if isinstance(i, int) and 1 <= i <= n})
     outlets = lambda idx: sorted({arts[i - 1]["source"] for i in idx})
 
-    agreed = [(a["fact"].strip(), valid(a["articles"])) for a in raw.get("agreed", [])[:4] if a.get("fact", "").strip()]
+    # Common ground first, then other agreed facts; both pass the same confirmation, and the sides each
+    # fact is confirmed on (not the writer's say-so) decide whether the page calls it common ground.
+    seen, cands = set(), []
+    for a in raw.get("common_ground", [])[:2] + raw.get("agreed", [])[:4]:
+        key = a.get("fact", "").strip().casefold()
+        if key and key not in seen:
+            seen.add(key); cands.append(a)
+    agreed = [(a["fact"].strip(), valid(a["articles"])) for a in cands]
     agreed = [(f, idx) for f, idx in agreed if len(outlets(idx)) >= MIN_OUTLETS_AGREED]
     confirmed, dropped = [], []
-    for a in raw.get("agreed", [])[:4]:
+    for a in cands:
         f, idx = a.get("fact", "").strip(), valid(a.get("articles", []))
         if f and len(outlets(idx)) < MIN_OUTLETS_AGREED:
             dropped.append({"fact": f, "why": f"cited by {len(outlets(idx))} outlet(s)"})
