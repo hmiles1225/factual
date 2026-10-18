@@ -1,0 +1,196 @@
+[
+ {
+  "role": "system",
+  "content": "You are the claim checker for fACTUAL, a news app with no human editor. Nobody reviews your\nanswer before readers see it, so accuracy matters more than completeness.\n\nHow to work:\n1. Decide first whether the claim is about facts or about values. A values claim (what should\n   happen, what matters more) gets the verdict \"Values\" and needs no evidence.\n2. For a factual claim, search for primary sources: the agency dataset, the official count, the\n   study itself, the court filing. News outlets are not evidence; use them only to find the primary\n   source.\n3. Find the NEWEST release of every dataset you use. Search explicitly for a newer release before\n   relying on a figure, and say in newest_data what you checked. Today's date is 2026-10-18.\n4. Use only what you read in pages you retrieved during this task. Do not use facts from memory,\n   even ones you are sure of. If you could not retrieve support for a point, leave it out.\n5. Every evidence quote must be copied word for word from the page at that exact URL. Code will\n   re-read the page and drop any quote it cannot find. Quote the sentence that carries the number.\n6. Every number you write in \"finding\" must appear in one of your quotes.\n7. Write \"steelman\" first: the strongest honest reason a reasonable person believes the claim.\n   Never mock. Rate the claim, never the person or group who says it.\n\nThe verdict rules below are fACTUAL's published method. Follow them exactly.\n\n# Verdicts\n\nEvery checked claim gets exactly one of four verdicts. Each one is always shown as a glyph and a\nword, never as color alone.\n\n## The test\n\n**Is the claim true as stated, checked against the newest evidence?**\n\nThere is one test, and no claim gets an exception to it. \"The newest evidence\" means the latest release\nof each dataset, found by a freshness check at the time the claim is checked.\n\n| Verdict | Means |\n| --- | --- |\n| Holds up | True as stated, on the newest evidence. |\n| Missing context | True as stated, but it leaves out something that changes the picture. |\n| Doesn't hold up | Not true as stated. Overstated and out-of-date claims count. |\n| Unproven | Not enough evidence either way, yet. |\n\n## Tie-breakers\n\n- **Overstated is Doesn't hold up.** \"Measles cases are at an all-time high\" is not true as stated,\n  even though 2025 had the most cases in over 30 years.\n- **Out of date is Doesn't hold up.** \"Only half a percent of people are transgender\" is not true as\n  stated: the newest Williams Institute estimate is 0.8% of U.S. adults. Someone repeating an older\n  figure is not lying, so the steelman says where the old figure came from.\n- **Missing context needs the claim to be true as stated.** It is for claims that are accurate but\n  leave out something that changes the picture, such as a total with no rate.\n- **Mixed evidence is Unproven,** and the text says \"The evidence is mixed.\" Never force certainty.\n- **A forecast is Unproven.** A prediction stated as fact (\"this would save money\", \"this will cost\n  a million jobs\") cannot be checked yet. It carries the reasoning flag \"Forecast, not a finding\" and\n  shows the range of credible estimates.\n- **Doesn't hold up needs two model families to agree.** If they disagree, the claim publishes as\n  Unproven.\n\n## How every check reads\n\n1. **Why this sounds right.** The steelman comes first, before the verdict.\n2. **The verdict,** glyph and word.\n3. **What the evidence shows.** The rationale never opens with a word that sounds like a verdict\n   (\"Out of date\", \"Yes\", \"Wrong\").\n4. **Based on,** naming the sources and their release dates.\n\nClaims are rated. People and groups never are.\n\n## Outlets are not evidence\n\nA verdict rests on primary sources: the dataset, the study, the filing, the official count. No news\noutlet's reporting settles a verdict, whichever side it leans.\n\nOutlets appear in two places instead:\n\n- **Coverage.** Which outlets covered the story, read from their own feeds over the same 48 hours.\n- **Also reported by.** When an outlet's article states the same verified fact, the check lists it,\n  for example \"Also reported by Fox News, CNN and MS NOW.\" Code confirms the figure or quote appears\n  in that article. Readers can see the fact is not one side's fact.\n\n## Values are not verdicts\n\nSome disagreements are about what matters more, not what is true. Those get no verdict. They go\nin \"Still open\" and are left to the reader.\n"
+ },
+ {
+  "role": "user",
+  "content": "Check this claim:\n\n\"Unemployment is at a 50-year low.\"\n\nReturn the JSON object described by the schema."
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"import json\\nr = await web_search({\\\"query\\\": \\\"BLS Employment Situation unemployment rate September 2026\\\"})\\nfor x in r[:6]:\\n    print(x.get('title'), x.get('url'), x.get('page_age'))\\n    print(x.get('content','')[:500].replace('\\\\n',' '))\\n    print('--')\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_search",
+  "content": "{\n  \"query\": \"BLS Employment Situation unemployment rate September 2026\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "search results:\nhttps://www.aarp.org/pri/topics/work-finances-retirement/employers-workforce/employment-data-digest/\nhttps://www.bls.gov/news.release/empsit.nr0.htm\nhttps://www.jec.senate.gov/public/vendor/_accounts/JEC-R/employment/national/Monthly%20Employment%20Update%20(PDF).pdf\nhttps://www.bls.gov/opub/ted/2026/unemployment-rate-little-changed-at-4-2-percent-in-september-2026.htm\nhttps://www.bls.gov/cps/\nhttps://www.bls.gov/news.release/empsit.a.htm\nhttps://www.forexfactory.com/news/1429690-the-us-employment-situation-september-2026\nhttps://jobbeacon.app/news/september-2026-payrolls-rose-29000-unemployment-reached-42-percent\nhttps://www.bls.gov/news.release/archives/empsit_10062023.pdf"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"print(type(r)); print(str(r)[:1500])\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"for u in [\\\"https://www.bls.gov/news.release/empsit.nr0.htm\\\",\\\"https://www.bls.gov/news.release/empsit.htm\\\"]:\\n    f = await web_fetch({\\\"url\\\":u})\\n    s=str(f)\\n    print(u, len(s)); \\n    i=s.find('unemployment rate')\\n    print(s[:2500])\\n    print('======')\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_fetch",
+  "content": "{\n  \"url\": \"https://www.bls.gov/news.release/empsit.nr0.htm\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "fetched https://www.bls.gov/news.release/empsit.nr0.htm (27231 chars)"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_fetch",
+  "content": "{\n  \"url\": \"https://www.bls.gov/news.release/empsit.htm\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "fetched https://www.bls.gov/news.release/empsit.htm (473302 chars)"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"f = await web_fetch({\\\"url\\\":\\\"https://www.bls.gov/news.release/empsit.nr0.htm\\\"})\\nd=f[0]['content']['source']['data'] if isinstance(f,list) else json.loads(f)[0]['content']['source']['data']\\ni=d.find('THE EMPLOYMENT SITUATION')\\nprint(d[i:i+3500])\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_fetch",
+  "content": "{\n  \"url\": \"https://www.bls.gov/news.release/empsit.nr0.htm\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "fetched https://www.bls.gov/news.release/empsit.nr0.htm (27231 chars)"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"j=json.loads(f) if isinstance(f,str) else f\\nd=j['content']['source']['data']\\ni=d.find('THE EMPLOYMENT SITUATION')\\nprint(d[i:i+4000])\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"import re\\nfor k in ['Embargo','embargo','8:30','October']:\\n    for m in re.finditer(k,d):\\n        print(repr(d[max(0,m.start()-200):m.start()+200])); break\\nr = await web_search({\\\"query\\\": \\\"BLS unemployment rate 3.4 percent lowest since 1969\\\"})\\nr=json.loads(r) if isinstance(r,str) else r\\nfor x in r[:8]:\\n    print(x.get('title'), x.get('url'))\\n    c=x.get('content','')\\n    for m in re.finditer('1969',c):\\n        print('  ',c[max(0,m.start()-250):m.start()+100].replace('\\\\n',' '))\\n        break\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_search",
+  "content": "{\n  \"query\": \"BLS unemployment rate 3.4 percent lowest since 1969\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "search results:\nhttps://x.com/bencasselman/status/1621511161186508801\nhttps://www.bls.gov/opub/mlr/2020/article/job-market-remains-tight-in-2019-as-the-unemployment-rate-falls-to-its-lowest-level-since-1969.htm\nhttps://www.cnbc.com/2023/02/03/us-unemployment-hit-a-historic-low-economists-arent-sure-itll-stick.html\nhttps://www.washingtonpost.com/business/2023/02/07/1969-vs-2023/\nhttps://tuzarapost.substack.com/p/breaking-president-trump-economy\nhttps://www.bls.gov/news.release/pdf/empsit.pdf\nhttps://tradingeconomics.com/articles/10042019123351.htm\nhttps://trumpwhitehouse.archives.gov/articles/wages-growing-workers-continue-move-off-sidelines-workforce\nhttps://www.bls.gov/opub/ted/2019/unemployment-rate-3-point-6-percent-in-april-2019-lowest-since-december-1969.htm"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"for x in r:\\n    if 'substack' in x['url']:\\n        print(x.get('page_age')); print(x['content'][:3000])\\nr2 = await web_search({\\\"query\\\": \\\"initial jobless claims lowest since 1969 2026 Department of Labor\\\"})\\nr2=json.loads(r2) if isinstance(r2,str) else r2\\nfor x in r2[:8]:\\n    print(x.get('title'), x.get('url'), x.get('page_age'))\\n    print('  ',x.get('content','')[:300].replace('\\\\n',' '))\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_search",
+  "content": "{\n  \"query\": \"initial jobless claims lowest since 1969 2026 Department of Labor\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "search results:\nhttps://www.bloomberg.com/news/articles/2026-07-23/us-initial-jobless-claims-fall-to-lowest-level-since-1969\nhttps://www.bloomberg.com/news/articles/2026-04-30/us-jobless-claims-plunge-to-189-000-lowest-since-1969\nhttps://finance.yahoo.com/economy/articles/u-jobless-claims-hit-lowest-142254322.html\nhttps://www.cnn.com/2026/07/23/economy/us-initial-jobless-claims-1969\nhttps://www.advisorperspectives.com/dshort/updates/2026/07/23/initial-jobless-claims-fall-to-lowest-level-since-1969\nhttps://edition.cnn.com/2026/07/23/economy/us-initial-jobless-claims-1969\nhttps://thedailyrecord.com/2026/07/23/us-weekly-jobless-claims-lowest-since-1969/\nhttps://econsnapshot.com/2026/07/27/unemployment-claims-lowest-since-1969/\nhttps://finance.yahoo.com/economy/policy/articles/us-weekly-jobless-claims-fall-123957463.html\nhttps://www.breitbart.com/economy/2026/09/24/jobless-claims-dip-to-197000-year-to-date-lowest-since-1969/"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"async def get(u):\\n    f=await web_fetch({\\\"url\\\":u})\\n    j=json.loads(f) if isinstance(f,str) else f\\n    if isinstance(j,list): j=j[0]\\n    try: return j['content']['source']['data']\\n    except Exception: return str(j)[:500]\\na = await get(\\\"https://www.bls.gov/news.release/archives/empsit_02032023.htm\\\")\\ni=a.find('THE EMPLOYMENT SITUATION'); print(a[i:i+1200])\\nfor m in re.finditer('1969',a): print(repr(a[m.start()-300:m.start()+50]))\\nb = await get(\\\"https://www.dol.gov/ui/data.pdf\\\")\\nprint(b[:2500])\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_fetch",
+  "content": "{\n  \"url\": \"https://www.bls.gov/news.release/archives/empsit_02032023.htm\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "fetched None (0 chars)"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_fetch",
+  "content": "{\n  \"url\": \"https://www.dol.gov/ui/data.pdf\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "fetched None (0 chars)"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"for q in [\\\"BLS Employment Situation January 2023 unemployment rate 3.4 percent\\\",\\\"Department of Labor unemployment insurance weekly claims news release October 2026\\\"]:\\n    rr = await web_search({\\\"query\\\": q})\\n    rr=json.loads(rr) if isinstance(rr,str) else rr\\n    for x in rr[:8]:\\n        print(x.get('title'), x.get('url'), x.get('page_age'))\\n        print('  ',x.get('content','')[:300].replace('\\\\n',' '))\\n    print(\\\"=====\\\")\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_search",
+  "content": "{\n  \"query\": \"BLS Employment Situation January 2023 unemployment rate 3.4 percent\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "search results:\nhttps://www.bls.gov/news.release/jec.nr0.htm\nhttps://mrinetwork.com/world-of-work/bls-employment-situation-report-january-2023/\nhttps://www.epi.org/indicators/unemployment/\nhttps://www.bls.gov/news.release/archives/empsit_02032023.pdf\nhttps://bidenwhitehouse.archives.gov/cea/written-materials/2023/02/03/the-employment-situation-in-january-3/\nhttps://www.mass.gov/news/massachusetts-unemployment-and-job-estimates-for-january-2024\nhttps://www.bls.gov/news.release/archives/empsit_02032023.htm\nhttps://www.bls.gov/news.release/archives/empsit_02022024.htm\nhttps://www.bls.gov/news.release/archives/empsit_02072025.pdf"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_search",
+  "content": "{\n  \"query\": \"Department of Labor unemployment insurance weekly claims news release October 2026\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "search results:\nhttps://www.dol.gov/ui/data.pdf\nhttps://labor.vermont.gov/document/weekly-unemployment-insurance-claims-summary-week-october-3-2026\nhttps://www.dol.gov/newsroom/releases\nhttps://www.axios.com/2026/10/08/layoffs-unemployment-labor\nhttps://www.investing.com/economic-calendar/initial-jobless-claims-294\nhttps://voz.us/en/economy/261008/39792/unemployment-insurance-claims-fell-to-197-000-last-week.html\nhttps://investinglive.com/news/us-initial-jobless-claims-for-the-week-is-modestly-stronger-at-197k-vs-200k-est/\nhttps://www.forexfactory.com/calendar/11-us-unemployment-claims\nhttps://fxtribune.com/news/us-initial-jobless-claims-rise-to-199-000-in-the-week-ending-10-october-2026/\nhttps://fxtribune.com/news/us-initial-jobless-claims-fall-to-197-000-in-the-week-ending-3-october-2026/"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"a = await get(\\\"https://www.bls.gov/news.release/archives/empsit_02032023.htm\\\")\\ni=a.find('THE EMPLOYMENT SITUATION'); print(a[i:i+1500])\\nb = await get(\\\"https://www.dol.gov/ui/data.pdf\\\")\\nprint(b[:2000])\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_fetch",
+  "content": "{\n  \"url\": \"https://www.bls.gov/news.release/archives/empsit_02032023.htm\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "fetched https://www.bls.gov/news.release/archives/empsit_02032023.htm (489372 chars)"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_fetch",
+  "content": "{\n  \"url\": \"https://www.dol.gov/ui/data.pdf\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "fetched https://www.dol.gov/ui/data.pdf (711024 chars)"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"import base64, io\\nfrom pypdf import PdfReader\\npdf=PdfReader(io.BytesIO(base64.b64decode(b)))\\nt=\\\"\\\\n\\\".join(p.extract_text() for p in pdf.pages[:2])\\nprint(t[:2500])\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"m = await get(\\\"https://www.bls.gov/opub/mlr/2020/article/job-market-remains-tight-in-2019-as-the-unemployment-rate-falls-to-its-lowest-level-since-1969.htm\\\")\\nfor k in re.finditer('1969',m): print(repr(m[k.start()-300:k.start()+80]))\\nfor k in re.finditer('Published|April 2020|DOI',m): print(repr(m[k.start()-50:k.start()+100]))\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_fetch",
+  "content": "{\n  \"url\": \"https://www.bls.gov/opub/mlr/2020/article/job-market-remains-tight-in-2019-as-the-unemployment-rate-falls-to-its-lowest-level-since-1969.htm\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "fetched https://www.bls.gov/opub/mlr/2020/article/job-market-remains-tight-in-2019-as-the-unemployment-rate-falls-to-its-lowest-level-since-1969.htm (475919 chars)"
+ },
+ {
+  "role": "assistant",
+  "content": "{\"fact_or_values\":\"fact\",\"verdict\":\"Doesn't hold up\",\"steelman\":\"For several years this was literally true. The Bureau of Labor Statistics reported that the jobless rate fell to its lowest level since 1969 in 2019, and it dropped even lower in early 2023. People who remember those headlines are repeating a figure that was once accurate. The labor market also still looks strong on other measures. New weekly unemployment-insurance claims are running low, and that is a separate number that is easy to mix up with the unemployment rate.\",\"finding\":\"The latest BLS jobs report covers September 2026. It puts the unemployment rate at 4.2 percent, with 7.1 million people unemployed. That is well above recent lows. BLS reported a 3.5 percent rate in 2019, which it called the lowest since 1969, and a 3.4 percent rate in January 2023. Because the rate was lower than 4.2 percent within the past few years, today's rate cannot be a 50-year low. The claim describes conditions from 2019 to 2023, not the current figure. A different measure, new weekly unemployment-insurance claims, was 199,000 in the Labor Department's latest weekly release, and that is low. But claims count new filings for benefits, not the unemployment rate.\",\"reasoning_flags\":[],\"newest_data\":\"I used the BLS Employment Situation for September 2026 (USDL-26-1549, released October 2, 2026). On October 18, 2026, I retrieved the BLS current-release page (empsit.nr0.htm), and it still showed the 2026 M09 results. That means the October report has not come out yet. For the weekly measure, I used the Labor Department's Unemployment Insurance Weekly Claims release dated October 15, 2026, retrieved from dol.gov/ui/data.pdf, which is the current-release address. For history, I used BLS's January 2023 Employment Situation (released February 3, 2023) and the BLS Monthly Labor Review article on 2019 (published April 28, 2020).\",\"evidence\":[{\"url\":\"https://www.bls.gov/news.release/empsit.nr0.htm\",\"publisher\":\"U.S. Bureau of Labor Statistics\",\"published\":\"2026-10-02\",\"quote\":\"Both the unemployment rate, at 4.2 percent, and the number of unemployed people, at 7.1 million,\",\"role\":\"contradicts\"},{\"url\":\"https://www.bls.gov/news.release/archives/empsit_02032023.htm\",\"publisher\":\"U.S. Bureau of Labor Statistics\",\"published\":\"2023-02-03\",\"quote\":\"Both the unemployment rate, at 3.4 percent\",\"role\":\"contradicts\"},{\"url\":\"https://www.bls.gov/opub/mlr/2020/article/job-market-remains-tight-in-2019-as-the-unemployment-rate-falls-to-its-lowest-level-since-1969.htm\",\"publisher\":\"U.S. Bureau of Labor Statistics, Monthly Labor Review\",\"published\":\"2020-04-28\",\"quote\":\"The U.S. labor market remained strong in 2019, as the unemployment rate fell to 3.5 percent, the lowest rate since 1969.\",\"role\":\"context\"},{\"url\":\"https://www.dol.gov/ui/data.pdf\",\"publisher\":\"U.S. Department of Labor\",\"published\":\"2026-10-15\",\"quote\":\"the advance figure for seasonally adjusted initial claims was 199,000\",\"role\":\"context\"}]}"
+ },
+ {
+  "role": "assistant",
+  "name": "evidence check",
+  "content": "{\n  \"verdict_from_model\": \"Doesn't hold up\",\n  \"verdict_after_check\": \"Doesn't hold up\",\n  \"guard_notes\": [],\n  \"numbers_unsourced\": [\n    \"50\"\n  ],\n  \"evidence\": [\n    {\n      \"url\": \"https://www.bls.gov/news.release/empsit.nr0.htm\",\n      \"publisher\": \"U.S. Bureau of Labor Statistics\",\n      \"published\": \"2026-10-02\",\n      \"quote\": \"Both the unemployment rate, at 4.2 percent, and the number of unemployed people, at 7.1 million,\",\n      \"role\": \"contradicts\",\n      \"verified\": true,\n      \"checked_by\": \"model fetch\"\n    },\n    {\n      \"url\": \"https://www.bls.gov/news.release/archives/empsit_02032023.htm\",\n      \"publisher\": \"U.S. Bureau of Labor Statistics\",\n      \"published\": \"2023-02-03\",\n      \"quote\": \"Both the unemployment rate, at 3.4 percent\",\n      \"role\": \"contradicts\",\n      \"verified\": true,\n      \"checked_by\": \"model fetch\"\n    },\n    {\n      \"url\": \"https://www.bls.gov/opub/mlr/2020/article/job-market-remains-tight-in-2019-as-the-unemployment-rate-falls-to-its-lowest-level-since-1969.htm\",\n      \"publisher\": \"U.S. Bureau of Labor Statistics, Monthly Labor Review\",\n      \"published\": \"2020-04-28\",\n      \"quote\": \"The U.S. labor market remained strong in 2019, as the unemployment rate fell to 3.5 percent, the lowest rate since 1969.\",\n      \"role\": \"context\",\n      \"verified\": true,\n      \"checked_by\": \"model fetch\"\n    },\n    {\n      \"url\": \"https://www.dol.gov/ui/data.pdf\",\n      \"publisher\": \"U.S. Department of Labor\",\n      \"published\": \"2026-10-15\",\n      \"quote\": \"the advance figure for seasonally adjusted initial claims was 199,000\",\n      \"role\": \"context\",\n      \"verified\": true,\n      \"checked_by\": \"our fetch\"\n    }\n  ]\n}"
+ }
+]

@@ -1,0 +1,162 @@
+[
+ {
+  "role": "system",
+  "content": "You are the claim checker for fACTUAL, a news app with no human editor. Nobody reviews your\nanswer before readers see it, so accuracy matters more than completeness.\n\nHow to work:\n1. Decide first whether the claim is about facts or about values. A values claim (what should\n   happen, what matters more) gets the verdict \"Values\" and needs no evidence.\n2. For a factual claim, search for primary sources: the agency dataset, the official count, the\n   study itself, the court filing. News outlets are not evidence; use them only to find the primary\n   source.\n3. Find the NEWEST release of every dataset you use. Search explicitly for a newer release before\n   relying on a figure, and say in newest_data what you checked. Today's date is 2026-10-18.\n4. Use only what you read in pages you retrieved during this task. Do not use facts from memory,\n   even ones you are sure of. If you could not retrieve support for a point, leave it out.\n5. Every evidence quote must be copied word for word from the page at that exact URL. Code will\n   re-read the page and drop any quote it cannot find. Quote the sentence that carries the number.\n6. Every number you write in \"finding\" must appear in one of your quotes.\n7. Write \"steelman\" first: the strongest honest reason a reasonable person believes the claim.\n   Never mock. Rate the claim, never the person or group who says it.\n\nThe verdict rules below are fACTUAL's published method. Follow them exactly.\n\n# Verdicts\n\nEvery checked claim gets exactly one of four verdicts. Each one is always shown as a glyph and a\nword, never as color alone.\n\n## The test\n\n**Is the claim true as stated, checked against the newest evidence?**\n\nThere is one test, and no claim gets an exception to it. \"The newest evidence\" means the latest release\nof each dataset, found by a freshness check at the time the claim is checked.\n\n| Verdict | Means |\n| --- | --- |\n| Holds up | True as stated, on the newest evidence. |\n| Missing context | True as stated, but it leaves out something that changes the picture. |\n| Doesn't hold up | Not true as stated. Overstated and out-of-date claims count. |\n| Unproven | Not enough evidence either way, yet. |\n\n## Tie-breakers\n\n- **Overstated is Doesn't hold up.** \"Measles cases are at an all-time high\" is not true as stated,\n  even though 2025 had the most cases in over 30 years.\n- **Out of date is Doesn't hold up.** \"Only half a percent of people are transgender\" is not true as\n  stated: the newest Williams Institute estimate is 0.8% of U.S. adults. Someone repeating an older\n  figure is not lying, so the steelman says where the old figure came from.\n- **Missing context needs the claim to be true as stated.** It is for claims that are accurate but\n  leave out something that changes the picture, such as a total with no rate.\n- **Mixed evidence is Unproven,** and the text says \"The evidence is mixed.\" Never force certainty.\n- **A forecast is Unproven.** A prediction stated as fact (\"this would save money\", \"this will cost\n  a million jobs\") cannot be checked yet. It carries the reasoning flag \"Forecast, not a finding\" and\n  shows the range of credible estimates.\n- **Doesn't hold up needs two model families to agree.** If they disagree, the claim publishes as\n  Unproven.\n\n## How every check reads\n\n1. **Why this sounds right.** The steelman comes first, before the verdict.\n2. **The verdict,** glyph and word.\n3. **What the evidence shows.** The rationale never opens with a word that sounds like a verdict\n   (\"Out of date\", \"Yes\", \"Wrong\").\n4. **Based on,** naming the sources and their release dates.\n\nClaims are rated. People and groups never are.\n\n## Outlets are not evidence\n\nA verdict rests on primary sources: the dataset, the study, the filing, the official count. No news\noutlet's reporting settles a verdict, whichever side it leans.\n\nOutlets appear in two places instead:\n\n- **Coverage.** Which outlets covered the story, read from their own feeds over the same 48 hours.\n- **Also reported by.** When an outlet's article states the same verified fact, the check lists it,\n  for example \"Also reported by Fox News, CNN and MS NOW.\" Code confirms the figure or quote appears\n  in that article. Readers can see the fact is not one side's fact.\n\n## Values are not verdicts\n\nSome disagreements are about what matters more, not what is true. Those get no verdict. They go\nin \"Still open\" and are left to the reader.\n"
+ },
+ {
+  "role": "user",
+  "content": "Check this claim:\n\n\"About 1 in 36 U.S. children has autism.\"\n\nReturn the JSON object described by the schema."
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"import json\\nqs=[\\\"CDC autism prevalence ADDM 1 in 31\\\",\\\"CDC ADDM autism prevalence 2026 report\\\",\\\"autism prevalence MMWR surveillance summary 2024 data\\\"]\\nfor q in qs:\\n    r=await web_search({\\\"query\\\":q})\\n    for x in r[:6]:\\n        print(x.get('title'),x.get('url'),x.get('page_age'))\\n        print(x.get('content','')[:300].replace('\\\\n',' '))\\n    print('---')\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_search",
+  "content": "{\n  \"query\": \"CDC autism prevalence ADDM 1 in 31\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "search results:\nhttps://autismcenter.org/autismprevalence/\nhttps://www.cdc.gov/autism/articles/prevalence-varies-across-us-communities.html\nhttps://www.cdc.gov/autism/data-research/autism-data-visualization-tool.html\nhttps://www.autismspeaks.org/news/autism-prevalence-rises-1-31-children-us\nhttps://www.cdc.gov/autism/data-research/index.html\nhttps://pathfindersforautism.org/autism-prevalence-update-2025/\nhttps://www.hhs.gov/press-room/autism-epidemic-runs-rampant-new-data-shows-grants.html\nhttps://autismsociety.org/autism-society-of-america-responds-to-new-cdc-report-on-updated-autism-prevalence-rates/\nhttps://www.behaviorfrontiers.com/blog/autism-diagnosis-rates-now-1-in-31\nhttps://www.buddingfuturesaba.com/autism-prevalence-cdc-2000-2022"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"r=await web_search({\\\"query\\\":\\\"CDC autism prevalence ADDM 1 in 31\\\"})\\nprint(type(r), str(r)[:1500])\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_search",
+  "content": "{\n  \"query\": \"CDC autism prevalence ADDM 1 in 31\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "search results:\nhttps://autismcenter.org/autismprevalence/\nhttps://www.cdc.gov/autism/articles/prevalence-varies-across-us-communities.html\nhttps://www.autismspeaks.org/news/autism-prevalence-rises-1-31-children-us\nhttps://www.cdc.gov/autism/data-research/autism-data-visualization-tool.html\nhttps://www.cdc.gov/autism/data-research/index.html\nhttps://pathfindersforautism.org/autism-prevalence-update-2025/\nhttps://www.hhs.gov/press-room/autism-epidemic-runs-rampant-new-data-shows-grants.html\nhttps://autismsociety.org/autism-society-of-america-responds-to-new-cdc-report-on-updated-autism-prevalence-rates/\nhttps://www.behaviorfrontiers.com/blog/autism-diagnosis-rates-now-1-in-31\nhttps://www.buddingfuturesaba.com/autism-prevalence-cdc-2000-2022"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"def s(q,n=6):\\n    r=json.loads(await web_search({\\\"query\\\":q})) if False else None\\nasync def S(q,n=6):\\n    r=await web_search({\\\"query\\\":q})\\n    if isinstance(r,str): r=json.loads(r)\\n    for x in r[:n]:\\n        print(x.get('title'),x.get('url'),x.get('page_age'))\\n        print(x.get('content','')[:300].replace('\\\\n',' '))\\n    print('---')\\nfor q in [\\\"CDC ADDM autism prevalence 2026 report\\\",\\\"autism prevalence 2024 surveillance year MMWR\\\",\\\"cdc.gov autism data research prevalence 1 in 31 8-year-old\\\"]:\\n    await S(q)\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"async def S(q,n=6):\\n    r=await web_search({\\\"query\\\":q})\\n    if isinstance(r,str): r=json.loads(r)\\n    for x in r[:n]:\\n        print(x.get('title'),x.get('url'),x.get('page_age'))\\n        print(x.get('content','')[:300].replace('\\\\n',' '))\\n    print('---')\\nfor q in [\\\"CDC ADDM autism prevalence 2026 report\\\",\\\"autism prevalence 2024 surveillance year MMWR\\\",\\\"cdc.gov autism data research prevalence 1 in 31 8-year-old\\\"]:\\n    await S(q)\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_search",
+  "content": "{\n  \"query\": \"CDC ADDM autism prevalence 2026 report\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "search results:\nhttps://pathfindersforautism.org/autism-prevalence-update-2025/\nhttps://www.autismsociety-nc.org/cdc-releases-new-data-on-autism-prevalence/\nhttps://autismsociety.org/autism-society-of-america-responds-to-new-cdc-report-on-updated-autism-prevalence-rates/\nhttps://www.cdc.gov/autism/data-research/index.html\nhttps://voxbooster.com/blog/autism-prevalence-statistics-2026/\nhttps://www.cdc.gov/mmwr/volumes/74/ss/pdfs/ss7402a1-H.pdf\nhttps://breakingnewsaba.com/industry-analysis/cdc-autism-prevalence-aba-demand\nhttps://liftoffaba.com/blog/autism-statistics-2026/\nhttps://www.steadystridesaba.com/blog/autism-statistics/"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_search",
+  "content": "{\n  \"query\": \"autism prevalence 2024 surveillance year MMWR\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "search results:\nhttps://www.cdc.gov/mmwr/volumes/74/ss/ss7402a1.htm\nhttps://www.cdc.gov/mmwr/volumes/74/ss/pdfs/ss7402a1-H.pdf\nhttps://www.cdc.gov/mmwr/volumes/72/ss/ss7202a1.htm\nhttps://www.ncbi.nlm.nih.gov/pmc/articles/PMC12011386/\nhttps://ndnr.com/autism-prevalence-2025/\nhttps://ifp.nyu.edu/2026/journal-article-abstracts/jcpp-70209-2\nhttps://voxbooster.com/blog/autism-prevalence-statistics-2026/\nhttps://www.motivity.net/autism-facts\nhttps://stacks.cdc.gov/view/cdc/148634"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_search",
+  "content": "{\n  \"query\": \"cdc.gov autism data research prevalence 1 in 31 8-year-old\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "search results:\nhttps://www.cdc.gov/autism/articles/prevalence-varies-across-us-communities.html\nhttps://publichealth.jhu.edu/2025/new-cdc-report-shows-increase-in-autism-in-2022-with-notable-shifts-in-race-ethnicity-and-sex\nhttps://www.autismsociety-nc.org/cdc-releases-new-data-on-autism-prevalence/\nhttps://autismsociety.org/autism-society-of-america-responds-to-new-cdc-report-on-updated-autism-prevalence-rates/\nhttps://pathfindersforautism.org/autism-prevalence-update-2025/\nhttps://www.nimh.nih.gov/health/statistics/autism-spectrum-disorder-asd\nhttps://usafacts.org/articles/is-autism-increasing/\nhttps://www.autismparentingmagazine.com/latest-cdc-autism-report/\nhttps://www.abacenters.com/autism-rates-cdc-updates/\nhttps://www.buddingfuturesaba.com/autism-prevalence-cdc-2000-2022"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"for q in [\\\"ADDM Network 2024 surveillance year autism prevalence released\\\",\\\"new CDC autism prevalence estimate 2026\\\"]:\\n    await S(q)\\nfor u in [\\\"https://www.cdc.gov/autism/data-research/index.html\\\",\\\"https://www.cdc.gov/mmwr/volumes/74/ss/ss7402a1.htm\\\",\\\"https://www.cdc.gov/autism/articles/prevalence-varies-across-us-communities.html\\\"]:\\n    r=await web_fetch({\\\"url\\\":u})\\n    if isinstance(r,str): r=json.loads(r)\\n    if isinstance(r,list): r=r[0]\\n    c=r.get('content','')\\n    print(u,len(c))\\n    import re\\n    for m in re.finditer(r'1 in 3[16]|32\\\\.2|27\\\\.6',c):\\n        print('  ',c[max(0,m.start()-250):m.end()+150].replace('\\\\n',' '))\\n    globals()['p_'+str(abs(hash(u)))[:4]]=c\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_search",
+  "content": "{\n  \"query\": \"ADDM Network 2024 surveillance year autism prevalence released\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "search results:\nhttps://autismcenter.org/autismprevalence/\nhttps://pathfindersforautism.org/autism-prevalence-update-2025/\nhttps://www.autismsociety-nc.org/cdc-releases-new-data-on-autism-prevalence/\nhttps://publichealth.jhu.edu/2025/new-cdc-report-shows-increase-in-autism-in-2022-with-notable-shifts-in-race-ethnicity-and-sex\nhttps://www.cdc.gov/autism/data-research/autism-data-visualization-tool.html\nhttps://www.cdc.gov/mmwr/volumes/74/ss/pdfs/ss7402a1-H.pdf\nhttps://breakingnewsaba.com/industry-analysis/cdc-autism-prevalence-aba-demand\nhttps://www.waisman.wisc.edu/2023/03/23/the-cdcs-autism-surveillance-network-continues-to-show-an-increase-in-autism-prevalence/\nhttps://www.iacc.hhs.gov/meetings/iacc-meetings/2023/full-committee-meeting/october11/april_minutes.pdf"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_search",
+  "content": "{\n  \"query\": \"new CDC autism prevalence estimate 2026\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "search results:\nhttps://hoodline.com/2026/10/new-york-families-brace-as-state-halves-autism-therapy-payments\nhttps://www.autismspeaks.org/news/autism-prevalence-rises-1-31-children-us\nhttps://www.abacenters.com/autism-rates-cdc-updates/\nhttps://www.southdenvertherapy.com/blog/autism-spectrum-statistics-2025\nhttps://voxbooster.com/blog/autism-prevalence-statistics-2026/\nhttps://liftoffaba.com/blog/autism-statistics-2026/\nhttps://theglobalfiles.com/autism-statistics-in-the-us/\nhttps://www.steadystridesaba.com/blog/autism-statistics/\nhttps://psychology.com/autism-statistics/"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_fetch",
+  "content": "{\n  \"url\": \"https://www.cdc.gov/autism/data-research/index.html\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "fetched https://www.cdc.gov/autism/data-research/index.html (20329 chars)"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"import re\\npages={}\\nfor u in [\\\"https://www.cdc.gov/autism/data-research/index.html\\\",\\\"https://www.cdc.gov/mmwr/volumes/74/ss/ss7402a1.htm\\\",\\\"https://www.cdc.gov/autism/articles/prevalence-varies-across-us-communities.html\\\",\\\"https://www.cdc.gov/mmwr/volumes/72/ss/ss7202a1.htm\\\"]:\\n    r=await web_fetch({\\\"url\\\":u})\\n    if isinstance(r,str): r=json.loads(r)\\n    if isinstance(r,list): r=r[0]\\n    c=r.get('content','')\\n    if isinstance(c,dict): print(list(c.keys())); c=json.dumps(c)\\n    pages[u]=c\\n    print(u,len(c),r.get('retrieved_at'))\\n    for m in re.finditer(r'1 in 3[16]|32\\\\.2 per|27\\\\.6 per',c):\\n        print('  ',c[max(0,m.start()-250):m.end()+150].replace('\\\\n',' '))\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_fetch",
+  "content": "{\n  \"url\": \"https://www.cdc.gov/autism/data-research/index.html\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "fetched https://www.cdc.gov/autism/data-research/index.html (20329 chars)"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_fetch",
+  "content": "{\n  \"url\": \"https://www.cdc.gov/mmwr/volumes/74/ss/ss7402a1.htm\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "fetched https://www.cdc.gov/mmwr/volumes/74/ss/ss7402a1.htm (121090 chars)"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_fetch",
+  "content": "{\n  \"url\": \"https://www.cdc.gov/autism/articles/prevalence-varies-across-us-communities.html\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "fetched https://www.cdc.gov/autism/articles/prevalence-varies-across-us-communities.html (30303 chars)"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_fetch",
+  "content": "{\n  \"url\": \"https://www.cdc.gov/mmwr/volumes/72/ss/ss7202a1.htm\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "fetched https://www.cdc.gov/mmwr/volumes/72/ss/ss7202a1.htm (111660 chars)"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"for u,c in pages.items():\\n    d=json.loads(c); t=d.get('source')\\n    if isinstance(t,dict): t=t.get('data') or json.dumps(t)\\n    pages[u]=t\\nfor u,pat in [(\\\"https://www.cdc.gov/autism/data-research/index.html\\\",\\\"About 1 in 31\\\"),(\\\"https://www.cdc.gov/mmwr/volumes/74/ss/ss7402a1.htm\\\",\\\"Among children aged 8 years in 2022\\\"),(\\\"https://www.cdc.gov/mmwr/volumes/72/ss/ss7202a1.htm\\\",\\\"The overall ASD prevalence was 27.6\\\"),(\\\"https://www.cdc.gov/autism/data-research/index.html\\\",\\\"2020   \\\")]:\\n    t=pages[u]; i=t.find(pat); print(repr(t[i:i+300])); print()\\nt=pages[\\\"https://www.cdc.gov/mmwr/volumes/74/ss/ss7402a1.htm\\\"]\\nfor k in ['8-year','ADDM sites','not representative','population-based']:\\n    for m in list(re.finditer(k,t))[:2]: print(repr(t[max(0,m.start()-200):m.end()+200]))\"\n}"
+ },
+ {
+  "role": "assistant",
+  "content": "{\"fact_or_values\":\"fact\",\"verdict\":\"Doesn't hold up\",\"steelman\":\"For two years, 1 in 36 was the CDC's official figure. It came from the ADDM Network report published in 2023, which covered 8-year-olds in 2020. Many articles, advocacy groups and fact sheets still repeat it, so anyone using it is quoting what used to be the federal estimate.\",\"finding\":\"The 1 in 36 figure is from the CDC's 2020 surveillance year, when autism prevalence was 27.6 per 1,000 8-year-olds. The CDC has since released a newer estimate. For 2022, it found 32.2 per 1,000 8-year-olds across 16 sites, or about 1 in 31 (3.2%). As of this check, the CDC's autism data page still lists 1 in 31 as its newest figure. The claim gives an outdated number, and fACTUAL's method rates outdated figures as Doesn't hold up. The CDC estimate also covers only 8-year-olds in the communities it monitors. It is not a count of all U.S. children, and prevalence varied widely between sites: from 9.7 per 1,000 in Laredo, Texas, to 53.1 per 1,000 in California.\",\"reasoning_flags\":[],\"newest_data\":\"I relied on the CDC ADDM Network surveillance summary for 2022 (MMWR Surveillance Summaries Vol. 74, No. 2, released April 2025) and the CDC's 'Data and Statistics on Autism Spectrum Disorder' page, retrieved 2026-10-17. To look for anything newer, I searched for a 2024 surveillance year ADDM report and for any 2026 CDC prevalence release, and found neither. The CDC data page, retrieved the day before this check, still lists 2022 (1 in 31) as the most recent surveillance year.\",\"evidence\":[{\"url\":\"https://www.cdc.gov/autism/data-research/index.html\",\"publisher\":\"Centers for Disease Control and Prevention\",\"published\":\"2025 (retrieved 2026-10-17)\",\"quote\":\"About 1 in 31 (3.2%) children aged 8 years has been identified with ASD according to estimates from CDC's ADDM Network.\",\"role\":\"contradicts\"},{\"url\":\"https://www.cdc.gov/mmwr/volumes/74/ss/ss7402a1.htm\",\"publisher\":\"CDC, Morbidity and Mortality Weekly Report\",\"published\":\"2025-04-17\",\"quote\":\"Among children aged 8 years in 2022, ASD prevalence was 32.2 per 1,000 children (one in 31) across the 16 sites, ranging from 9.7 in Texas (Laredo) to 53.1 in California.\",\"role\":\"contradicts\"},{\"url\":\"https://www.cdc.gov/mmwr/volumes/72/ss/ss7202a1.htm\",\"publisher\":\"CDC, Morbidity and Mortality Weekly Report\",\"published\":\"2023-03-24\",\"quote\":\"The overall ASD prevalence was 27.6 per 1,000 (one in 36) children aged 8 years and was 3.8 times as prevalent among boys as among girls (43.0 versus 11.4).\",\"role\":\"context\"}]}"
+ },
+ {
+  "role": "assistant",
+  "name": "evidence check",
+  "content": "{\n  \"verdict_from_model\": \"Doesn't hold up\",\n  \"verdict_after_check\": \"Doesn't hold up\",\n  \"guard_notes\": [],\n  \"numbers_unsourced\": [],\n  \"evidence\": [\n    {\n      \"url\": \"https://www.cdc.gov/autism/data-research/index.html\",\n      \"publisher\": \"Centers for Disease Control and Prevention\",\n      \"published\": \"2025 (retrieved 2026-10-17)\",\n      \"quote\": \"About 1 in 31 (3.2%) children aged 8 years has been identified with ASD according to estimates from CDC's ADDM Network.\",\n      \"role\": \"contradicts\",\n      \"verified\": true,\n      \"checked_by\": \"model fetch\"\n    },\n    {\n      \"url\": \"https://www.cdc.gov/mmwr/volumes/74/ss/ss7402a1.htm\",\n      \"publisher\": \"CDC, Morbidity and Mortality Weekly Report\",\n      \"published\": \"2025-04-17\",\n      \"quote\": \"Among children aged 8 years in 2022, ASD prevalence was 32.2 per 1,000 children (one in 31) across the 16 sites, ranging from 9.7 in Texas (Laredo) to 53.1 in California.\",\n      \"role\": \"contradicts\",\n      \"verified\": true,\n      \"checked_by\": \"model fetch\"\n    },\n    {\n      \"url\": \"https://www.cdc.gov/mmwr/volumes/72/ss/ss7202a1.htm\",\n      \"publisher\": \"CDC, Morbidity and Mortality Weekly Report\",\n      \"published\": \"2023-03-24\",\n      \"quote\": \"The overall ASD prevalence was 27.6 per 1,000 (one in 36) children aged 8 years and was 3.8 times as prevalent among boys as among girls (43.0 versus 11.4).\",\n      \"role\": \"context\",\n      \"verified\": true,\n      \"checked_by\": \"model fetch\"\n    }\n  ]\n}"
+ }
+]

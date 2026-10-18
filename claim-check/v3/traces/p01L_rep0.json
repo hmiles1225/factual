@@ -1,0 +1,94 @@
+[
+ {
+  "role": "system",
+  "content": "You are the claim checker for fACTUAL, a news app with no human editor. Nobody reviews your\nanswer before readers see it, so accuracy matters more than completeness.\n\nHow to work:\n1. Decide first whether the claim is about facts or about values. A values claim (what should\n   happen, what matters more) gets the verdict \"Values\" and needs no evidence.\n2. For a factual claim, search for primary sources: the agency dataset, the official count, the\n   study itself, the court filing. News outlets are not evidence; use them only to find the primary\n   source.\n3. Find the NEWEST release of every dataset you use. Search explicitly for a newer release before\n   relying on a figure, and say in newest_data what you checked. Today's date is 2026-10-18.\n4. Use only what you read in pages you retrieved during this task. Do not use facts from memory,\n   even ones you are sure of. If you could not retrieve support for a point, leave it out.\n5. Every evidence quote must be copied word for word from the page at that exact URL. Code will\n   re-read the page and drop any quote it cannot find. Quote the sentence that carries the number.\n6. Every number you write in \"finding\" must appear in one of your quotes.\n7. Write \"steelman\" first: the strongest honest reason a reasonable person believes the claim.\n   Never mock. Rate the claim, never the person or group who says it.\n\nThe verdict rules below are fACTUAL's published method. Follow them exactly.\n\n# Verdicts\n\nEvery checked claim gets exactly one of four verdicts. Each one is always shown as a glyph and a\nword, never as color alone.\n\n## The test\n\n**Is the claim true as stated, checked against the newest evidence?**\n\nThere is one test, and no claim gets an exception to it. \"The newest evidence\" means the latest release\nof each dataset, found by a freshness check at the time the claim is checked.\n\n| Verdict | Means |\n| --- | --- |\n| Holds up | True as stated, on the newest evidence. |\n| Missing context | True as stated, but it leaves out something that changes the picture. |\n| Doesn't hold up | Not true as stated. Overstated and out-of-date claims count. |\n| Unproven | Not enough evidence either way, yet. |\n\n## Tie-breakers\n\n- **Overstated is Doesn't hold up.** \"Measles cases are at an all-time high\" is not true as stated,\n  even though 2025 had the most cases in over 30 years.\n- **Out of date is Doesn't hold up.** \"Only half a percent of people are transgender\" is not true as\n  stated: the newest Williams Institute estimate is 0.8% of U.S. adults. Someone repeating an older\n  figure is not lying, so the steelman says where the old figure came from.\n- **Missing context needs the claim to be true as stated.** It is for claims that are accurate but\n  leave out something that changes the picture, such as a total with no rate.\n- **Mixed evidence is Unproven,** and the text says \"The evidence is mixed.\" Never force certainty.\n- **A forecast is Unproven.** A prediction stated as fact (\"this would save money\", \"this will cost\n  a million jobs\") cannot be checked yet. It carries the reasoning flag \"Forecast, not a finding\" and\n  shows the range of credible estimates.\n- **Doesn't hold up needs two model families to agree.** If they disagree, the claim publishes as\n  Unproven.\n\n## How every check reads\n\n1. **Why this sounds right.** The steelman comes first, before the verdict.\n2. **The verdict,** glyph and word.\n3. **What the evidence shows.** The rationale never opens with a word that sounds like a verdict\n   (\"Out of date\", \"Yes\", \"Wrong\").\n4. **Based on,** naming the sources and their release dates.\n\nClaims are rated. People and groups never are.\n\n## Outlets are not evidence\n\nA verdict rests on primary sources: the dataset, the study, the filing, the official count. No news\noutlet's reporting settles a verdict, whichever side it leans.\n\nOutlets appear in two places instead:\n\n- **Coverage.** Which outlets covered the story, read from their own feeds over the same 48 hours.\n- **Also reported by.** When an outlet's article states the same verified fact, the check lists it,\n  for example \"Also reported by Fox News, CNN and MS NOW.\" Code confirms the figure or quote appears\n  in that article. Readers can see the fact is not one side's fact.\n\n## Values are not verdicts\n\nSome disagreements are about what matters more, not what is true. Those get no verdict. They go\nin \"Still open\" and are left to the reader.\n"
+ },
+ {
+  "role": "user",
+  "content": "Check this claim:\n\n\"Measles cases in the U.S. are at an all-time high.\"\n\nReturn the JSON object described by the schema."
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"import json\\nr = await web_search({\\\"query\\\": \\\"CDC measles cases and outbreaks 2026\\\"})\\nfor x in r[:6]:\\n    print(x.get('url'), x.get('page_age'))\\n    print(x.get('content','')[:800].replace('\\\\n',' '))\\n    print('---')\\n\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_search",
+  "content": "{\n  \"query\": \"CDC measles cases and outbreaks 2026\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "search results:\nhttps://www.cdc.gov/measles/data-research/index.html\nhttps://www.beckershospitalreview.com/quality/public-health/measles-in-2026-where-the-major-outbreaks-stand/\nhttps://www.contagionlive.com/view/measles-update-october-16-2026\nhttps://www.usnews.com/news/us/articles/2026-09-04/us-cdc-records-more-than-3-100-measles-cases-so-far-in-2026\nhttps://www.cidrap.umn.edu/measles/cdc-confirms-59-new-measles-cases-1952-total\nhttps://jamanetwork.com/journals/jama/fullarticle/2853046\nhttps://contagionlive.com/view/ebola-outbreak-in-drc-tops-9235-confirmed-cases-cdc-reports\nhttps://abcnews.com/Health/us-surpasses-4000-measles-cases-infections-confirmed-45/story?id=137125273\nhttps://abcnews.com/Health/4400-measles-cases-reported-us-cdc-plans-send/story?id=137315190"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"print(type(r)); print(str(r)[:2000])\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"r=json.loads(r)\\nfor x in r:\\n    print(x['url'], x.get('page_age'))\\n    c=x['content']\\n    import re\\n    for k in ['1992','1958','1963','all-time','highest','pre-vaccine','before the vaccine','eliminat','1912','annual']:\\n        for m in re.finditer(k,c):\\n            print('  ',k,':',c[max(0,m.start()-250):m.start()+250].replace('\\\\n',' '))\\n    print('----')\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"a = await web_fetch({\\\"url\\\":\\\"https://www.cdc.gov/measles/data-research/index.html\\\"})\\na=json.loads(a) if isinstance(a,str) else a\\nc=a[0]['content'] if isinstance(a,list) else str(a)\\nprint(c[:3000])\\nfor k in ['1991','1992','1990','highest','since']:\\n    for m in re.finditer(k,c):\\n        print('  ',k,':',c[max(0,m.start()-250):m.start()+250].replace('\\\\n',' '))\\ns = await web_search({\\\"query\\\":\\\"CDC history of measles before vaccine cases reported each year\\\"})\\ns=json.loads(s)\\nfor x in s[:6]:\\n    print(x['url'], x.get('page_age'))\\n    print(x['content'][:600].replace('\\\\n',' '))\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_fetch",
+  "content": "{\n  \"url\": \"https://www.cdc.gov/measles/data-research/index.html\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "fetched https://www.cdc.gov/measles/data-research/index.html (40725 chars)"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_search",
+  "content": "{\n  \"query\": \"CDC history of measles before vaccine cases reported each year\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "search results:\nhttps://www.cdc.gov/mmwr/preview/mmwrhtml/00041753.htm\nhttps://www.cdc.gov/measles/downloads/measlesdataandstatsslideset.pdf\nhttps://www.cdc.gov/pinkbook/hcp/table-of-contents/chapter-13-measles.html\nhttps://www.cdc.gov/surv-manual/php/table-of-contents/chapter-7-measles.html\nhttps://en.wikipedia.org/wiki/Measles_resurgence_in_the_United_States\nhttps://www.cdc.gov/measles/data-research/index.html\nhttps://en.wikipedia.org/wiki/2025_Southwest_United_States_measles_outbreak\nhttps://insights.healthobservatory.asu.edu/measles/timeline/\nhttps://www.mayoclinic.org/diseases-conditions/history-disease-outbreaks-vaccine-timeline/measles\nhttps://www.nvic.org/disease-vaccine/measles/history-in-america"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"d=a['content']['source']['data']\\nfor k in ['As of October','History of measles cases','Before the measles vaccine','1,384 from','2,289']:\\n    for m in re.finditer(k,d):\\n        print('  ',k,':',d[max(0,m.start()-100):m.start()+700])\\n        print('==')\\ns2 = await web_fetch({\\\"url\\\":\\\"https://www.cdc.gov/surv-manual/php/table-of-contents/chapter-7-measles.html\\\"})\\ns2=json.loads(s2) if isinstance(s2,str) else s2\\nd2=s2['content']['source']['data'] if isinstance(s2,dict) and 'content' in s2 else str(s2)\\nfor k in ['549,000','1989','1990']:\\n    for m in re.finditer(k,d2):\\n        print('  ',k,':',d2[max(0,m.start()-200):m.start()+300].replace('\\\\n',' '))\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_fetch",
+  "content": "{\n  \"url\": \"https://www.cdc.gov/surv-manual/php/table-of-contents/chapter-7-measles.html\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "fetched https://www.cdc.gov/surv-manual/php/table-of-contents/chapter-7-measles.html (117120 chars)"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"for k in ['last_updated','During 1989','In the decade prior']:\\n    for m in re.finditer(k,d2):\\n        print(repr(d2[m.start():m.start()+200]))\\nj = await web_fetch({\\\"url\\\":\\\"https://jamanetwork.com/journals/jama/fullarticle/2853046\\\"})\\nj=json.loads(j) if isinstance(j,str) else j\\ndj=j['content']['source']['data'] if isinstance(j,dict) and 'content' in j else str(j)[:500]\\ni=dj.find('highest reported'); print(repr(dj[i-200:i+60]))\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_fetch",
+  "content": "{\n  \"url\": \"https://jamanetwork.com/journals/jama/fullarticle/2853046\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "fetched https://jamanetwork.com/journals/jama/fullarticle/2853046 (18269 chars)"
+ },
+ {
+  "role": "assistant",
+  "content": "{\"fact_or_values\":\"fact\",\"verdict\":\"Doesn't hold up\",\"steelman\":\"U.S. measles cases really have climbed sharply. The CDC's 2026 count is already almost twice the 2025 total, which itself was far above 2024. Researchers describe it as the highest count since 1991. For anyone who grew up after the vaccine made measles rare, this is the worst they have seen, so calling it an all-time high is an easy step to make.\",\"finding\":\"The CDC counted 4,410 confirmed measles cases in the U.S. in 2026 as of October 15, 2026. For all of 2025 it counted 2,289. The 2026 count has been described as the highest reported number since 1991. Even so, it is far below earlier years. In the decade before the measles vaccine was licensed in 1963, an average of 549,000 cases were reported each year. During the 1989\u20131991 resurgence, more than 55,000 cases and 123 deaths were reported. Cases are at a decades-long high and rising, but they are nowhere near an all-time high. Under fACTUAL's rules, an overstated claim does not hold up.\",\"reasoning_flags\":[],\"newest_data\":\"I used the CDC 'Measles Cases and Outbreaks' page, last updated October 16, 2026, with data as of October 15, 2026. CDC updates this page weekly, and this was the newest release when I searched on 2026-10-18. A search for 2026 measles counts found nothing newer than that update. Historical figures come from the CDC Manual for the Surveillance of Vaccine-Preventable Diseases, Chapter 7 (Measles), last updated June 3, 2025. The point that this is the highest count since 1991 comes from a JAMA news item published August 14, 2026, which reports CDC data.\",\"evidence\":[{\"url\":\"https://www.cdc.gov/measles/data-research/index.html\",\"publisher\":\"U.S. Centers for Disease Control and Prevention\",\"published\":\"2026-10-16\",\"quote\":\"As of October 15, 2026, 4,410 confirmed* measles cases were reported in the United States in 2026.\",\"role\":\"context\"},{\"url\":\"https://www.cdc.gov/measles/data-research/index.html\",\"publisher\":\"U.S. Centers for Disease Control and Prevention\",\"published\":\"2026-10-16\",\"quote\":\"For the full year of 2025, a total of 2,289 confirmed* measles cases were reported in the United States.\",\"role\":\"context\"},{\"url\":\"https://www.cdc.gov/surv-manual/php/table-of-contents/chapter-7-measles.html\",\"publisher\":\"U.S. Centers for Disease Control and Prevention\",\"published\":\"2025-06-03\",\"quote\":\"In the decade prior to the licensure of live measles vaccine in 1963, an average of 549,000 measles cases and 495 measles deaths were reported annually.\",\"role\":\"contradicts\"},{\"url\":\"https://www.cdc.gov/surv-manual/php/table-of-contents/chapter-7-measles.html\",\"publisher\":\"U.S. Centers for Disease Control and Prevention\",\"published\":\"2025-06-03\",\"quote\":\"During 1989\u20131991, a resurgence of measles occurred when over 55,000 cases and 123 deaths were reported.\",\"role\":\"contradicts\"},{\"url\":\"https://jamanetwork.com/journals/jama/fullarticle/2853046\",\"publisher\":\"JAMA\",\"published\":\"2026-08-14\",\"quote\":\"the highest reported number since 1991\",\"role\":\"context\"}]}"
+ },
+ {
+  "role": "assistant",
+  "name": "evidence check",
+  "content": "{\n  \"verdict_from_model\": \"Doesn't hold up\",\n  \"verdict_after_check\": \"Doesn't hold up\",\n  \"guard_notes\": [],\n  \"numbers_unsourced\": [],\n  \"evidence\": [\n    {\n      \"url\": \"https://www.cdc.gov/measles/data-research/index.html\",\n      \"publisher\": \"U.S. Centers for Disease Control and Prevention\",\n      \"published\": \"2026-10-16\",\n      \"quote\": \"As of October 15, 2026, 4,410 confirmed* measles cases were reported in the United States in 2026.\",\n      \"role\": \"context\",\n      \"verified\": true,\n      \"checked_by\": \"model fetch\"\n    },\n    {\n      \"url\": \"https://www.cdc.gov/measles/data-research/index.html\",\n      \"publisher\": \"U.S. Centers for Disease Control and Prevention\",\n      \"published\": \"2026-10-16\",\n      \"quote\": \"For the full year of 2025, a total of 2,289 confirmed* measles cases were reported in the United States.\",\n      \"role\": \"context\",\n      \"verified\": true,\n      \"checked_by\": \"model fetch\"\n    },\n    {\n      \"url\": \"https://www.cdc.gov/surv-manual/php/table-of-contents/chapter-7-measles.html\",\n      \"publisher\": \"U.S. Centers for Disease Control and Prevention\",\n      \"published\": \"2025-06-03\",\n      \"quote\": \"In the decade prior to the licensure of live measles vaccine in 1963, an average of 549,000 measles cases and 495 measles deaths were reported annually.\",\n      \"role\": \"contradicts\",\n      \"verified\": true,\n      \"checked_by\": \"model fetch\"\n    },\n    {\n      \"url\": \"https://www.cdc.gov/surv-manual/php/table-of-contents/chapter-7-measles.html\",\n      \"publisher\": \"U.S. Centers for Disease Control and Prevention\",\n      \"published\": \"2025-06-03\",\n      \"quote\": \"During 1989\\u20131991, a resurgence of measles occurred when over 55,000 cases and 123 deaths were reported.\",\n      \"role\": \"contradicts\",\n      \"verified\": true,\n      \"checked_by\": \"model fetch\"\n    },\n    {\n      \"url\": \"https://jamanetwork.com/journals/jama/fullarticle/2853046\",\n      \"publisher\": \"JAMA\",\n      \"published\": \"2026-08-14\",\n      \"quote\": \"the highest reported number since 1991\",\n      \"role\": \"context\",\n      \"verified\": true,\n      \"checked_by\": \"model fetch\"\n    }\n  ]\n}"
+ }
+]

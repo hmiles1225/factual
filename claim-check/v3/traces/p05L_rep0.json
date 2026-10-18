@@ -1,0 +1,243 @@
+[
+ {
+  "role": "system",
+  "content": "You are the claim checker for fACTUAL, a news app with no human editor. Nobody reviews your\nanswer before readers see it, so accuracy matters more than completeness.\n\nHow to work:\n1. Decide first whether the claim is about facts or about values. A values claim (what should\n   happen, what matters more) gets the verdict \"Values\" and needs no evidence.\n2. For a factual claim, search for primary sources: the agency dataset, the official count, the\n   study itself, the court filing. News outlets are not evidence; use them only to find the primary\n   source.\n3. Find the NEWEST release of every dataset you use. Search explicitly for a newer release before\n   relying on a figure, and say in newest_data what you checked. Today's date is 2026-10-18.\n4. Use only what you read in pages you retrieved during this task. Do not use facts from memory,\n   even ones you are sure of. If you could not retrieve support for a point, leave it out.\n5. Every evidence quote must be copied word for word from the page at that exact URL. Code will\n   re-read the page and drop any quote it cannot find. Quote the sentence that carries the number.\n6. Every number you write in \"finding\" must appear in one of your quotes.\n7. Write \"steelman\" first: the strongest honest reason a reasonable person believes the claim.\n   Never mock. Rate the claim, never the person or group who says it.\n\nThe verdict rules below are fACTUAL's published method. Follow them exactly.\n\n# Verdicts\n\nEvery checked claim gets exactly one of four verdicts. Each one is always shown as a glyph and a\nword, never as color alone.\n\n## The test\n\n**Is the claim true as stated, checked against the newest evidence?**\n\nThere is one test, and no claim gets an exception to it. \"The newest evidence\" means the latest release\nof each dataset, found by a freshness check at the time the claim is checked.\n\n| Verdict | Means |\n| --- | --- |\n| Holds up | True as stated, on the newest evidence. |\n| Missing context | True as stated, but it leaves out something that changes the picture. |\n| Doesn't hold up | Not true as stated. Overstated and out-of-date claims count. |\n| Unproven | Not enough evidence either way, yet. |\n\n## Tie-breakers\n\n- **Overstated is Doesn't hold up.** \"Measles cases are at an all-time high\" is not true as stated,\n  even though 2025 had the most cases in over 30 years.\n- **Out of date is Doesn't hold up.** \"Only half a percent of people are transgender\" is not true as\n  stated: the newest Williams Institute estimate is 0.8% of U.S. adults. Someone repeating an older\n  figure is not lying, so the steelman says where the old figure came from.\n- **Missing context needs the claim to be true as stated.** It is for claims that are accurate but\n  leave out something that changes the picture, such as a total with no rate.\n- **Mixed evidence is Unproven,** and the text says \"The evidence is mixed.\" Never force certainty.\n- **A forecast is Unproven.** A prediction stated as fact (\"this would save money\", \"this will cost\n  a million jobs\") cannot be checked yet. It carries the reasoning flag \"Forecast, not a finding\" and\n  shows the range of credible estimates.\n- **Doesn't hold up needs two model families to agree.** If they disagree, the claim publishes as\n  Unproven.\n\n## How every check reads\n\n1. **Why this sounds right.** The steelman comes first, before the verdict.\n2. **The verdict,** glyph and word.\n3. **What the evidence shows.** The rationale never opens with a word that sounds like a verdict\n   (\"Out of date\", \"Yes\", \"Wrong\").\n4. **Based on,** naming the sources and their release dates.\n\nClaims are rated. People and groups never are.\n\n## Outlets are not evidence\n\nA verdict rests on primary sources: the dataset, the study, the filing, the official count. No news\noutlet's reporting settles a verdict, whichever side it leans.\n\nOutlets appear in two places instead:\n\n- **Coverage.** Which outlets covered the story, read from their own feeds over the same 48 hours.\n- **Also reported by.** When an outlet's article states the same verified fact, the check lists it,\n  for example \"Also reported by Fox News, CNN and MS NOW.\" Code confirms the figure or quote appears\n  in that article. Readers can see the fact is not one side's fact.\n\n## Values are not verdicts\n\nSome disagreements are about what matters more, not what is true. Those get no verdict. They go\nin \"Still open\" and are left to the reader.\n"
+ },
+ {
+  "role": "user",
+  "content": "Check this claim:\n\n\"Most of the 2017 Trump tax cut went to the top 1% in its first year.\"\n\nReturn the JSON object described by the schema."
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"import json\\nqs=[\\\"Tax Policy Center distributional analysis Tax Cuts and Jobs Act 2018 top 1 percent share\\\",\\\"JCT distributional effects conference agreement H.R. 1 Tax Cuts and Jobs Act 2018\\\",\\\"TCJA 2018 top 1 percent share of tax cut percent\\\"]\\nfor q in qs:\\n    r=await web_search({\\\"query\\\":q})\\n    for x in r[:6]:\\n        print(x.get('title'),x.get('url'),x.get('page_age'))\\n        print(x.get('content','')[:300].replace('\\\\n',' '))\\n    print('---')\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_search",
+  "content": "{\n  \"query\": \"Tax Policy Center distributional analysis Tax Cuts and Jobs Act 2018 top 1 percent share\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "search results:\nhttps://www.brookings.edu/wp-content/uploads/2018/06/es_20180608_tcja_summary_paper_final.pdf\nhttps://taxpolicycenter.org/sites/default/files/publication/150816/2001641_distributional_analysis_of_the_conference_agreement_for_the_tax_cuts_and_jobs_act_0.pdf\nhttps://taxpolicycenter.org/sites/default/files/publication/148831/2001605-distributional-analysis-of-the-tax-cuts-and-jobs-act-as-passed-by-the-senate-finance-committee_2.pdf\nhttps://www.cato.org/blog/distribution-tables-distort-tax-policy-debate\nhttps://www.aei.org/wp-content/uploads/2019/02/Distributional-implications-TCJA-Kallen-Mathur-WP.pdf\nhttps://taxpolicycenter.org/taxvox/who-will-pay-tax-cuts-and-jobs-act\nhttps://taxpolicycenter.org/sites/default/files/publication/157267/distributional_effects_of_individual_income_tax_expenditures_after_the_2017_tax_cuts_and_jobs_act_1.pdf\nhttps://taxpolicycenter.org/sites/default/files/publication/155349/2018.06.08_tcja_summary_paper_final.pdf\nhttps://taxpolicycenter.org/taxvox/three-numbers-know-about-tcja-2018"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"r=await web_search({\\\"query\\\":qs[0]})\\nprint(type(r), str(r)[:1000])\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_search",
+  "content": "{\n  \"query\": \"Tax Policy Center distributional analysis Tax Cuts and Jobs Act 2018 top 1 percent share\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "search results:\nhttps://www.brookings.edu/wp-content/uploads/2018/06/es_20180608_tcja_summary_paper_final.pdf\nhttps://taxpolicycenter.org/sites/default/files/publication/150816/2001641_distributional_analysis_of_the_conference_agreement_for_the_tax_cuts_and_jobs_act_0.pdf\nhttps://www.aei.org/wp-content/uploads/2019/02/Distributional-implications-TCJA-Kallen-Mathur-WP.pdf\nhttps://www.cato.org/blog/distribution-tables-distort-tax-policy-debate\nhttps://taxpolicycenter.org/sites/default/files/publication/148831/2001605-distributional-analysis-of-the-tax-cuts-and-jobs-act-as-passed-by-the-senate-finance-committee_2.pdf\nhttps://taxpolicycenter.org/taxvox/who-will-pay-tax-cuts-and-jobs-act\nhttps://taxpolicycenter.org/sites/default/files/publication/157267/distributional_effects_of_individual_income_tax_expenditures_after_the_2017_tax_cuts_and_jobs_act_1.pdf\nhttps://taxpolicycenter.org/sites/default/files/publication/155349/2018.06.08_tcja_summary_paper_final.pdf\nhttps://taxpolicycenter.org/taxvox/three-numbers-know-about-tcja-2018"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"async def s(q,n=6,c=400):\\n    r=json.loads(await web_search({\\\"query\\\":q}))\\n    for x in r[:n]:\\n        print(x.get('title'),x.get('url'),x.get('page_age'))\\n        print(x.get('content','')[:c].replace('\\\\n',' '))\\n    print('---')\\nfor q in qs: await s(q)\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_search",
+  "content": "{\n  \"query\": \"Tax Policy Center distributional analysis Tax Cuts and Jobs Act 2018 top 1 percent share\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "search results:\nhttps://www.brookings.edu/wp-content/uploads/2018/06/es_20180608_tcja_summary_paper_final.pdf\nhttps://taxpolicycenter.org/sites/default/files/publication/150816/2001641_distributional_analysis_of_the_conference_agreement_for_the_tax_cuts_and_jobs_act_0.pdf\nhttps://taxpolicycenter.org/sites/default/files/publication/148831/2001605-distributional-analysis-of-the-tax-cuts-and-jobs-act-as-passed-by-the-senate-finance-committee_2.pdf\nhttps://www.aei.org/wp-content/uploads/2019/02/Distributional-implications-TCJA-Kallen-Mathur-WP.pdf\nhttps://www.cato.org/blog/distribution-tables-distort-tax-policy-debate\nhttps://taxpolicycenter.org/sites/default/files/publication/155349/2018.06.08_tcja_summary_paper_final.pdf\nhttps://taxpolicycenter.org/taxvox/who-will-pay-tax-cuts-and-jobs-act\nhttps://taxpolicycenter.org/sites/default/files/publication/157267/distributional_effects_of_individual_income_tax_expenditures_after_the_2017_tax_cuts_and_jobs_act_1.pdf\nhttps://taxpolicycenter.org/taxvox/three-numbers-know-about-tcja-2018"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_search",
+  "content": "{\n  \"query\": \"JCT distributional effects conference agreement H.R. 1 Tax Cuts and Jobs Act 2018\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "search results:\nhttps://www.jct.gov/publications/?it=content&subject_name=Payroll+Tax%2CCorporate%2CExcise+Taxes&pg=7\nhttps://www.brookings.edu/wp-content/uploads/2018/06/ES_20180608_tcja_summary_paper_final.pdf\nhttps://www.aei.org/wp-content/uploads/2019/02/Distributional-implications-TCJA-Kallen-Mathur-WP.pdf\nhttps://www.jct.gov/getattachment/b7441bb5-d3b6-40bb-be8e-46992abedfa8/x-10-19-5173.pdf\nhttps://www.cbo.gov/publication/53429\nhttps://www.everycrsreport.com/reports/R45092.html\nhttps://cbo.gov/system/files/115th-congress-2017-2018/reports/53429-distributionhr1.pdf\nhttps://taxpolicycenter.org/publications/distributional-analysis-conference-agreement-tax-cuts-and-jobs-act\nhttps://taxpolicycenter.org/sites/default/files/publication/150816/2001641_distributional_analysis_of_the_conference_agreement_for_the_tax_cuts_and_jobs_act_0.pdf\nhttps://waysandmeans.house.gov/wp-content/uploads/2019/04/Oh-Testimony.pdf"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_search",
+  "content": "{\n  \"query\": \"TCJA 2018 top 1 percent share of tax cut percent\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "search results:\nhttps://taxpolicycenter.org/sites/default/files/publication/154006/the_effect_of_the_tcja_individual_income_tax_provisions_across_income_groups_and_across_the_states.pdf\nhttps://taxpolicycenter.org/taxvox/three-numbers-know-about-tcja-2018\nhttps://www.brookings.edu/wp-content/uploads/2018/06/es_20180608_tcja_summary_paper_final.pdf\nhttps://taxfoundation.org/data/all/federal/congressional-budget-office-shows-2017-tax-law-reduced-tax-rates-across-board-2018/\nhttps://taxpolicycenter.org/taxvox/tcja-would-cut-taxes-average-1600-2018-most-benefits-going-those-making-300000-plus\nhttps://taxpolicycenter.org/sites/default/files/publication/150816/2001641_distributional_analysis_of_the_conference_agreement_for_the_tax_cuts_and_jobs_act_0.pdf\nhttps://www.brookings.edu/articles/the-tax-cuts-and-jobs-act-and-the-2018-midterms-examining-the-potential-electoral-impact/\nhttps://taxpolicycenter.org/sites/default/files/publication/148831/2001605-distributional-analysis-of-the-tax-cuts-and-jobs-act-as-passed-by-the-senate-finance-committee_2.pdf\nhttps://www.cato.org/blog/frequently-asked-questions-about-tax-cuts-jobs-act"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"import re\\nasync def f(url):\\n    r=await web_fetch({\\\"url\\\":url})\\n    r=json.loads(r) if isinstance(r,str) else r\\n    if isinstance(r,dict): print(r); return \\\"\\\"\\n    return r[0].get('content','')\\ndocs={}\\nfor u in [\\\"https://taxpolicycenter.org/sites/default/files/publication/150816/2001641_distributional_analysis_of_the_conference_agreement_for_the_tax_cuts_and_jobs_act_0.pdf\\\",\\\"https://taxpolicycenter.org/sites/default/files/publication/155349/2018.06.08_tcja_summary_paper_final.pdf\\\",\\\"https://taxpolicycenter.org/taxvox/three-numbers-know-about-tcja-2018\\\"]:\\n    docs[u]=await f(u)\\n    t=docs[u]\\n    for m in re.finditer(r'top 1 percent|percent of the (total )?(tax|benefit)',t,re.I):\\n        print(t[max(0,m.start()-300):m.end()+300].replace('\\\\n',' '));print('..')\\n    print('=======')\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_fetch",
+  "content": "{\n  \"url\": \"https://taxpolicycenter.org/sites/default/files/publication/150816/2001641_distributional_analysis_of_the_conference_agreement_for_the_tax_cuts_and_jobs_act_0.pdf\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "fetched https://taxpolicycenter.org/sites/default/files/publication/150816/2001641_distributional_analysis_of_the_conference_agreement_for_the_tax_cuts_and_jobs_act_0.pdf (376620 chars)"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_fetch",
+  "content": "{\n  \"url\": \"https://taxpolicycenter.org/sites/default/files/publication/155349/2018.06.08_tcja_summary_paper_final.pdf\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "fetched https://taxpolicycenter.org/sites/default/files/publication/155349/2018.06.08_tcja_summary_paper_final.pdf (1270036 chars)"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_fetch",
+  "content": "{\n  \"url\": \"https://taxpolicycenter.org/taxvox/three-numbers-know-about-tcja-2018\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "fetched https://taxpolicycenter.org/taxvox/three-numbers-know-about-tcja-2018 (6992 chars)"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"import base64, io\\nfrom pypdf import PdfReader\\nasync def fetch_text(url):\\n    r=await web_fetch({\\\"url\\\":url})\\n    r=json.loads(r) if isinstance(r,str) else r\\n    if isinstance(r,list): r=r[0]\\n    c=r.get('content')\\n    if isinstance(c,dict) and c.get('source',{}).get('type')=='base64':\\n        data=base64.b64decode(c['source']['data'])\\n        rd=PdfReader(io.BytesIO(data))\\n        return \\\"\\\\n\\\".join((p.extract_text() or '') for p in rd.pages)\\n    if isinstance(c,str): return c\\n    return str(r)[:500]\\ndef grep(t,pat,w=300,mx=10):\\n    for i,m in enumerate(re.finditer(pat,t,re.I)):\\n        if i>=mx: break\\n        print('>>',t[max(0,m.start()-w):m.end()+w].replace('\\\\n',' '))\\nu1=\\\"https://taxpolicycenter.org/sites/default/files/publication/150816/2001641_distributional_analysis_of_the_conference_agreement_for_the_tax_cuts_and_jobs_act_0.pdf\\\"\\nt1=await fetch_text(u1); docs[u1]=t1\\nprint(len(t1))\\ngrep(t1,r'top 1 percent')\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_fetch",
+  "content": "{\n  \"url\": \"https://taxpolicycenter.org/sites/default/files/publication/150816/2001641_distributional_analysis_of_the_conference_agreement_for_the_tax_cuts_and_jobs_act_0.pdf\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "fetched https://taxpolicycenter.org/sites/default/files/publication/150816/2001641_distributional_analysis_of_the_conference_agreement_for_the_tax_cuts_and_jobs_act_0.pdf (376620 chars)"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"grep(t1,r'20\\\\.5|83 percent|82\\\\.8',w=300)\\nprint(t1[:1500])\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"u2=\\\"https://taxpolicycenter.org/sites/default/files/publication/155349/2018.06.08_tcja_summary_paper_final.pdf\\\"\\nt2=await fetch_text(u2); docs[u2]=t2\\nprint(len(t2))\\ngrep(t2,r'20\\\\.5|top 1 percent (would )?receive',w=300)\\nu3=\\\"https://taxpolicycenter.org/taxvox/tcja-would-cut-taxes-average-1600-2018-most-benefits-going-those-making-300000-plus\\\"\\nt3=await fetch_text(u3); docs[u3]=t3\\ngrep(t3,r'percent of the|top 1 percent|20 percent|one-fifth',w=300)\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_fetch",
+  "content": "{\n  \"url\": \"https://taxpolicycenter.org/sites/default/files/publication/155349/2018.06.08_tcja_summary_paper_final.pdf\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "fetched https://taxpolicycenter.org/sites/default/files/publication/155349/2018.06.08_tcja_summary_paper_final.pdf (1270036 chars)"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_fetch",
+  "content": "{\n  \"url\": \"https://taxpolicycenter.org/taxvox/tcja-would-cut-taxes-average-1600-2018-most-benefits-going-those-making-300000-plus\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "fetched https://taxpolicycenter.org/taxvox/tcja-would-cut-taxes-average-1600-2018-most-benefits-going-those-making-300000-plus (7100 chars)"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"print(t3[:300])\\ngrep(t3,r'percent',w=250,mx=15)\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"async def fetch_text(url):\\n    r=await web_fetch({\\\"url\\\":url})\\n    r=json.loads(r) if isinstance(r,str) else r\\n    if isinstance(r,list): r=r[0]\\n    c=r.get('content')\\n    if isinstance(c,dict):\\n        s=c.get('source',{})\\n        if s.get('type')=='base64':\\n            data=base64.b64decode(s['data'])\\n            rd=PdfReader(io.BytesIO(data))\\n            return \\\"\\\\n\\\".join((p.extract_text() or '') for p in rd.pages)\\n        if s.get('type')=='text': return s.get('data','')\\n    if isinstance(c,str): return c\\n    return str(r)[:500]\\nt3=await fetch_text(u3); docs[u3]=t3\\ngrep(t3,r'percent',w=250,mx=15)\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_fetch",
+  "content": "{\n  \"url\": \"https://taxpolicycenter.org/taxvox/tcja-would-cut-taxes-average-1600-2018-most-benefits-going-those-making-300000-plus\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "fetched https://taxpolicycenter.org/taxvox/tcja-would-cut-taxes-average-1600-2018-most-benefits-going-those-making-300000-plus (7100 chars)"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"u4=\\\"https://taxpolicycenter.org/taxvox/three-numbers-know-about-tcja-2018\\\"\\nt4=await fetch_text(u4); docs[u4]=t4\\ngrep(t4,r'percent',w=250,mx=12)\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_fetch",
+  "content": "{\n  \"url\": \"https://taxpolicycenter.org/taxvox/three-numbers-know-about-tcja-2018\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "fetched https://taxpolicycenter.org/taxvox/three-numbers-know-about-tcja-2018 (6992 chars)"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"for q in [\\\"TCJA 2018 top 1 percent received 20 percent of tax cut Tax Policy Center\\\",\\\"Joint Committee on Taxation distributional effects Public Law 115-97 2019 JCX-10-19\\\",\\\"ex post analysis Tax Cuts and Jobs Act distribution 2018 tax returns top 1 percent share of benefits\\\",\\\"TCJA who benefited top 1 percent share 2018 study 2024 2025\\\"]:\\n    await s(q,n=6,c=300)\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_search",
+  "content": "{\n  \"query\": \"TCJA 2018 top 1 percent received 20 percent of tax cut Tax Policy Center\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "search results:\nhttps://taxpolicycenter.org/sites/default/files/publication/155349/2018.06.08_tcja_summary_paper_final_0.pdf\nhttps://www.brookings.edu/wp-content/uploads/2018/06/es_20180608_tcja_summary_paper_final.pdf\nhttps://taxfoundation.org/data/all/federal/congressional-budget-office-shows-2017-tax-law-reduced-tax-rates-across-board-2018/\nhttps://taxpolicycenter.org/taxvox/how-tax-cuts-and-jobs-act-evolved\nhttps://www.americanprogress.org/article/the-tax-cuts-and-jobs-act-failed-to-deliver-promised-benefits/\nhttps://taxpolicycenter.org/sites/default/files/publication/150816/2001641_distributional_analysis_of_the_conference_agreement_for_the_tax_cuts_and_jobs_act_0.pdf\nhttps://taxpolicycenter.org/sites/default/files/publication/148831/2001605-distributional-analysis-of-the-tax-cuts-and-jobs-act-as-passed-by-the-senate-finance-committee_2.pdf\nhttps://taxpolicycenter.org/taxvox/three-numbers-know-about-tcja-2018\nhttps://www.factcheck.org/2018/01/democrats-misleading-tax-line"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_search",
+  "content": "{\n  \"query\": \"Joint Committee on Taxation distributional effects Public Law 115-97 2019 JCX-10-19\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "search results:\nhttps://www.taxnotes.com/research/federal/legislative-documents/congressional-joint-committee-prints/jct-analyzes-tcja-distributional-impact/2996f\nhttps://www.jct.gov/getattachment/b7441bb5-d3b6-40bb-be8e-46992abedfa8/x-10-19-5173.pdf\nhttps://www.jct.gov/publications/?it=content&date_year=2%2C6&subject_name=Energy%25c%25+Environment+%26+Natural+Resources%2CIndividual&pg=11\nhttps://www.jct.gov/publications/2019/jcx-10-19/\nhttps://www.govinfo.gov/content/pkg/CPRT-115JPRT33137/pdf/CPRT-115JPRT33137.pdf\nhttps://www.congress.gov/crs-product/R48286\nhttps://www.everycrsreport.com/reports/R45092.html\nhttps://www.congress.gov/crs-product/R45092\nhttps://www.jct.gov/getattachment/790991f7-b399-4d6f-be72-cdbe2d1345c4/x-47-24.pdf"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_search",
+  "content": "{\n  \"query\": \"ex post analysis Tax Cuts and Jobs Act distribution 2018 tax returns top 1 percent share of benefits\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "search results:\nhttps://www.brookings.edu/wp-content/uploads/2018/06/es_20180608_tcja_summary_paper_final.pdf\nhttps://taxpolicycenter.org/sites/default/files/publication/155349/2018.06.08_tcja_summary_paper_final_0.pdf\nhttps://itep.org/housetaxplan/\nhttps://www.aei.org/wp-content/uploads/2019/02/Distributional-implications-TCJA-Kallen-Mathur-WP.pdf\nhttps://ntanet.org/wp-content/uploads/2019/03/Session1111_Paper1411_FullPaper_1.pdf\nhttps://taxpolicycenter.org/sites/default/files/publication/150816/2001641_distributional_analysis_of_the_conference_agreement_for_the_tax_cuts_and_jobs_act_0.pdf\nhttps://www.americanprogress.org/article/the-tax-cuts-and-jobs-act-failed-to-deliver-promised-benefits/\nhttps://equitablegrowth.org/six-years-later-more-evidence-shows-the-tax-cuts-and-jobs-act-benefits-u-s-business-owners-and-executives-not-average-workers/\nhttps://www.urban.org/sites/default/files/publication/94846/2001605-distributional-analysis-of-the-tax-cuts-and-jobs-act-as-passed-by-the-senate-finance-committee.pdf\nhttps://waysandmeans.house.gov/wp-content/uploads/2019/04/Oh-Testimony.pdf"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"try:\\n    await s(\\\"JCX-10-19 distributional effects Public Law 115-97\\\",n=5,c=300)\\nexcept Exception as e: print(e)\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"grep(t2,r'percent of the (total )?(tax change|benefit|tax cut)|share of (the )?(total )?(tax change|benefit|tax cut)|one-fifth|83 percent',w=300,mx=12)\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"grep(t2,r'distributional effects of the TCJA in 2018|in 2018[^.]{0,200}top 1 percent|20 percent of',w=400,mx=6)\\ni=t2.find('Diving deeper'); print(t2[i-2500:i])\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"i=t1.find('Top 1 percent 3.4 20.5'); print(repr(t1[i-1800:i+200]))\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"grep(t4,r'20(18|19)',w=80,mx=6)\\nprint(t4[:400])\"\n}"
+ },
+ {
+  "role": "assistant",
+  "content": "{\"fact_or_values\":\"fact\",\"verdict\":\"Doesn't hold up\",\"steelman\":\"The same Tax Policy Center analysis that rated the 2017 law found that the top 1% would get 83% of the total benefit. That figure was widely repeated and it is real. But it applies to 2027, after most of the law's individual tax cuts were scheduled to expire. It is easy to apply it to the law as a whole or to its first year. The law's benefits also did lean heavily toward high earners. Their average cut was far larger in dollars than anyone else's, and the 95th\u201399th percentile and the top 1% together got more than any other group.\",\"finding\":\"The Tax Policy Center (TPC) modeled the final version of the bill, and its 2018 table puts the top 1% at 20.5% of the total federal tax change. That is about one-fifth, not most. In TPC's figures for 2018, households got an average cut of about $1,600, while the top 1% got an average of about $51,000. The 83% figure comes from the same TPC analysis but refers to 2027, after nearly all individual provisions were set to expire. TPC's June 2018 overview repeats this: the top 1% gets 83% of the benefit in 2027. So the claim takes a late-year figure and applies it to the first year. These are model estimates made around the time the law passed, not counts from tax returns. TPC's 2019 look back at 2018 still used the same $51,000 average for the top 1%.\",\"reasoning_flags\":[\"Picked dates\"],\"newest_data\":\"I relied on TPC's distributional analysis of the TCJA conference agreement (December 18, 2017). I checked it against TPC's June 8, 2018 overview paper, which reprints the same 2018 table, and TPC's TaxVox post of about April 2019, which reviews 2018 using the same averages. I hit a search-tool limit before I could retrieve newer studies, including the Joint Committee on Taxation's 2019 distributional report on Public Law 115-97, which appeared in search results but which I never opened. So I could not confirm that no newer estimate of the top 1%'s share in 2018 exists.\",\"evidence\":[{\"url\":\"https://taxpolicycenter.org/sites/default/files/publication/150816/2001641_distributional_analysis_of_the_conference_agreement_for_the_tax_cuts_and_jobs_act_0.pdf\",\"publisher\":\"Urban-Brookings Tax Policy Center\",\"published\":\"2017-12-18\",\"quote\":\"Top 1 percent 3.4 20.5 -51,140 -2.3 30.3\",\"role\":\"contradicts\"},{\"url\":\"https://taxpolicycenter.org/sites/default/files/publication/150816/2001641_distributional_analysis_of_the_conference_agreement_for_the_tax_cuts_and_jobs_act_0.pdf\",\"publisher\":\"Urban-Brookings Tax Policy Center\",\"published\":\"2017-12-18\",\"quote\":\"In 2018, taxes would be reduced by about $1,600 on average, increasing after-tax incomes 2.2 percent (table 1).\",\"role\":\"context\"},{\"url\":\"https://taxpolicycenter.org/sites/default/files/publication/150816/2001641_distributional_analysis_of_the_conference_agreement_for_the_tax_cuts_and_jobs_act_0.pdf\",\"publisher\":\"Urban-Brookings Tax Policy Center\",\"published\":\"2017-12-18\",\"quote\":\"would receive an average cut of $51,000, or 3.4 percent of after-tax income.\",\"role\":\"context\"},{\"url\":\"https://taxpolicycenter.org/sites/default/files/publication/155349/2018.06.08_tcja_summary_paper_final.pdf\",\"publisher\":\"Urban-Brookings Tax Policy Center\",\"published\":\"2018-06-08\",\"quote\":\"The top 1 percent will receive 83 percent of the total benefit, with\",\"role\":\"context\"},{\"url\":\"https://taxpolicycenter.org/taxvox/three-numbers-know-about-tcja-2018\",\"publisher\":\"Urban-Brookings Tax Policy Center (TaxVox)\",\"published\":\"2019-04 (approx.)\",\"quote\":\"Middle-income households paid an average of about $900 less, and the top one percent got an average tax cut of $51,000.\",\"role\":\"context\"}]}"
+ },
+ {
+  "role": "assistant",
+  "name": "evidence check",
+  "content": "{\n  \"verdict_from_model\": \"Doesn't hold up\",\n  \"verdict_after_check\": \"Doesn't hold up\",\n  \"guard_notes\": [],\n  \"numbers_unsourced\": [],\n  \"evidence\": [\n    {\n      \"url\": \"https://taxpolicycenter.org/sites/default/files/publication/150816/2001641_distributional_analysis_of_the_conference_agreement_for_the_tax_cuts_and_jobs_act_0.pdf\",\n      \"publisher\": \"Urban-Brookings Tax Policy Center\",\n      \"published\": \"2017-12-18\",\n      \"quote\": \"Top 1 percent 3.4 20.5 -51,140 -2.3 30.3\",\n      \"role\": \"contradicts\",\n      \"verified\": true,\n      \"checked_by\": \"our fetch\"\n    },\n    {\n      \"url\": \"https://taxpolicycenter.org/sites/default/files/publication/150816/2001641_distributional_analysis_of_the_conference_agreement_for_the_tax_cuts_and_jobs_act_0.pdf\",\n      \"publisher\": \"Urban-Brookings Tax Policy Center\",\n      \"published\": \"2017-12-18\",\n      \"quote\": \"In 2018, taxes would be reduced by about $1,600 on average, increasing after-tax incomes 2.2 percent (table 1).\",\n      \"role\": \"context\",\n      \"verified\": true,\n      \"checked_by\": \"our fetch\"\n    },\n    {\n      \"url\": \"https://taxpolicycenter.org/sites/default/files/publication/150816/2001641_distributional_analysis_of_the_conference_agreement_for_the_tax_cuts_and_jobs_act_0.pdf\",\n      \"publisher\": \"Urban-Brookings Tax Policy Center\",\n      \"published\": \"2017-12-18\",\n      \"quote\": \"would receive an average cut of $51,000, or 3.4 percent of after-tax income.\",\n      \"role\": \"context\",\n      \"verified\": true,\n      \"checked_by\": \"our fetch\"\n    },\n    {\n      \"url\": \"https://taxpolicycenter.org/sites/default/files/publication/155349/2018.06.08_tcja_summary_paper_final.pdf\",\n      \"publisher\": \"Urban-Brookings Tax Policy Center\",\n      \"published\": \"2018-06-08\",\n      \"quote\": \"The top 1 percent will receive 83 percent of the total benefit, with\",\n      \"role\": \"context\",\n      \"verified\": true,\n      \"checked_by\": \"our fetch\"\n    },\n    {\n      \"url\": \"https://taxpolicycenter.org/taxvox/three-numbers-know-about-tcja-2018\",\n      \"publisher\": \"Urban-Brookings Tax Policy Center (TaxVox)\",\n      \"published\": \"2019-04 (approx.)\",\n      \"quote\": \"Middle-income households paid an average of about $900 less, and the top one percent got an average tax cut of $51,000.\",\n      \"role\": \"context\",\n      \"verified\": true,\n      \"checked_by\": \"model fetch\"\n    }\n  ]\n}"
+ }
+]

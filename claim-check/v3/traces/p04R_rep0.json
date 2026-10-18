@@ -1,0 +1,195 @@
+[
+ {
+  "role": "system",
+  "content": "You are the claim checker for fACTUAL, a news app with no human editor. Nobody reviews your\nanswer before readers see it, so accuracy matters more than completeness.\n\nHow to work:\n1. Decide first whether the claim is about facts or about values. A values claim (what should\n   happen, what matters more) gets the verdict \"Values\" and needs no evidence.\n2. For a factual claim, search for primary sources: the agency dataset, the official count, the\n   study itself, the court filing. News outlets are not evidence; use them only to find the primary\n   source.\n3. Find the NEWEST release of every dataset you use. Search explicitly for a newer release before\n   relying on a figure, and say in newest_data what you checked. Today's date is 2026-10-18.\n4. Use only what you read in pages you retrieved during this task. Do not use facts from memory,\n   even ones you are sure of. If you could not retrieve support for a point, leave it out.\n5. Every evidence quote must be copied word for word from the page at that exact URL. Code will\n   re-read the page and drop any quote it cannot find. Quote the sentence that carries the number.\n6. Every number you write in \"finding\" must appear in one of your quotes.\n7. Write \"steelman\" first: the strongest honest reason a reasonable person believes the claim.\n   Never mock. Rate the claim, never the person or group who says it.\n\nThe verdict rules below are fACTUAL's published method. Follow them exactly.\n\n# Verdicts\n\nEvery checked claim gets exactly one of four verdicts. Each one is always shown as a glyph and a\nword, never as color alone.\n\n## The test\n\n**Is the claim true as stated, checked against the newest evidence?**\n\nThere is one test, and no claim gets an exception to it. \"The newest evidence\" means the latest release\nof each dataset, found by a freshness check at the time the claim is checked.\n\n| Verdict | Means |\n| --- | --- |\n| Holds up | True as stated, on the newest evidence. |\n| Missing context | True as stated, but it leaves out something that changes the picture. |\n| Doesn't hold up | Not true as stated. Overstated and out-of-date claims count. |\n| Unproven | Not enough evidence either way, yet. |\n\n## Tie-breakers\n\n- **Overstated is Doesn't hold up.** \"Measles cases are at an all-time high\" is not true as stated,\n  even though 2025 had the most cases in over 30 years.\n- **Out of date is Doesn't hold up.** \"Only half a percent of people are transgender\" is not true as\n  stated: the newest Williams Institute estimate is 0.8% of U.S. adults. Someone repeating an older\n  figure is not lying, so the steelman says where the old figure came from.\n- **Missing context needs the claim to be true as stated.** It is for claims that are accurate but\n  leave out something that changes the picture, such as a total with no rate.\n- **Mixed evidence is Unproven,** and the text says \"The evidence is mixed.\" Never force certainty.\n- **A forecast is Unproven.** A prediction stated as fact (\"this would save money\", \"this will cost\n  a million jobs\") cannot be checked yet. It carries the reasoning flag \"Forecast, not a finding\" and\n  shows the range of credible estimates.\n- **Doesn't hold up needs two model families to agree.** If they disagree, the claim publishes as\n  Unproven.\n\n## How every check reads\n\n1. **Why this sounds right.** The steelman comes first, before the verdict.\n2. **The verdict,** glyph and word.\n3. **What the evidence shows.** The rationale never opens with a word that sounds like a verdict\n   (\"Out of date\", \"Yes\", \"Wrong\").\n4. **Based on,** naming the sources and their release dates.\n\nClaims are rated. People and groups never are.\n\n## Outlets are not evidence\n\nA verdict rests on primary sources: the dataset, the study, the filing, the official count. No news\noutlet's reporting settles a verdict, whichever side it leans.\n\nOutlets appear in two places instead:\n\n- **Coverage.** Which outlets covered the story, read from their own feeds over the same 48 hours.\n- **Also reported by.** When an outlet's article states the same verified fact, the check lists it,\n  for example \"Also reported by Fox News, CNN and MS NOW.\" Code confirms the figure or quote appears\n  in that article. Readers can see the fact is not one side's fact.\n\n## Values are not verdicts\n\nSome disagreements are about what matters more, not what is true. Those get no verdict. They go\nin \"Still open\" and are left to the reader.\n"
+ },
+ {
+  "role": "user",
+  "content": "Check this claim:\n\n\"Only about half a percent of Americans are transgender.\"\n\nReturn the JSON object described by the schema."
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"import json\\nqs=[\\\"Williams Institute how many adults and youth identify as transgender in the United States\\\",\\\"Williams Institute transgender population estimate 2025\\\",\\\"Williams Institute transgender population estimate 2026\\\",\\\"Gallup LGBTQ identification transgender percent 2026\\\"]\\nfor q in qs:\\n    r=await web_search({\\\"query\\\":q})\\n    print(\\\"==\\\",q)\\n    for x in r[:6]:\\n        print(x.get('title'),x.get('url'),x.get('page_age'))\\n        print(x.get('content','')[:300].replace(\\\"\\\\n\\\",\\\" \\\"))\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_search",
+  "content": "{\n  \"query\": \"Williams Institute how many adults and youth identify as transgender in the United States\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "search results:\nhttps://williamsinstitute.law.ucla.edu/press/trans-pop-estimates-press-release/\nhttps://www.yahoo.com/news/articles/heres-many-trans-adults-kids-175146988.html\nhttps://www.catholicnewsagency.com/news/266333/new-report-shows-1-percent-of-us-population-identifies-as-transgender\nhttps://williamsinstitute.law.ucla.edu/wp-content/uploads/Trans-Pop-Update-Jun-2022.pdf\nhttps://thehill.com/homenews/lgbtq/5462128-transgender-americans-population-williams-institute/\nhttps://williamsinstitute.law.ucla.edu/wp-content/uploads/Trans-Pop-Update-Aug-2025.pdf\nhttps://factually.co/fact-checks/society/size-of-trans-population-in-us-832773\nhttps://appliedsciencecommons.net/artifacts/23657437/trans-pop-update-aug-2025/24557317/\nhttps://link.axios.com/click/31553181.99/aHR0cHM6Ly93aWxsaWFtc2luc3RpdHV0ZS5sYXcudWNsYS5lZHUvcHVibGljYXRpb25zL3RyYW5zLWFkdWx0cy11bml0ZWQtc3RhdGVzLz91dG1fc291cmNlPW5ld3NsZXR0ZXImdXRtX21lZGl1bT1lbWFpbCZ1dG1fY2FtcGFpZ249c2VuZHRvX2xvY2FsbmV3c2xldHRlcnRlc3Qmc3RyZWFtPXRvcA/62b8cd589d2f587427054b63Be3927820\nhttps://www.yahoo.com/news/articles/1-30-u-teens-identify-190900182.html"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"r=await web_search({\\\"query\\\":qs[0]})\\nprint(type(r), str(r)[:1000])\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_search",
+  "content": "{\n  \"query\": \"Williams Institute how many adults and youth identify as transgender in the United States\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "search results:\nhttps://williamsinstitute.law.ucla.edu/press/trans-pop-estimates-press-release/\nhttps://www.yahoo.com/news/articles/heres-many-trans-adults-kids-175146988.html\nhttps://williamsinstitute.law.ucla.edu/wp-content/uploads/Trans-Pop-Update-Jun-2022.pdf\nhttps://thehill.com/homenews/lgbtq/5462128-transgender-americans-population-williams-institute/\nhttps://www.ewtnnews.com/world/us/new-report-shows-1-percent-of-us-population-identifies-as-transgender\nhttps://williamsinstitute.law.ucla.edu/wp-content/uploads/Trans-Pop-Update-Aug-2025.pdf\nhttps://factually.co/fact-checks/society/size-of-trans-population-in-us-832773\nhttps://appliedsciencecommons.net/artifacts/23657437/trans-pop-update-aug-2025/24557317/\nhttps://link.axios.com/click/31553181.99/aHR0cHM6Ly93aWxsaWFtc2luc3RpdHV0ZS5sYXcudWNsYS5lZHUvcHVibGljYXRpb25zL3RyYW5zLWFkdWx0cy11bml0ZWQtc3RhdGVzLz91dG1fc291cmNlPW5ld3NsZXR0ZXImdXRtX21lZGl1bT1lbWFpbCZ1dG1fY2FtcGFpZ249c2VuZHRvX2xvY2FsbmV3c2xldHRlcnRlc3Qmc3RyZWFtPXRvcA/62b8cd589d2f587427054b63Be3927820\nhttps://www.yahoo.com/news/articles/1-30-u-teens-identify-190900182.html"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"for q in qs:\\n    r=json.loads(await web_search({\\\"query\\\":q}))\\n    print(\\\"==\\\",q)\\n    for x in r[:6]:\\n        print(x.get('title'),x.get('url'),x.get('page_age'))\\n        print(x.get('content','')[:400].replace(\\\"\\\\n\\\",\\\" \\\"))\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_search",
+  "content": "{\n  \"query\": \"Williams Institute how many adults and youth identify as transgender in the United States\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "search results:\nhttps://williamsinstitute.law.ucla.edu/press/trans-pop-estimates-press-release/\nhttps://www.yahoo.com/news/articles/heres-many-trans-adults-kids-175146988.html\nhttps://williamsinstitute.law.ucla.edu/wp-content/uploads/Trans-Pop-Update-Jun-2022.pdf\nhttps://thehill.com/homenews/lgbtq/5462128-transgender-americans-population-williams-institute/\nhttps://www.ewtnnews.com/world/us/new-report-shows-1-percent-of-us-population-identifies-as-transgender\nhttps://williamsinstitute.law.ucla.edu/wp-content/uploads/Trans-Pop-Update-Aug-2025.pdf\nhttps://factually.co/fact-checks/society/size-of-trans-population-in-us-832773\nhttps://appliedsciencecommons.net/artifacts/23657437/trans-pop-update-aug-2025/24557317/\nhttps://link.axios.com/click/31553181.99/aHR0cHM6Ly93aWxsaWFtc2luc3RpdHV0ZS5sYXcudWNsYS5lZHUvcHVibGljYXRpb25zL3RyYW5zLWFkdWx0cy11bml0ZWQtc3RhdGVzLz91dG1fc291cmNlPW5ld3NsZXR0ZXImdXRtX21lZGl1bT1lbWFpbCZ1dG1fY2FtcGFpZ249c2VuZHRvX2xvY2FsbmV3c2xldHRlcnRlc3Qmc3RyZWFtPXRvcA/62b8cd589d2f587427054b63Be3927820\nhttps://www.yahoo.com/news/articles/1-30-u-teens-identify-190900182.html"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_search",
+  "content": "{\n  \"query\": \"Williams Institute transgender population estimate 2025\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "search results:\nhttps://williamsinstitute.law.ucla.edu/press/trans-pop-estimates-press-release/\nhttps://www.catholicnewsagency.com/news/266333/new-report-shows-1-percent-of-us-population-identifies-as-transgender\nhttps://x.com/WilliamsPolicy/status/1958148622144659818\nhttps://williamsinstitute.law.ucla.edu/wp-content/uploads/Trans-Pop-Update-Aug-2025.pdf\nhttps://www.advocate.com/news/how-many-trans-people-us\nhttps://factually.co/fact-checks/society/trans-population-united-states-estimates-a56904\nhttps://factually.co/fact-checks/society/size-of-trans-population-in-us-832773\nhttps://appliedsciencecommons.net/artifacts/23657437/trans-pop-update-aug-2025/24557317/\nhttps://williamsinstitute.law.ucla.edu/press/new-estimate-2-8-million-people-aged-13-and-older-identify-as-transgender-in-the-us"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_search",
+  "content": "{\n  \"query\": \"Williams Institute transgender population estimate 2026\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "search results:\nhttps://williamsinstitute.law.ucla.edu/press/trans-pop-estimates-press-release/\nhttps://www.catholicnewsagency.com/news/266333/new-report-shows-1-percent-of-us-population-identifies-as-transgender\nhttps://williamsinstitute.law.ucla.edu/subpopulations/transgender-people/\nhttps://x.com/WilliamsPolicy/status/1958148622144659818\nhttps://en.wikipedia.org/wiki/LGBTQ_demographics_of_the_United_States\nhttps://www.advocate.com/news/how-many-trans-people-us\nhttps://factually.co/fact-checks/society/size-of-trans-population-in-us-832773\nhttps://ictnews.org/politics/election-2026/an-attack-on-all-peoples-bodily-autonomy-is-on-the-washington-state-ballot\nhttps://williamsinstitute.law.ucla.edu/press/new-estimate-2-8-million-people-aged-13-and-older-identify-as-transgender-in-the-us\nhttps://williamsinstitute.law.ucla.edu/events/trans-people-us-webinar/"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_search",
+  "content": "{\n  \"query\": \"Gallup LGBTQ identification transgender percent 2026\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "search results:\nhttps://www.metroweekly.com/2026/02/lgbtq-identification-gallup-2025/\nhttps://news.gallup.com/poll/702206/lgbtq-identification-holds.aspx\nhttps://news.gallup.com/poll/332522/percentage-americans-lgbt.aspx\nhttps://www.advocate.com/news/lgbtq-population-9-percent-2025\nhttps://research.lifeway.com/2026/04/08/lgbtq-identification-flat-overall-still-growing-among-gen-z/\nhttps://sethjmeyer.substack.com/p/gallups-poll-on-lgbtqia-identification\nhttps://thehill.com/homenews/lgbtq/5155381-lgbtq-10-percent-gallup-gay-trans-queer/\nhttps://news.gallup.com/poll/611864/lgbtq-identification.aspx\nhttps://www.lgbtqnation.com/2026/02/9-of-americans-identify-as-lgbtq/\nhttps://goodfaithmedia.org/gallup-releases-latest-data-on-lgbtq-identity/"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"urls=[\\\"https://williamsinstitute.law.ucla.edu/press/trans-pop-estimates-press-release/\\\",\\\"https://news.gallup.com/poll/702206/lgbtq-identification-holds.aspx\\\",\\\"https://williamsinstitute.law.ucla.edu/wp-content/uploads/Trans-Pop-Update-Jun-2022.pdf\\\",\\\"https://williamsinstitute.law.ucla.edu/wp-content/uploads/Trans-Pop-Update-Aug-2025.pdf\\\"]\\npages={}\\nfor u in urls:\\n    r=await web_fetch({\\\"url\\\":u})\\n    if isinstance(r,str): r=json.loads(r)\\n    if isinstance(r,list): r=r[0]\\n    pages[u]=r.get('content','')\\n    print(u,len(pages[u]),r.get('error_code'))\\nimport re\\ndef grep(u,pat,w=250):\\n    c=pages[u]\\n    for m in re.finditer(pat,c):\\n        print('...',c[max(0,m.start()-w):m.end()+w].replace(\\\"\\\\n\\\",\\\" \\\"),'\\\\n')\\ngrep(urls[0],r\\\"0\\\\.8%|released in 2016\\\")\\ngrep(urls[1],r\\\"transgender|1\\\\.1%\\\")\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_fetch",
+  "content": "{\n  \"url\": \"https://williamsinstitute.law.ucla.edu/press/trans-pop-estimates-press-release/\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "fetched https://williamsinstitute.law.ucla.edu/press/trans-pop-estimates-press-release/ (12969 chars)"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_fetch",
+  "content": "{\n  \"url\": \"https://news.gallup.com/poll/702206/lgbtq-identification-holds.aspx\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "fetched https://news.gallup.com/poll/702206/lgbtq-identification-holds.aspx (41098 chars)"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_fetch",
+  "content": "{\n  \"url\": \"https://williamsinstitute.law.ucla.edu/wp-content/uploads/Trans-Pop-Update-Jun-2022.pdf\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "fetched https://williamsinstitute.law.ucla.edu/wp-content/uploads/Trans-Pop-Update-Jun-2022.pdf (5118900 chars)"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_fetch",
+  "content": "{\n  \"url\": \"https://williamsinstitute.law.ucla.edu/wp-content/uploads/Trans-Pop-Update-Aug-2025.pdf\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "fetched https://williamsinstitute.law.ucla.edu/wp-content/uploads/Trans-Pop-Update-Aug-2025.pdf (5781612 chars)"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"for u in urls:\\n    r=await web_fetch({\\\"url\\\":u})\\n    if isinstance(r,str): r=json.loads(r)\\n    if isinstance(r,list): r=r[0]\\n    c=r.get('content')\\n    print(u, type(c), str(r)[:300] if not isinstance(c,str) else '')\\n    if isinstance(c,dict): c=json.dumps(c)\\n    pages[u]=c or ''\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_fetch",
+  "content": "{\n  \"url\": \"https://williamsinstitute.law.ucla.edu/press/trans-pop-estimates-press-release/\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "fetched https://williamsinstitute.law.ucla.edu/press/trans-pop-estimates-press-release/ (12969 chars)"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_fetch",
+  "content": "{\n  \"url\": \"https://news.gallup.com/poll/702206/lgbtq-identification-holds.aspx\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "fetched https://news.gallup.com/poll/702206/lgbtq-identification-holds.aspx (41098 chars)"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_fetch",
+  "content": "{\n  \"url\": \"https://williamsinstitute.law.ucla.edu/wp-content/uploads/Trans-Pop-Update-Jun-2022.pdf\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "fetched https://williamsinstitute.law.ucla.edu/wp-content/uploads/Trans-Pop-Update-Jun-2022.pdf (5118900 chars)"
+ },
+ {
+  "role": "tool_call",
+  "name": "web_fetch",
+  "content": "{\n  \"url\": \"https://williamsinstitute.law.ucla.edu/wp-content/uploads/Trans-Pop-Update-Aug-2025.pdf\"\n}"
+ },
+ {
+  "role": "tool_result",
+  "content": "fetched https://williamsinstitute.law.ucla.edu/wp-content/uploads/Trans-Pop-Update-Aug-2025.pdf (5781612 chars)"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"import base64,io\\nfrom pypdf import PdfReader\\nfor u in urls:\\n    r=await web_fetch({\\\"url\\\":u})\\n    if isinstance(r,str): r=json.loads(r)\\n    if isinstance(r,list): r=r[0]\\n    s=r['content']['source']\\n    if s['type']=='text': pages[u]=s['data']\\n    else:\\n        rd=PdfReader(io.BytesIO(base64.b64decode(s['data'])))\\n        pages[u]=\\\"\\\\n\\\".join(p.extract_text() for p in rd.pages)\\n    print(u,len(pages[u]))\\ngrep(urls[0],r\\\"0\\\\.8%|released in 2016\\\")\\ngrep(urls[1],r\\\"transgender\\\")\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"print({u:len(v) for u,v in pages.items()})\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"for u in urls:\\n    d=json.loads(pages[u]); s=d['source']\\n    if s['type']=='text': pages[u]=s['data']\\n    else:\\n        try:\\n            rd=PdfReader(io.BytesIO(base64.b64decode(s['data'])))\\n            pages[u]=\\\"\\\\n\\\".join((p.extract_text() or '') for p in rd.pages[:6])\\n        except Exception as e: print(e)\\n    print(u,len(pages[u]))\\ngrep(urls[0],r\\\"0\\\\.8%|released in 2016\\\")\\ngrep(urls[1],r\\\"transgender\\\",150)\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"grep(urls[1],r\\\"1\\\\.1%|Trans\\\",200)\\ngrep(urls[0],r\\\"2016, 2017|latest in a series|percentage and number of all adults\\\",300)\\ngrep(urls[2],r\\\"0\\\\.5%|0\\\\.6%\\\",250)\\ngrep(urls[3],r\\\"0\\\\.8%|1\\\\.0% of those\\\",200)\"\n}"
+ },
+ {
+  "role": "tool_call",
+  "name": "code_execution",
+  "content": "{\n  \"code\": \"qs2=[(urls[0],\\\"This includes about 724,000 youth aged 13 to 17 (3.3% of youth) and around 2.1 million adults aged 18 and older (0.8% of adults).\\\"),\\n(urls[0],\\\"Results show that the percentage and number of all adults who identify as transgender in the U.S. have remained fairly consistent over time.\\\"),\\n(urls[1],\\\"Meanwhile, 17% of LGBTQ+ adults identify as gay, 16% as lesbian and 12% as transgender, each representing between 1% and 2% of all U.S. adults.\\\"),\\n(urls[2],\\\"Among U.S. adults, 0.5% (about 1.3 million adults) identify as transgender.\\\"),\\n(urls[3],\\\"Our latest estimate does not significantly differ from\\\"),\\n(urls[0],\\\"Approximately 2.8 million people aged 13 and older\\u20141.0% of the U.S. population in that age group\\u2014identify as transgender\\\")]\\nfor u,q in qs2: print(q in pages[u])\\ngrep(urls[1],r\\\"February 16, 2026\\\",60)\"\n}"
+ },
+ {
+  "role": "assistant",
+  "content": "{\"fact_or_values\":\"fact\",\"verdict\":\"Doesn't hold up\",\"steelman\":\"The figure was the official estimate until recently. The Williams Institute's June 2022 report, which used CDC survey data from 2017 to 2020, put the share of U.S. adults who identify as transgender at 0.5%, or about 1.3 million people. Anyone citing that widely reported number was repeating what was then the main estimate.\",\"finding\":\"The newest Williams Institute estimate, released in August 2025 and based on CDC survey data from 2021 to 2023, finds that about 2.1 million U.S. adults identify as transgender. That is 0.8% of adults. Counting everyone aged 13 and older, the share is 1.0%, about 2.8 million people. Among youth aged 13 to 17 it is 3.3%. The 'half a percent' figure comes from the Institute's earlier June 2022 report, which estimated 0.5% of adults, about 1.3 million. The Institute says its newest adult estimate does not differ significantly from its earlier ones, and that the adult share has stayed fairly steady over time. But the published figure is now 0.8%, not about half a percent. Gallup's February 2026 survey report also puts the share higher, saying transgender adults make up between 1% and 2% of all U.S. adults. Both newest sources put the share well above half a percent, so the claim is out of date as stated.\",\"reasoning_flags\":[],\"newest_data\":\"This check relies on the Williams Institute report 'How Many Adults and Youth Identify as Transgender in the United States?' (August 2025, CDC BRFSS 2021-2023 and YRBS 2021 and 2023 data) and Gallup's 'LGBTQ+ Identification Holds at 9% in U.S.' (February 16, 2026, 2025 survey data). The Williams press release calls the August 2025 report the latest in its series, after earlier releases in 2016, 2017 and 2022. Searches for Williams Institute transgender estimates from 2025 and 2026 found no newer release. A search for Gallup's 2026 figures returned the February 2026 report. The search results also listed a Gallup overview page marked as updated June 1, 2026. I could not open that page before reaching the tool limit, so it is not used here.\",\"evidence\":[{\"url\":\"https://williamsinstitute.law.ucla.edu/press/trans-pop-estimates-press-release/\",\"publisher\":\"Williams Institute, UCLA School of Law\",\"published\":\"2025-08-20\",\"quote\":\"This includes about 724,000 youth aged 13 to 17 (3.3% of youth) and around 2.1 million adults aged 18 and older (0.8% of adults).\",\"role\":\"contradicts\"},{\"url\":\"https://williamsinstitute.law.ucla.edu/press/trans-pop-estimates-press-release/\",\"publisher\":\"Williams Institute, UCLA School of Law\",\"published\":\"2025-08-20\",\"quote\":\"Approximately 2.8 million people aged 13 and older\u20141.0% of the U.S. population in that age group\u2014identify as transgender\",\"role\":\"contradicts\"},{\"url\":\"https://williamsinstitute.law.ucla.edu/wp-content/uploads/Trans-Pop-Update-Jun-2022.pdf\",\"publisher\":\"Williams Institute, UCLA School of Law\",\"published\":\"2022-06\",\"quote\":\"Among U.S. adults, 0.5% (about 1.3 million adults) identify as transgender.\",\"role\":\"context\"},{\"url\":\"https://williamsinstitute.law.ucla.edu/press/trans-pop-estimates-press-release/\",\"publisher\":\"Williams Institute, UCLA School of Law\",\"published\":\"2025-08-20\",\"quote\":\"Results show that the percentage and number of all adults who identify as transgender in the U.S. have remained fairly consistent over time.\",\"role\":\"context\"},{\"url\":\"https://williamsinstitute.law.ucla.edu/wp-content/uploads/Trans-Pop-Update-Aug-2025.pdf\",\"publisher\":\"Williams Institute, UCLA School of Law\",\"published\":\"2025-08\",\"quote\":\"Our latest estimate does not significantly differ from\",\"role\":\"context\"},{\"url\":\"https://news.gallup.com/poll/702206/lgbtq-identification-holds.aspx\",\"publisher\":\"Gallup\",\"published\":\"2026-02-16\",\"quote\":\"Meanwhile, 17% of LGBTQ+ adults identify as gay, 16% as lesbian and 12% as transgender, each representing between 1% and 2% of all U.S. adults.\",\"role\":\"contradicts\"}]}"
+ },
+ {
+  "role": "assistant",
+  "name": "evidence check",
+  "content": "{\n  \"verdict_from_model\": \"Doesn't hold up\",\n  \"verdict_after_check\": \"Doesn't hold up\",\n  \"guard_notes\": [],\n  \"numbers_unsourced\": [],\n  \"evidence\": [\n    {\n      \"url\": \"https://williamsinstitute.law.ucla.edu/press/trans-pop-estimates-press-release/\",\n      \"publisher\": \"Williams Institute, UCLA School of Law\",\n      \"published\": \"2025-08-20\",\n      \"quote\": \"This includes about 724,000 youth aged 13 to 17 (3.3% of youth) and around 2.1 million adults aged 18 and older (0.8% of adults).\",\n      \"role\": \"contradicts\",\n      \"verified\": true,\n      \"checked_by\": \"model fetch\"\n    },\n    {\n      \"url\": \"https://williamsinstitute.law.ucla.edu/press/trans-pop-estimates-press-release/\",\n      \"publisher\": \"Williams Institute, UCLA School of Law\",\n      \"published\": \"2025-08-20\",\n      \"quote\": \"Approximately 2.8 million people aged 13 and older\\u20141.0% of the U.S. population in that age group\\u2014identify as transgender\",\n      \"role\": \"contradicts\",\n      \"verified\": true,\n      \"checked_by\": \"model fetch\"\n    },\n    {\n      \"url\": \"https://williamsinstitute.law.ucla.edu/wp-content/uploads/Trans-Pop-Update-Jun-2022.pdf\",\n      \"publisher\": \"Williams Institute, UCLA School of Law\",\n      \"published\": \"2022-06\",\n      \"quote\": \"Among U.S. adults, 0.5% (about 1.3 million adults) identify as transgender.\",\n      \"role\": \"context\",\n      \"verified\": true,\n      \"checked_by\": \"our fetch\"\n    },\n    {\n      \"url\": \"https://williamsinstitute.law.ucla.edu/press/trans-pop-estimates-press-release/\",\n      \"publisher\": \"Williams Institute, UCLA School of Law\",\n      \"published\": \"2025-08-20\",\n      \"quote\": \"Results show that the percentage and number of all adults who identify as transgender in the U.S. have remained fairly consistent over time.\",\n      \"role\": \"context\",\n      \"verified\": true,\n      \"checked_by\": \"model fetch\"\n    },\n    {\n      \"url\": \"https://williamsinstitute.law.ucla.edu/wp-content/uploads/Trans-Pop-Update-Aug-2025.pdf\",\n      \"publisher\": \"Williams Institute, UCLA School of Law\",\n      \"published\": \"2025-08\",\n      \"quote\": \"Our latest estimate does not significantly differ from\",\n      \"role\": \"context\",\n      \"verified\": true,\n      \"checked_by\": \"our fetch\"\n    },\n    {\n      \"url\": \"https://news.gallup.com/poll/702206/lgbtq-identification-holds.aspx\",\n      \"publisher\": \"Gallup\",\n      \"published\": \"2026-02-16\",\n      \"quote\": \"Meanwhile, 17% of LGBTQ+ adults identify as gay, 16% as lesbian and 12% as transgender, each representing between 1% and 2% of all U.S. adults.\",\n      \"role\": \"contradicts\",\n      \"verified\": true,\n      \"checked_by\": \"model fetch\"\n    }\n  ]\n}"
+ }
+]
