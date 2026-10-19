@@ -58,6 +58,8 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           # Tested 2026-10-19 on 20 claims: 19/20 right, no false Doesn't hold up, ~35% fewer searches.
           FACTUAL_MAX_SEARCHES: "6"
+          # The Texas demo's time capsule is written under this key (investors' link only). Unset: not written.
+          CAPSULE_KEY: ${{ secrets.CAPSULE_KEY }}
         run: python pipeline/check_today.py
 
       - name: Keep a copy of this run's output
@@ -108,3 +110,5 @@ jobs:
           for f in data/archive/*.json; do if [ -f "$f" ]; then put "$f" "data/archive/$(basename "$f")"; fi; done
           # Link-preview pages, one per story on Today (written by check_today.py), at s/<sid>.html.
           for f in data/share/*.html; do if [ -f "$f" ]; then put "$f" "s/$(basename "$f")"; fi; done
+          # The Texas time capsule (written only until the edition's cutoff; after it, the server keeps the last).
+          if [ -d data/capsule ]; then find data/capsule -type f | while read -r f; do put "$f" "$f"; done; fi

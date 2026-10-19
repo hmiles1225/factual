@@ -551,3 +551,14 @@ details[open] > summary::after { content: "\2212"; }
   .topic-section { scroll-margin-top: calc(var(--mast-h) + 24px); }
   .topic-section:first-child { margin-top: 28px; }
 }
+
+/* Local politics (the Texas demo) and its time capsule */
+.settings-local { margin-top: 12px !important; padding-top: 12px !important; border-top: 1px solid var(--line) !important; }
+.settings-local[hidden] { display: none; }
+.settings-local legend { float: left; width: 100%; }
+.settings-local label { clear: both; }
+.settings-local select, .pick-state { min-height: 40px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surf-2); color: var(--ink); font: 500 0.9375rem/1 var(--sans); }
+.settings-local select:disabled { opacity: 0.5; }
+.pick-state { min-height: 44px; }
+.capsule-bar { padding: 10px var(--gutter); background: var(--brand); color: #fff; font: 400 0.875rem/1.45 var(--sans); text-align: center; }
+.capsule-bar strong { font-weight: 700; }

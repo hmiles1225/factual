@@ -122,7 +122,11 @@ def fetch_outlet(feed):
 
 
 def main():
-    feeds = json.loads((ROOT / "pipeline/feeds.json").read_text())["feeds"]
+    cfg = json.loads((ROOT / "pipeline/feeds.json").read_text())
+    # A region edition (the Texas demo) reads its own outlets only until its cutoff.
+    now = datetime.now(timezone.utc)
+    live = {k for k, r in cfg.get("regions", {}).items() if now < datetime.fromisoformat(r["until"])}
+    feeds = [f for f in cfg["feeds"] if not f.get("region") or f["region"] in live]
     with ThreadPoolExecutor(max_workers=8) as pool:
         results = list(pool.map(fetch_outlet, feeds))
     articles, failed, status = [], 0, []

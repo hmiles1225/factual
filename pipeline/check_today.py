@@ -40,7 +40,7 @@ ARCHIVE_URL = "https://hestonmiles.com/factual/data/archive/"
 SITE_URL = "https://hestonmiles.com/factual/"
 # In this order: when the day's budget runs out, the sections later in the list wait. The first five are the
 # ones pre-selected for readers.
-TOPIC_QUOTAS = {"politics": 5, "elections": 3, "economy": 3, "immigration": 3, "crime": 3, "world": 3,
+TOPIC_QUOTAS = {"politics": 5, "texas": 6, "elections": 3, "economy": 3, "immigration": 3, "crime": 3, "world": 3,
                 "environment": 3, "health": 3, "tech": 3, "science": 3, "education": 3}   # Heston's calls, 2026-10-18 to -19
 EXTRA_CANDIDATES = 3             # stories tried past the quota, in rank order, when one won't summarize
 ARTICLES_PER_BRIEF = 14          # picked round-robin by side, so one side can't fill the brief
@@ -790,6 +790,7 @@ def main():
                    "gemini_free_searches": GEMINI_FREE_SEARCHES, "search_usd": SEARCH_USD, "new_claims_per_day": new_per_day}
     (ROOT / "data/library.json").write_text(json.dumps(lib, indent=1))
     stories_path.write_text(json.dumps(data, indent=1))
+    write_capsule(data, lib)
     (ROOT / "data/.summarized").write_text(datetime.now(timezone.utc).isoformat())  # deploy publishes stories.json only with this
     print(f"check_today: {state['new_this_scan']} new claims · today anthropic ${spend["anthropic_usd"]:.2f}/{anthropic_cap:.2f} · "
           f"gemini ${spend['gemini_usd']:.2f}/{gemini_cap:.2f}, searches {spend['gemini_searches']} ({GEMINI_FREE_SEARCHES} free), "
@@ -1012,6 +1013,31 @@ def write_share_pages(stories):
 </head><body><p><a href="{e(story_url)}">{e(st['working_title'])}</a></p></body></html>
 """)
     print(f"  share pages: {len(stories)}")
+
+
+def write_capsule(data, lib):
+    """The Texas demo's time capsule: until the edition's cutoff, every scan saves the whole of Today (all
+    sections, Texas Election included) with the checks it shows, at data/capsule/<key>/tx.json. After the
+    cutoff nothing is written, so the last copy on the server is the capsule. The key is a repo secret
+    (CAPSULE_KEY), never in the code: only a link that carries it can open the capsule."""
+    key = os.environ.get("CAPSULE_KEY", "").strip()
+    tx = (data.get("regions") or {}).get("tx")
+    if not tx or not re.fullmatch(r"[A-Za-z0-9_-]{16,64}", key):
+        return
+    if datetime.now(timezone.utc) >= datetime.fromisoformat(tx["until"]):
+        print("  capsule: frozen (past the Texas cutoff); not written")
+        return
+    on = [s for s in data["stories"] if s.get("on_today")]
+    checks = {k for s in on for k in s.get("checks", [])}
+    capsule = {"edition": "tx", "frozen_at": tx["until"], "scanned_at": data["scanned_at"], "regions": data.get("regions"),
+               "feeds": data.get("feeds", []), "stories": on,
+               "library": {"claims": {k: c for k, c in lib.get("claims", {}).items() if k in checks}}}
+    folder = ROOT / "data/capsule"
+    (folder / key).mkdir(parents=True, exist_ok=True)
+    (folder / key / "tx.json").write_text(json.dumps(capsule))
+    (folder / ".htaccess").write_text("Options -Indexes\n")  # never list the folder, so the key can't be found
+    (folder / "index.html").write_text("")
+    print(f"  capsule: {len(on)} stories, {len(capsule['library']['claims'])} checks")
 
 
 _ARCHIVED = {}

@@ -122,7 +122,8 @@
    },
    "sections": [
     "https://www.breitbart.com/tech/feed/",
-    "https://www.breitbart.com/economy/feed/"
+    "https://www.breitbart.com/economy/feed/",
+    "https://www.breitbart.com/texas/feed/"
    ]
   },
   {
@@ -371,6 +372,24 @@
     "source": "AllSides Media Bias Chart, Version 12 (2026)",
     "url": "https://www.allsides.com/media-bias/media-bias-chart"
    }
+  },
+  {
+   "source": "Texas Observer",
+   "url": "https://www.texasobserver.org/feed/",
+   "region": "tx",
+   "allsides": {
+    "rating": "Lean Left",
+    "note": "AllSides rating as quoted from the outlet's AllSides page in search results on 2026-10-19 (AllSides refuses automated reads); Heston confirmed."
+   }
+  },
+  {
+   "source": "The Texan",
+   "url": "https://thetexan.news/search/?f=rss&t=article&l=50&s=start_time&sd=desc",
+   "region": "tx",
+   "allsides": {
+    "rating": "Lean Right",
+    "note": "AllSides rating as quoted from the outlet's AllSides page in search results on 2026-10-19 (AllSides refuses automated reads); Heston confirmed."
+   }
   }
  ],
  "placement_source": {
@@ -423,7 +442,20 @@
    "date": "2026-10-20",
    "change": "Economy section: added economy and business section feeds, checked live. Left: NYT Economy, CBS MoneyWatch, ABC Money, NBC Business, NPR Economy. Center: WSJ Markets and Economy, New York Post Business, The Hill Business. Right: Breitbart Economy, Epoch Times Business, Daily Mail Money, Washington Examiner Economy. No working feed: CNN Business, Daily Caller, Just the News.",
    "by": "Heston's call"
+  },
+  {
+   "date": "2026-10-19",
+   "change": "Texas edition (demo, until Nov 4 2026): added Texas Observer (Lean Left), Houston Chronicle (Center), Dallas Morning News (Center), The Texan (Lean Right) as region outlets, and Breitbart's Texas section. Texas Tribune refuses the scanner; Texas Scorecard has no AllSides or Pew rating, so it is not placed or added. Houston Chronicle and Dallas Morning News were tried and dropped the same day: their news sitemaps were days out of date.",
+   "by": "Heston's call"
   }
  ],
- "_note_allsides": "Outlets Pew did not survey are placed from AllSides Media Bias Ratings (allsides.com), read from each outlet's AllSides page on 2026-10-19: Left and Lean Left are left-leaning, Center is center, Lean Right and Right are right-leaning. AllSides is a category, not a number, so these outlets count fully toward their side but are not drawn on the Pew audience chart. Ratings AllSides itself marks as low confidence are not used (TheBlaze). Reason and The Federalist have no current AllSides page we could verify, so they stay Unplaced."
+ "_note_allsides": "Outlets Pew did not survey are placed from AllSides Media Bias Ratings (allsides.com), read from each outlet's AllSides page on 2026-10-19: Left and Lean Left are left-leaning, Center is center, Lean Right and Right are right-leaning. AllSides is a category, not a number, so these outlets count fully toward their side but are not drawn on the Pew audience chart. Ratings AllSides itself marks as low confidence are not used (TheBlaze). Reason and The Federalist have no current AllSides page we could verify, so they stay Unplaced.",
+ "regions": {
+  "tx": {
+   "name": "Texas",
+   "section": "Texas Election",
+   "until": "2026-11-04T14:00:00+00:00",
+   "_note": "Demo edition (Heston, 2026-10-19). Live until the 9am Eastern scan on Nov 4 2026 (14:00 UTC), then frozen as a time capsule. Region outlets feed only the Texas section, never the national sections, so the national 15/15 balance is unchanged."
+  }
+ }
 }

@@ -11,6 +11,7 @@ const WORDS = ["no", "one", "two", "three", "four", "five", "six", "seven", "eig
 // Today's sections. Politics moves by the day; the others are grouped over the week.
 const TOPICS = [  // in this order everywhere; the first five are followed until a reader chooses
   { key: "politics", name: "Politics", span: "Today" },
+  { key: "texas", name: "Texas Election", span: "This week", local: "TX" },  // only with Local politics set to Texas
   { key: "elections", name: "Elections", span: "Today" },
   { key: "economy", name: "Economy", span: "Today" },
   { key: "immigration", name: "Immigration", span: "Today" },
@@ -22,16 +23,38 @@ const TOPICS = [  // in this order everywhere; the first five are followed until
   { key: "science", name: "Science", span: "This week" },
   { key: "education", name: "Education", span: "This week" },
 ];
-const DEFAULT_TOPICS = TOPICS.slice(0, 5).map(t => t.key);
+const NATIONAL = TOPICS.filter(t => !t.local);
+const DEFAULT_TOPICS = NATIONAL.slice(0, 5).map(t => t.key);
+// Local politics: a state the reader picked (this device), or ?state=xx for this visit. The Texas demo
+// edition runs to its cutoff; after it, ?state=tx with the investors' key opens the time capsule.
+const STATES = { AL: "Alabama", AK: "Alaska", AZ: "Arizona", AR: "Arkansas", CA: "California", CO: "Colorado", CT: "Connecticut", DE: "Delaware",
+  DC: "District of Columbia", FL: "Florida", GA: "Georgia", HI: "Hawaii", ID: "Idaho", IL: "Illinois", IN: "Indiana", IA: "Iowa", KS: "Kansas",
+  KY: "Kentucky", LA: "Louisiana", ME: "Maine", MD: "Maryland", MA: "Massachusetts", MI: "Michigan", MN: "Minnesota", MS: "Mississippi",
+  MO: "Missouri", MT: "Montana", NE: "Nebraska", NV: "Nevada", NH: "New Hampshire", NJ: "New Jersey", NM: "New Mexico", NY: "New York",
+  NC: "North Carolina", ND: "North Dakota", OH: "Ohio", OK: "Oklahoma", OR: "Oregon", PA: "Pennsylvania", RI: "Rhode Island", SC: "South Carolina",
+  SD: "South Dakota", TN: "Tennessee", TX: "Texas", UT: "Utah", VT: "Vermont", VA: "Virginia", WA: "Washington", WV: "West Virginia",
+  WI: "Wisconsin", WY: "Wyoming" };
+let LOCAL_ON = false;   // set once the scan says a region edition is running (or a time capsule is open)
+let CAPSULE = null;     // the frozen edition being shown, if any
+const sget = (k, store) => { try { return (store || localStorage).getItem(k); } catch (e) { return null; } };
+const sset = (k, v, store) => { try { if (v == null) (store || localStorage).removeItem(k); else (store || localStorage).setItem(k, v); } catch (e) {} };
+const localState = () => sget("fx-state", sessionStorage) || sget("fx-local");
 // The sections a reader follows, kept on this device only. null until they have chosen.
 function chosenTopics() {
   try {
     const v = JSON.parse(localStorage.getItem("fx-topics"));
-    if (Array.isArray(v)) { const keys = v.filter(k => TOPICS.some(t => t.key === k)); if (keys.length) return keys; }
+    if (Array.isArray(v)) { const keys = v.filter(k => NATIONAL.some(t => t.key === k)); if (keys.length) return keys; }
   } catch (e) {}
   return null;
 }
-const followedTopics = () => chosenTopics() || DEFAULT_TOPICS;
+function followedTopics() {
+  const base = chosenTopics() || DEFAULT_TOPICS;
+  const st = localState();
+  if (!LOCAL_ON || !st) return base;
+  // The local section sits right under Politics (or first, if Politics isn't followed).
+  const at = base.indexOf("politics") + 1;
+  return [...base.slice(0, at), st === "TX" ? "texas" : "local", ...base.slice(at)];
+}
 function saveTopics(keys) {
   try { localStorage.setItem("fx-topics", JSON.stringify(keys)); } catch (e) {}
   document.dispatchEvent(new CustomEvent("fx-topics"));
@@ -354,7 +377,8 @@ function storyCard(story, i, data, isLead) {
 function renderToday(data) {
   const feeds = data.feeds || [];
   $("scanline").replaceChildren(el("span", "sr-only", "Live. Updated "), document.createTextNode(clock(data.scanned_at)),
-    el("span", "scan-extra", ` \u00b7 ${feeds.filter(f => f.ok).length} outlets`));
+    el("span", "scan-extra", ` \u00b7 ${feeds.filter(f => f.ok && !f.region).length} outlets`));
+  if (CAPSULE) $("scanline").replaceChildren(el("span", "sr-only", "Frozen. "), document.createTextNode("Time capsule"));
 
   TODAY = data;
   drawToday();
@@ -383,8 +407,11 @@ function drawToday() {
   $("sections").replaceChildren();
   drawPicker();
   let total = 0;
-  for (const t of TOPICS.filter(t => follow.has(t.key))) {
-    const ranked = data.stories.filter(s => shownToday(s) && s.topic === t.key);
+  const order = TOPICS.filter(t => follow.has(t.key));
+  if (follow.has("local")) order.splice(order.findIndex(t => t.key === "politics") + 1, 0, { key: "local", name: `${STATES[localState()] || "Local"} Election`, span: "" });
+  for (const t of order) {
+    // A national story that is mostly the same articles as a Texas race shows once, in Texas Election.
+    const ranked = data.stories.filter(s => shownToday(s) && s.topic === t.key && !(follow.has("texas") && s.also_in === "texas"));
     // Newest first, all of it (Heston): a ranked lead jumped around as later scans found more outlets.
     const list = ranked.sort((a, b) => brokeAt(b) - brokeAt(a));
     total += list.length;
@@ -399,7 +426,7 @@ function drawToday() {
       list.forEach((s, i) => ol.append(storyCard(s, i, data, i === 0)));  // every section opens with a full-width lead
       sec.append(ol);
     } else {
-      sec.append(el("p", "topic-empty", `Nothing yet that both sides are covering.`));
+      sec.append(el("p", "topic-empty", t.key === "local" ? `Local coverage is a Texas-only demo for now.` : `Nothing yet that both sides are covering.`));
     }
     $("sections").append(sec);
     const link = el("a", list.length ? "strip-link" : "strip-link is-empty", t.name);
@@ -451,7 +478,7 @@ function spyStrip() {
 // First visit: choose what to follow, the first five already chosen. Not a modal: Today shows underneath.
 function drawPicker() {
   const old = $("picker");
-  if (chosenTopics()) { if (old) old.remove(); return; }
+  if (chosenTopics() || CAPSULE || sget("fx-state", sessionStorage)) { if (old) old.remove(); return; }  // a demo link skips it
   if (old) return;
   const box = el("section", "picker");
   box.id = "picker";
@@ -460,20 +487,37 @@ function drawPicker() {
   h.id = "picker-title";
   box.append(h, el("p", "picker-sub", "Choose any. You can change this any time in Settings."));
   const grid = el("div", "picker-grid");
-  for (const t of TOPICS) {
+  for (const t of NATIONAL) {
     const lab = el("label", "pick");
     const box2 = el("input");
     box2.type = "checkbox"; box2.value = t.key; box2.checked = DEFAULT_TOPICS.includes(t.key);
     lab.append(box2, el("span", null, t.name));
     grid.append(lab);
   }
+  // Local politics, with its state, while an edition runs. Unchecked by default.
+  let pickState = null;
+  if (LOCAL_ON) {
+    const lab = el("label", "pick pick-local");
+    const cb = el("input");
+    cb.type = "checkbox"; cb.value = "__local";
+    pickState = el("select", "pick-state");
+    pickState.setAttribute("aria-label", "Your state");
+    pickState.append(el("option", null, "Local politics: choose a state"));
+    pickState.firstChild.value = "";
+    for (const [code, name] of Object.entries(STATES)) { const o = el("option", null, name); o.value = code; pickState.append(o); }
+    pickState.addEventListener("change", () => { cb.checked = !!pickState.value; });
+    cb.addEventListener("change", () => { if (cb.checked && !pickState.value) pickState.focus(); });
+    lab.append(cb, el("span", null, "Local politics"));
+    grid.append(lab, pickState);
+  }
   const done = el("button", "picker-done", "Show my stories");
   done.type = "button";
   const sync = () => { done.disabled = !grid.querySelector("input:checked"); };
   grid.addEventListener("change", sync);
   done.addEventListener("click", () => {
-    const keys = [...grid.querySelectorAll("input:checked")].map(i => i.value);
+    const keys = [...grid.querySelectorAll("input:checked")].map(i => i.value).filter(k => k !== "__local");
     if (!keys.length) return;
+    if (pickState) sset("fx-local", grid.querySelector('input[value="__local"]').checked && pickState.value ? pickState.value : null);
     box.remove();
     saveTopics(keys);
     $("topic-nav").querySelector("a, button").focus();
@@ -487,12 +531,14 @@ function renderHow(data) {
   const feeds = (data && data.feeds) || [];
   if (!$("feeds")) return;
   for (const [k, name] of [["left", "Left-leaning"], ["center", "Center"], ["right", "Right-leaning"], ["unplaced", "Not placed"]]) {
-    const list = feeds.filter(f => f.ok && (f.side || "unplaced") === k).map(f => f.source).sort();
+    const list = feeds.filter(f => f.ok && !f.region && (f.side || "unplaced") === k).map(f => f.source).sort();
     if (!list.length) continue;
     $("feeds").append(el("p", "feeds-side", `${name} \u00b7 ${list.length}`), el("p", "feeds-list", list.join(", ")));
   }
   const down = feeds.filter(f => !f.ok).map(f => f.source);
   if (down.length) $("feeds").append(el("p", "feeds-down", `Not reachable in the last scan: ${down.join(", ")}.`));
+  const tx = feeds.filter(f => f.ok && f.region === "tx");
+  if (tx.length) $("feeds").append(el("p", "feeds-down", `Texas Election (a demo edition, until Nov 4) also reads ${tx.map(f => `${f.source} (AllSides ${f.allsides})`).join(", ")} and Breitbart\u2019s Texas section, alongside the national outlets\u2019 Texas coverage. Texas outlets never feed the national sections.`));
 }
 
 /* ---------- Common ground: shared ground, and what we get wrong about each other ---------- */
@@ -665,7 +711,7 @@ function initSettings() {
   // Topics: which sections Today shows. At least one stays on.
   const fs = el("fieldset", "settings-topics");
   fs.append(el("legend", null, "Topics"));
-  for (const t of TOPICS) {
+  for (const t of NATIONAL) {
     const lab = el("label");
     const cb = el("input");
     cb.type = "checkbox"; cb.name = "topic"; cb.value = t.key;
@@ -673,10 +719,39 @@ function initSettings() {
     fs.append(lab);
   }
   form.append(fs);
+  // Local politics: off until a reader turns it on and picks a state. Shown only while an edition runs.
+  const loc = el("fieldset", "settings-local");
+  loc.hidden = true;
+  loc.append(el("legend", null, "Local politics"));
+  const lab = el("label");
+  const on = el("input");
+  on.type = "checkbox"; on.name = "local-on";
+  lab.append(on, document.createTextNode(" Show my state"));
+  const sel = el("select");
+  sel.name = "local-state";
+  sel.setAttribute("aria-label", "State");
+  sel.append(el("option", null, "Choose a state"));
+  sel.firstChild.value = "";
+  for (const [code, name] of Object.entries(STATES)) { const o = el("option", null, name); o.value = code; sel.append(o); }
+  loc.append(lab, sel);
+  form.append(loc);
+  const syncLocal = () => { loc.hidden = !LOCAL_ON; const st = localState(); on.checked = !!st; sel.value = st || ""; sel.disabled = !st && !on.checked; };
+  syncLocal();
+  document.addEventListener("fx-local", syncLocal);
+  document.addEventListener("fx-topics", syncLocal);
+  const saveLocal = () => {
+    sset("fx-state", null, sessionStorage);  // a choice in Settings replaces a ?state= visit
+    sset("fx-local", on.checked && sel.value ? sel.value : null);
+    sel.disabled = !on.checked;
+    document.dispatchEvent(new CustomEvent("fx-topics"));
+  };
+  on.addEventListener("change", () => { sel.disabled = !on.checked; if (on.checked && !sel.value) sel.focus(); saveLocal(); });
+  sel.addEventListener("change", () => { if (sel.value) on.checked = true; saveLocal(); });
   const syncTopics = () => { const f = new Set(followedTopics()); fs.querySelectorAll("input").forEach(i => { i.checked = f.has(i.value); }); };
   syncTopics();
   document.addEventListener("fx-topics", syncTopics);
   form.addEventListener("change", e => {
+    if (e.target.name === "local-on" || e.target.name === "local-state") return;  // handled above
     if (e.target.name === "topic") {
       const keys = [...fs.querySelectorAll("input:checked")].map(i => i.value);
       if (!keys.length) { e.target.checked = true; return; }
@@ -1049,7 +1124,7 @@ function renderStory(data) {
   }
 
   // 4. Who covered it.
-  const placed = (data.feeds || []).filter(f => f.ok && (f.lean != null || ALLSIDES[f.source]));
+  const placed = (data.feeds || []).filter(f => f.ok && (f.lean != null || ALLSIDES[f.source]) && (!f.region || f.region === story.region));
   if (placed.length) {
     const sc = el("section", "block");
     sc.id = "outlets";
@@ -1296,6 +1371,11 @@ const fromArchive = (arch, day) => ({ stories: Object.values(arch.stories || {})
 
 async function load() {
   const page = document.body.dataset.page;
+  // ?state=tx turns on that state's local section for this visit (never saved); &key=... is the investors'
+  // key to the Texas time capsule. Both last for the visit, so links inside the site keep them.
+  const q = new URLSearchParams(location.search);
+  if (/^[a-z]{2}$/i.test(q.get("state") || "") && STATES[q.get("state").toUpperCase()]) sset("fx-state", q.get("state").toUpperCase(), sessionStorage);
+  if (/^[A-Za-z0-9_-]{16,64}$/.test(q.get("key") || "")) sset("fx-capsule", q.get("key"), sessionStorage);
   initSettings();
   initHeader();
   initToTop();
@@ -1311,8 +1391,22 @@ async function load() {
   if (page === "archive") return renderArchive(await getJSON("data/archive/index.json", true));
   if (page === "common") return renderCommon(await getJSON("common-ground.json"));
   if (page === "how") return renderHow(await getJSON("data/stories.json", true));
-  const library = getJSON("data/library.json", true);
   const params = new URLSearchParams(location.search);
+  // The time capsule: after the Texas edition's cutoff, the investors' key opens Today as it stood then.
+  const key = sget("fx-capsule", sessionStorage);
+  if (key) {
+    const cap = await getJSON(`data/capsule/${key}/tx.json`, true);
+    if (cap && Date.now() >= Date.parse(cap.frozen_at) && (page !== "story" || cap.stories.some(s => s.sid === params.get("s")))) {
+      CAPSULE = cap;
+      LOCAL_ON = true;
+      if (!localState()) sset("fx-state", "TX", sessionStorage);
+      document.dispatchEvent(new CustomEvent("fx-local"));
+      capsuleBar(cap);
+      const data = { stories: cap.stories, feeds: cap.feeds, scanned_at: cap.scanned_at, regions: cap.regions, library: cap.library };
+      return (page === "story" ? renderStory : renderToday)(data);
+    }
+  }
+  const library = getJSON("data/library.json", true);
   let data;
   // A link with a day (from the archive or a shared link) shows the live story while it is still on
   // Today, and that day's archived copy once it has left.
@@ -1331,7 +1425,22 @@ async function load() {
     }
   }
   data.library = await library;
+  const tx = data.regions && data.regions.tx;
+  LOCAL_ON = !!tx && Date.now() < Date.parse(tx.until) && !data.archiveDay;
+  document.dispatchEvent(new CustomEvent("fx-local"));
   (page === "story" ? renderStory : renderToday)(data);
+}
+
+// The time capsule says what it is, under the header, on every page it shows.
+function capsuleBar(cap) {
+  const when = new Date(cap.frozen_at).toLocaleString("en-US", { timeZone: "America/New_York", month: "long", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+  const bar = el("div", "capsule-bar");
+  bar.setAttribute("role", "note");
+  bar.append(el("strong", null, "Time capsule"), document.createTextNode(` \u00b7 fACTUAL\u2019s Texas Election edition as it stood on ${when} Eastern. Stories, checks and poll results are frozen.`));
+  document.querySelector(".masthead").after(bar);
+  const robots = document.createElement("meta");  // never indexed
+  robots.name = "robots"; robots.content = "noindex, nofollow";
+  document.head.append(robots);
 }
 
 load().catch(fail);

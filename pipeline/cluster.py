@@ -185,11 +185,31 @@ def previous_ids():
         req = urllib.request.Request(LIVE_STORIES, headers={"User-Agent": "fACTUAL-scan/0.1 (+https://hestonmiles.com/factual/)"})
         with urllib.request.urlopen(req, timeout=20, context=ctx) as r:
             prev = json.loads(r.read())
-        return {a["url"]: st["sid"] for st in prev.get("stories", []) if st.get("sid") for a in st["articles"]}
+        out = {}
+        for st in prev.get("stories", []):
+            for a in st.get("articles", []) if st.get("sid") else []:
+                out.setdefault(a["url"], set()).add(st["sid"])
+        return out
     except Exception as e:
         print(f"  previous scan not readable ({e}); new ids")
         return {}
 
+
+# The Texas demo edition: election coverage about Texas, from Texas outlets and national ones alike.
+TX_TEXT = re.compile(r"\b(Texas|Texan|Texans|Abbott|Paxton|Talarico|Cornyn|Dan Patrick|Austin|Houston|Dallas|San Antonio|El Paso|Fort Worth|Rio Grande)\b")
+ELECTION_TEXT = re.compile(r"\b(elections?|vote[sd]?|voters?|voting|ballots?|polls?|polling|campaign(s|ing)?|candidates?|race|ads?|attack ad|debates?|primary|runoff|midterms?|"
+                           r"turnout|Senate|governor|gubernatorial|attorney general|lieutenant governor|redistricting|congressional|GOP|Democrats?|Republicans?)\b", re.I)
+TX_SID = "tx"  # Texas story ids start with this, so they never collide with a national story's id
+# Texas Election is grouped by race, not by event: one story per race, updated through Election Day. First match
+# wins, so an article on Paxton's Senate bid is a Senate story even though he is attorney general.
+TX_RACES = [
+    ("senate", "Texas Senate race: Talarico vs. Paxton", re.compile(r"\b(Senate|Paxton|Talarico|Cornyn)\b")),
+    ("governor", "Texas governor's race", re.compile(r"\b(governor|gubernatorial|Abbott)\b", re.I)),
+    ("statewide", "Texas attorney general and lieutenant governor", re.compile(r"\b(attorney general|lieutenant governor|Dan Patrick)\b", re.I)),
+    ("house", "Texas House races and redistricting", re.compile(r"\b(redistrict\w*|congressional|district|U\.S\. House)\b", re.I)),
+    ("voting", "Voting in Texas: early voting, turnout and rules", re.compile(r"\b(early voting|turnout|ballots?|polling places?|voter rolls?|voter registration|mail-in|election officials?)\b", re.I)),
+    ("trail", "On the Texas campaign trail", re.compile(r".")),
+]
 
 ALLSIDES_SIDE = {"Left": "left", "Lean Left": "left", "Center": "center", "Lean Right": "right", "Right": "right"}
 
@@ -282,8 +302,14 @@ def main():
     def sub(ids, window):  # cluster a subset; return clusters as indices into news
         return [[ids[j] for j in m] for m in group(vectors[ids], [hours(news[i]) for i in ids], window)] if ids else []
 
+    feeds = json.loads((ROOT / "pipeline/feeds.json").read_text())
+    region_of = {f["source"]: f["region"] for f in feeds["feeds"] if f.get("region")}
+    tx = feeds.get("regions", {}).get("tx")
+    tx_live = bool(tx) and datetime.fromisoformat(scan["fetched_at"]) < datetime.fromisoformat(tx["until"])
+
     now_h = datetime.fromisoformat(scan["fetched_at"]).timestamp() / 3600
-    dated = [i for i, a in enumerate(news) if hours(a) is not None]
+    # Region outlets (the Texas demo) never feed the national sections.
+    dated = [i for i, a in enumerate(news) if hours(a) is not None and a["source"] not in region_of]
     recent = [i for i in dated if now_h - hours(news[i]) <= RECENT_HOURS]
     # The week's environment, science and health articles, sorted one by one, then grouped over the pool.
     base = (vectors @ other.T).max(axis=1)
@@ -292,15 +318,26 @@ def main():
     slow = [i for i in dated if top_topic(i) in SLOW_TOPICS and art[top_topic(i)][i] > 0]
     # Week clusters go first, so a story carried over from the last scan keeps its id in its week form.
     clusters = [(m, "week") for m in sub(slow, POOL_DAYS * 24)] + [(m, "day") for m in sub(recent, WINDOW_HOURS)]
+    # Texas Election: recent election coverage that is about Texas (or from a Texas outlet), grouped on its own.
+    if tx_live:
+        # A week of it: election stories build over days, and the demo runs to Election Day.
+        tx_ids = [i for i, a in enumerate(news) if hours(a) is not None
+                  and (a["source"] in region_of or TX_TEXT.search(text_for(a)))
+                  and (ELECTION_TEXT.search(text_for(a)) or art["elections"][i] > 0)]
+        by_race = {}
+        for i in tx_ids:
+            key = next(k for k, _, rx in TX_RACES if rx.search(text_for(news[i])))
+            by_race.setdefault(key, []).append(i)
+        clusters += [(ids, "texas:" + key) for key, ids in by_race.items()]
 
-    feeds = json.loads((ROOT / "pipeline/feeds.json").read_text())
     side = {f["source"]: side_of(f) for f in feeds["feeds"]}
     # Audience lean, 0 = all Democratic users, 1 = all Republican users (Pew), for the spectrum charts.
     lean = {f["source"]: round(f["pew"]["rep"] / (f["pew"]["rep"] + f["pew"]["dem"]), 3) for f in feeds["feeds"] if f.get("pew")}
     pew = {f["source"]: {"rep": f["pew"]["rep"], "dem": f["pew"]["dem"]} for f in feeds["feeds"] if f.get("pew")}
     allsides = {f["source"]: f["allsides"]["rating"] for f in feeds["feeds"] if not f.get("pew") and (f.get("allsides") or {}).get("rating") in ALLSIDES_SIDE}
     working = {f["source"] for f in scan.get("feeds", []) if f["ok"]}
-    roster = {k: sorted(src for src in working if side.get(src, "unplaced") == k) for k in (*SIDES, "unplaced")}
+    roster = {k: sorted(src for src in working if side.get(src, "unplaced") == k and src not in region_of) for k in (*SIDES, "unplaced")}
+    roster_tx = {k: sorted(src for src in working if side.get(src, "unplaced") == k) for k in (*SIDES, "unplaced")}  # national + Texas outlets
 
     prev_sid, used_sids = previous_ids(), set()
     stories = []
@@ -316,19 +353,25 @@ def main():
         order = [int(i) for i in np.argsort(-closeness)]
         lead = next((arts[i] for i in order if not is_media(arts[i])), arts[order[0]])
         coverage = {k: [src for src in sources if side.get(src, "unplaced") == k] for k in (*SIDES, "unplaced")}
-        shares = [len(coverage[k]) / len(roster[k]) if roster[k] else 0.0 for k in SIDES]
+        texas = span.startswith("texas")
+        race = span.split(":", 1)[1] if texas else None
+        r = roster_tx if texas else roster
+        shares = [len(coverage[k]) / len(r[k]) if r[k] else 0.0 for k in SIDES]
         # A story keeps its id from the last scan when most of its articles were in that story, so
         # links keep working and its summary is not paid for again as old articles age out.
         first = min(arts, key=lambda a: (a["published"] or "", a["url"]))
-        votes = Counter(prev_sid[a["url"]] for a in arts if a["url"] in prev_sid)
+        votes = Counter(s for a in arts for s in prev_sid.get(a["url"], ()) if s.startswith(TX_SID) == texas)
         carried = next((sid for sid, n in votes.most_common(1) if n >= max(2, 0.3 * len(arts)) and sid not in used_sids), None)
-        sid = carried or hashlib.sha1(first["url"].encode()).hexdigest()[:10]
+        sid = f"{TX_SID}-{race}" if texas else (carried or hashlib.sha1(first["url"].encode()).hexdigest()[:10])  # a race keeps one address
+        while sid in used_sids:  # a new id can match one carried from the last scan: never reuse one
+            sid = (TX_SID if texas else "") + hashlib.sha1((sid + "+").encode()).hexdigest()[:8 if texas else 10]
         used_sids.add(sid)
         stories.append({
             "_idx": idx,
             "sid": sid,
-            "span": span,
-            "working_title": lead["title"],
+            "span": "day" if texas else span,
+            "region": "tx" if texas else None,
+            "working_title": next(t for k, t, _ in TX_RACES if k == race) if texas else lead["title"],
             "outlets": len(sources),
             "sources": sources,
             "coverage": coverage,
@@ -343,19 +386,25 @@ def main():
         best = max(scores, key=scores.get)
         st["topic_scores"] = {t: round(x, 3) for t, x in scores.items()}
         st["politics_score"] = round(scores["politics"], 3)
-        st["topic"] = best if scores[best] > TOPIC_MARGIN else "other"
+        st["topic"] = "texas" if st.get("region") == "tx" else best if scores[best] > TOPIC_MARGIN else "other"
     # Slow topics come from the week pass; politics and the rest from the day pass. A day story on a slow
     # topic is kept only if the week pass did not already group its articles.
     week_urls = {a["url"] for st in stories if st["span"] == "week" and st["topic"] in SLOW_TOPICS for a in st["articles"]}
     stories = [st for st in stories if (st["span"] == "week" and st["topic"] in SLOW_TOPICS)
                or (st["span"] == "day" and not (st["topic"] in SLOW_TOPICS and any(a["url"] in week_urls for a in st["articles"])))]
+    # A national story that is mostly the same articles as a Texas one is marked, so a reader who follows the
+    # Texas section sees it once, there.
+    tx_urls = {a["url"] for st in stories if st.get("region") == "tx" for a in st["articles"]}
+    for st in stories:
+        if st.get("region") != "tx" and tx_urls and sum(a["url"] in tx_urls for a in st["articles"]) >= 0.5 * len(st["articles"]):
+            st["also_in"] = "texas"
     stories.sort(key=lambda s: (s["balance_score"], s["outlets"], len(s["articles"])), reverse=True)
     for n, st in enumerate(stories):
         st["id"] = n
         st["related"] = []
         st["related_to"] = None
         for earlier in stories[:n]:
-            if earlier["related_to"] is None and float((vectors[st["_idx"]] @ vectors[earlier["_idx"]].T).mean()) >= RELATED:
+            if earlier["related_to"] is None and (earlier.get("region") == st.get("region")) and float((vectors[st["_idx"]] @ vectors[earlier["_idx"]].T).mean()) >= RELATED:
                 st["related_to"] = earlier["id"]
                 earlier["related"].append(n)
                 break
@@ -366,12 +415,13 @@ def main():
         "articles_scanned": len(articles),
         "feeds": [{**f, "side": side.get(f["source"], "unplaced"), "lean": lean.get(f["source"]), "pew": pew.get(f["source"]),
                    "placed_by": "Pew" if f["source"] in pew else "AllSides" if allsides.get(f["source"]) else None,
-                   "allsides": allsides.get(f["source"])}
+                   "allsides": allsides.get(f["source"]), "region": region_of.get(f["source"])}
                   for f in scan.get("feeds", [])],
+        "regions": feeds.get("regions", {}),
         "method": {"model": MODEL, "threshold": THRESHOLD, "window_hours": WINDOW_HOURS, "linkage": "average", "related": RELATED,
                    "topics": {"politics": "U.S. politics and U.S. policy abroad", "elections": "Elections", "economy": "Economy",
                               "immigration": "Immigration", "crime": "Crime and justice", "world": "World", "environment": "Energy and environment",
-                              "health": "Health", "tech": "AI and tech", "science": "Science", "education": "Education"}, "topic_margin": TOPIC_MARGIN},
+                              "health": "Health", "tech": "AI and tech", "science": "Science", "education": "Education", "texas": "Texas Election (demo)"}, "topic_margin": TOPIC_MARGIN},
         "placement": {"source": feeds["placement_source"], "left_below": LEFT_BELOW, "right_above": RIGHT_ABOVE,
                       "measure": "Republican users / (Republican + Democratic users)"},
         "roster": roster,
