@@ -135,7 +135,7 @@ function spectrum(points, legend, ariaLabel) {
   // Touch has no hover, so the tooltip used to last only while a finger was held down. A tap now opens it
   // and rings the dot; it closes after TIP_MS, on a tap anywhere else, or when another dot is tapped.
   // Touching the tooltip itself restarts the time. A mouse keeps the hover behaviour.
-  const TIP_MS = 3000;
+  const TIP_MS = 5000;
   const closeTip = () => { clearTimeout(tip._t); tip.classList.remove("on"); wrap.querySelectorAll(".is-picked").forEach(n => n.classList.remove("is-picked")); };
   const holdTip = () => { clearTimeout(tip._t); tip._t = setTimeout(closeTip, TIP_MS); };
   tip.addEventListener("pointerup", e => { if (e.pointerType !== "mouse") holdTip(); });
