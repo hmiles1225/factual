@@ -225,51 +225,44 @@ function figure(img, cls, href) {
   return f;
 }
 
+// The numbers that lead every story: outlets, facts both sides report, splits, loaded words.
+function metrics(story) {
+  const b = story.brief || {};
+  const n = (b.differences || []).length;
+  return [[story.sources.length, "outlets"], [(b.agreed || []).filter(acrossSides).length, "agreed"],
+    [n, n === 1 ? "split" : "splits"], [(b.loaded || []).length, "loaded"]];
+}
+function metricRow(story, cls) {
+  const ul = el("ul", cls);
+  const tiles = cls.includes("tiles");
+  for (const [n, l] of metrics(story)) {
+    const li = el("li", l === "agreed" ? "is-agreed" : null);
+    li.append(el("span", "m-n", String(n)), document.createTextNode(" "), el("span", "m-l", l === "loaded" && !tiles ? "loaded words" : l));
+    ul.append(li);
+  }
+  return ul;
+}
+
 function storyCard(story, i, data, isLead) {
   const li = el("li", isLead ? "story story-lead" : "story");
-  // The first story in each section shows its photo, when it has one: large for the lead, a band for the others.
-  if (story.image && isLead) li.append(figure(story.image, "lead-photo", storyHref(story)));
-  else if (story.image && i === 0) li.append(figure(story.image, "card-photo", storyHref(story)));
+  // The first story in each section shows its photo, when it has one.
+  if (story.image && (isLead || i === 0)) li.append(figure(story.image, isLead ? "lead-photo" : "card-photo", storyHref(story)));
   const main = el("div", "story-main");
-  main.append(el("p", "story-num", String(i + 1).padStart(2, "0")));
+  main.append(metricRow(story, "metrics"));
   const h = el("h2", "headline");
   const a = el("a", null, story.working_title);
   a.href = storyHref(story);
   h.append(a);
   main.append(h);
-
-  const agreed = (story.brief && story.brief.agreed) || [];
-  main.append(...storyProse(agreed, isLead ? 4 : 3, "gist"));
+  main.append(...storyProse((story.brief && story.brief.agreed) || [], isLead ? 2 : 1, "gist"));
   li.append(main);
-
-  const rows = decided(story, data.library).slice(0, 2);
-  if (rows.length) {
-    const ul = el("ul", "checks");
-    for (const { c } of rows) {
-      const r = el("li");
-      const txt = el("div");
-      txt.append(el("span", "check-claim", c.claim));
-      const src = sourcesLine(c);
-      if (src) txt.append(src);
-      r.append(chip(c.verdict), txt);
-      ul.append(r);
-    }
-    li.append(ul);
-  }
-
-  const foot = el("div", "story-foot");
-  foot.append(el("span", "sources-line", `${plural(story.articles.length, "article", "articles")} · ${listNames(story.sources, 3)}`));
-  const more = el("a", "read-more", "Read the story");
-  more.href = storyHref(story);
-  foot.append(more);
-  li.append(foot);
   return li;
 }
 
 function renderToday(data) {
   const feeds = data.feeds || [];
-  $("today-date").textContent = new Date(data.scanned_at).toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
-  $("scanline").textContent = `Updated ${clock(data.scanned_at)}`;
+  $("scanline").replaceChildren(el("span", "sr-only", "Live. Updated "), document.createTextNode(clock(data.scanned_at)),
+    el("span", "scan-extra", ` \u00b7 ${feeds.filter(f => f.ok).length} outlets`));
 
   // Only stories with a written summary, chosen by the scan for Today (covered by both sides). Never a bare headline.
   const shown = s => s.related_to === null && s.on_today && s.brief && (s.brief.agreed || []).some(acrossSides);
@@ -281,7 +274,7 @@ function renderToday(data) {
     const sec = el("section", "topic-section");
     sec.id = t.key;
     const head = el("div", "topic-head");
-    head.append(el("h2", "topic-name", t.name), el("p", "topic-span", `${t.span} \u00b7 ${list.length ? `${WORDS[list.length] || list.length} ${list.length === 1 ? "story" : "stories"}` : "none yet"}`));
+    head.append(el("h2", "topic-name", t.name), el("p", "topic-span", `${t.span} \u00b7 ${list.length}`));
     sec.append(head);
     if (list.length) {
       const ol = el("ol", "stories");
@@ -289,7 +282,7 @@ function renderToday(data) {
       list.forEach((s, i) => ol.append(storyCard(s, i, data, t.key === "politics" && i === 0)));
       sec.append(ol);
     } else {
-      sec.append(el("p", "topic-empty", `No ${t.name.toLowerCase()} story ${t.span === "Today" ? "today" : "this week"} has been covered by both left- and right-leaning outlets yet. We only summarize stories both sides are covering.`));
+      sec.append(el("p", "topic-empty", `Nothing yet that both sides are covering.`));
     }
     $("sections").append(sec);
     const chip = el("a", "topic-chip", t.name);
@@ -297,7 +290,7 @@ function renderToday(data) {
     chip.append(el("span", "topic-count", String(list.length)));
     nav.append(chip);
   }
-  $("today-count").textContent = WORDS[total] || String(total);
+  if ($("today-count")) $("today-count").textContent = WORDS[total] || String(total);
 
   const ok = feeds.filter(f => f.ok).sort((a, b) => a.source.localeCompare(b.source));
   $("feeds").append(el("p", "feeds-list", ok.map(f => f.source).join(", ")));
@@ -437,27 +430,34 @@ function withCrux(node, text, crux) {
 
 // One disagreement: the point, whether it is partisan, and each side's account with where its outlets
 // sit and its claim checked. The more left-leaning account always comes first, so left reads left.
+// Short side tag for a group of outlets, from where they are placed: LEFT, RIGHT, LEFT + CENTER, BOTH.
+function sideTagText(outlets) {
+  const has = sidesIn(outlets);
+  if (has.has("left") && has.has("right")) return "Both sides";
+  const parts = ["left", "center", "right"].filter(k => has.has(k)).map(k => k[0].toUpperCase() + k.slice(1));
+  return parts.length ? parts.join(" + ") : "Unrated";
+}
+
+// One disagreement: the point, then each side's account in its own panel, its claim checked inside it.
+// The more left-leaning account always comes first, so left reads left.
 function differenceBlock(d, lib, leanOf) {
   const art = el("article", "diff");
   art.append(el("h3", "diff-point", d.point));
   const pos = d.positions.slice(0, 2).sort((p, q) => (meanLean(p.outlets, leanOf) ?? 0.5) - (meanLean(q.outlets, leanOf) ?? 0.5));
   const line = pos.length === 2 ? splitLine(pos, leanOf) : null;
-  if (line) art.append(el("p", "diff-split", line));
-  const names = pos.map(p => sideName(p.outlets, leanOf));
-  const heads = names.length === 2 && names[0] === names[1] ? [`Some ${names[0].toLowerCase()}`, `Other ${names[1].toLowerCase()}`] : names;
+  if (line && !/^This one splits/.test(line)) art.append(el("p", "diff-split", line));
+  let tags = pos.map(p => sideTagText(p.outlets));
+  if (tags.length === 2 && tags[0] === tags[1]) tags = tags.map((t, i) => `${t} \u00b7 ${i ? "B" : "A"}`);
   const cols = el("div", "sides");
   pos.forEach((p, i) => {
     const col = el("div", "side");
-    const head = el("p", "side-head");
-    head.append(el("span", "side-tag", heads[i]), document.createTextNode(" say"));
-    col.append(head, withCrux(el("p", "side-says"), p.says, p.crux));
-    const pts = p.outlets.filter(o => leanOf[o] != null || ALLSIDES[o]).map(o => ({ name: o, lean: leanOf[o], rating: ALLSIDES[o], style: "fill", note: heads[i].toLowerCase() }));
-    if (pts.length) col.append(spectrum(pts, null, `${heads[i]}: ${p.outlets.join(", ")}, placed by audience`));
+    col.append(el("p", "side-tag", tags[i]));
+    col.append(withCrux(el("p", "side-says"), p.says, p.crux));
     col.append(el("p", "side-outlets", listNames(p.outlets, 4)));
     const c = claimOf(lib, p.check);
     if (c) col.append(claimDetails(c));
-    else if (p.checkable_claim) col.append(el("p", "side-pending", "Checking this claim against primary sources."));
-    else if (p.no_claim) col.append(el("p", "side-pending", "Nothing to fact-check here: this account is about emphasis or framing, not a factual claim."));
+    else if (p.checkable_claim) col.append(el("p", "side-pending", "Checking this claim."));
+    else if (p.no_claim) col.append(el("p", "side-pending", "Framing, not a factual claim."));
     cols.append(col);
   });
   art.append(cols);
@@ -503,12 +503,13 @@ function outletList(feeds, covered) {
   return det;
 }
 
-function loadedItem(t) {
-  const d = el("div", "loaded-item");
-  d.append(el("p", "loaded-term", `\u201c${t.term}\u201d`), el("p", "side-outlets", listNames(t.outlets, 4)));
-  if (t.why) d.append(el("p", "loaded-why", t.why.replace(/\.?$/, ".")));
-  if (t.neutral) d.append(el("p", "loaded-neutral", `Plainer: ${t.neutral}`));
-  return d;
+function loadedItem(t, side) {
+  const li = el("li", "loaded-item");
+  const top = el("p", "loaded-line");
+  top.append(el("span", "loaded-side", side), el("span", "sr-only", "Loaded: "), el("s", "loaded-term", t.term));
+  if (t.neutral) top.append(el("span", "loaded-arrow", " \u2192 "), el("span", "sr-only", "plainer: "), el("span", "loaded-neutral", t.neutral));
+  li.append(top, el("p", "loaded-why", `${listNames(t.outlets, 3)}${t.why ? ". " + t.why.replace(/\.?$/, ".") : ""}`));
+  return li;
 }
 
 function renderStory(data) {
@@ -525,7 +526,7 @@ function renderStory(data) {
   document.title = `${story.working_title} · fACTUAL`;
   $("story-meta").textContent = `${topicName(story.topic) ? topicName(story.topic) + " \u00b7 " : ""}${data.archiveDay ? `From the archive \u00b7 ${dayName(data.archiveDay)}` : `Updated ${clock(data.scanned_at)}`}`;
   $("story-title").textContent = story.working_title;
-  $("story-sub").append(el("p", "byline", `Headline from ${lead(story).source}`));
+  $("story-sub").append(el("p", "byline", `Headline \u00b7 ${lead(story).source}`));
   if (story.image) $("story-sub").append(figure(story.image, "story-photo"));
 
   const brief = story.brief;
@@ -535,63 +536,48 @@ function renderStory(data) {
   PEW = Object.fromEntries((data.feeds || []).filter(f => f.pew).map(f => [f.source, f.pew]));
   SIDE = Object.fromEntries((data.feeds || []).map(f => [f.source, f.side]));
   ALLSIDES = Object.fromEntries((data.feeds || []).filter(f => f.lean == null && f.allsides).map(f => [f.source, f.allsides]));
-  // 1. The story: every fact several outlets confirm, both-sides facts first, one-side facts tagged.
-  // 1. The story: only facts outlets on both the left and the right report.
+  $("story-sub").querySelector(".byline").after(metricRow(story, "metrics metrics-tiles"));
+
+  // 1. Agreed: only facts outlets on both the left and the right report.
   if (agreed.some(acrossSides)) {
-    const s1 = el("section", "block story-panel");
-    s1.append(el("h2", "block-title", "The story"));
-    s1.append(...storyProse(agreed, 12, "lede"));
-    const by = [...new Set(agreed.filter(acrossSides).flatMap(f => f.reported_by))];
-    s1.append(el("p", "block-note", `Every sentence here was reported by outlets on both the left and the right (${listNames(by, 6)}), and no outlet we read contradicted any of it.`));
+    const s1 = el("section", "block");
+    s1.append(el("h2", "block-title", "Agreed \u00b7 left and right"));
+    const ul = el("ul", "facts");
+    for (const f of agreed.filter(acrossSides).slice(0, 12)) {
+      const li = el("li");
+      li.append(el("span", "fact-mark", "\u2713"), el("span", "fact-text", f.fact));
+      ul.append(li);
+    }
+    s1.append(ul);
     body.append(s1);
   }
 
-  // 2. Where left and right differ, with each side's factual claim checked where possible.
+  // 2. Splits, each side's claim checked inside its panel.
   const diffs = (brief && brief.differences) || [];
   if (diffs.length) {
     const s3 = el("section", "block");
-    s3.append(el("h2", "block-title", "Where the coverage differs"));
+    s3.append(el("h2", "block-title", diffs.length === 1 ? "Split" : `Splits \u00b7 ${diffs.length}`));
     for (const d of diffs) s3.append(differenceBlock(d, data.library, leanOf));
     body.append(s3);
-    s3.querySelectorAll(".spectrum").forEach(f => f.draw && f.draw());
   }
 
-  // Loaded language: the outlets' own charged words, side by side, each verified in their text.
-  const loaded = (brief && brief.loaded) || [];
+  // 3. Loaded words: the outlets' own charged words, left then right.
   if (brief && brief.loaded_v) {
+    const loaded = brief.loaded || [];
+    const group = t => { const p = t.sides.filter(x => x !== "unplaced"); return p.length && p.every(x => x === "left") ? "Left" : p.length && p.every(x => x === "right") ? "Right" : "Both"; };
+    const by = k => loaded.filter(t => group(t) === k);
     const sl = el("section", "block");
-    sl.append(el("h2", "block-title", "Loaded language"));
-    sl.append(el("p", "block-note lead-note", "Charged or slanted words the outlets chose themselves, not words they quoted. Each was found in that outlet's own headline, summary or opening."));
-    if (!loaded.length) {
-      sl.append(el("p", "topic-empty", "None found. Neither side's coverage of this story used charged or slanted words of its own."));
-      body.append(sl);
-    } else {
-    const groups = [["left", "Left-leaning outlets"], ["right", "Right-leaning outlets"]];
-    const group = t => { const p = t.sides.filter(x => x !== "unplaced"); return p.length && p.every(x => x === "left") ? "left" : p.length && p.every(x => x === "right") ? "right" : "mixed"; };
-    const mixed = loaded.filter(t => group(t) === "mixed");
-    const cols = el("div", "sides");
-    for (const [k, name] of groups) {
-      const col = el("div", "side");
-      const head = el("p", "side-head");
-      head.append(el("span", "side-tag", name), document.createTextNode(" wrote"));
-      col.append(head);
-      const mine = loaded.filter(t => group(t) === k);
-      if (!mine.length) col.append(el("p", "side-pending", "None found in this story's coverage."));
-      for (const t of mine) col.append(loadedItem(t));
-      cols.append(col);
-    }
-    sl.append(cols);
-    if (mixed.length) {
-      const extra = el("div", "loaded-mixed");
-      extra.append(el("p", "sub-title", "Used across outlets"));
-      for (const t of mixed) extra.append(loadedItem(t));
-      sl.append(extra);
+    sl.append(el("h2", "block-title", `Loaded words \u00b7 ${by("Left").length} left \u00b7 ${by("Right").length} right`));
+    if (!loaded.length) sl.append(el("p", "topic-empty", "None found on either side."));
+    else {
+      const ul = el("ul", "loaded-list");
+      for (const k of ["Left", "Right", "Both"]) for (const t of by(k)) ul.append(loadedItem(t, k[0] === "B" ? "L+R" : k[0]));
+      sl.append(ul);
     }
     body.append(sl);
-    }
   }
 
-  // 3. Who covered it: every outlet we read, placed by its audience; filled if it covered this story.
+  // 4. Who covered it.
   const placed = (data.feeds || []).filter(f => f.ok && (f.lean != null || ALLSIDES[f.source]));
   if (placed.length) {
     const sc = el("section", "block");
@@ -599,33 +585,31 @@ function renderStory(data) {
     const covered = new Set(story.sources);
     const fig = spectrum(placed.map(f => ({ name: f.source, lean: f.lean, rating: ALLSIDES[f.source], style: covered.has(f.source) ? "fill" : "ghost",
       note: covered.has(f.source) ? "covered this" : "did not cover this" })),
-      [["fill", "Covered this story"], ["ghost", "Did not"], ["sq", "Square: placed by AllSides rating"]],
-      `Outlets that covered this story, placed by audience: ${story.sources.join(", ")}`);
+      [["fill", "Covered"], ["ghost", "Did not"], ["sq", "AllSides-rated"]],
+      `Outlets that covered this story: ${story.sources.join(", ")}`);
     sc.append(fig);
-    const unplaced = story.sources.filter(o => leanOf[o] == null && !ALLSIDES[o]);
     const who = sideName(story.sources, leanOf);
-    if (/^(Left|Right)-leaning outlets$/.test(who)) fig.before(el("p", "diff-split", `Only ${who.toLowerCase()} covered this story.`));
-    sc.append(el("p", "block-note", `Each dot is an outlet we read. Toward the left, Democrats are more likely than Republicans to get news there; toward the right, Republicans are. Center outlets are used about equally (Pew Research Center, 2025). Squares are outlets Pew did not survey, placed at their AllSides rating (Left, Lean Left, Center, Lean Right, Right).${unplaced.length ? ` Also covered by ${listNames(unplaced, 4)}, which neither rates.` : ""}`));
+    if (/^(Left|Right)-leaning outlets$/.test(who)) fig.before(el("p", "diff-split", `Only ${who.toLowerCase()} covered this.`));
     sc.append(outletList(placed, covered));
     body.append(sc);
     fig.draw();
   }
 
-  // Values questions are the reader's to decide.
+  // 5. Values questions.
   const values = (brief && brief.values_questions) || [];
   if (values.length) {
     const sv = el("section", "block");
-    sv.append(el("h2", "block-title", "Yours to decide"));
+    sv.append(el("h2", "block-title", "Your call"));
     const ul = el("ul", "open-list");
     for (const q of values) { const li = el("li"); li.append(el("p", "open-point", q)); ul.append(li); }
-    sv.append(ul, el("p", "block-note", "Values questions get no verdict. The facts above are the same whichever way you answer."));
+    sv.append(ul);
     body.append(sv);
   }
 
-  // 4. Sources, folded away.
+  // 6. Sources, the disclosure, and the method.
   const s4 = el("section", "block");
   const det = el("details", "sources-all");
-  det.append(el("summary", null, `Sources: ${plural(story.articles.length, "article", "articles")} from ${listNames(story.sources, 3)}`));
+  det.append(el("summary", null, `Sources \u00b7 ${plural(story.articles.length, "article", "articles")}`));
   const ul = el("ul", "articles");
   for (const art of [...story.articles].sort((a, b) => a.source.localeCompare(b.source))) {
     const li = el("li");
@@ -637,7 +621,12 @@ function renderStory(data) {
   }
   det.append(ul);
   s4.append(det);
-  s4.append(el("p", "block-note", "Summaries and checks are written by AI from the coverage and from primary sources. No person reviews them before they appear."));
+  const foot = el("p", "disclosure");
+  foot.append(document.createTextNode("Written and checked by AI. No human review. "));
+  const m = el("a", null, "Method \u2192");
+  m.href = "./#about";
+  foot.append(m);
+  s4.append(foot);
   body.append(s4);
 }
 

@@ -1,2 +1,3 @@
-Schibsted Grotesk, Newsreader and IBM Plex Mono are licensed under the SIL Open Font
+Barlow, Barlow Semi Condensed and JetBrains Mono are licensed under the SIL Open Font
 License 1.1 (https://openfontlicense.org). Latin subsets, from Google Fonts.
+The app icon is drawn from Newsreader Italic (also SIL OFL 1.1), as an outline.
