@@ -186,6 +186,21 @@ For each term give every article number that uses it, why it is loaded, and a ne
 Coverage:
 {coverage}"""
 
+POLL_VERSION = "1"
+POLL_SCHEMA = _item({"polls": {"type": "array", "items": _item({
+    "question": {"type": "string", "description": "The question as a reader would answer it, neutral, at most 25 words."},
+    "options": {"type": "array", "items": {"type": "string"}, "description": "2 to 4 answers, each at most 12 words."}},
+    ["question", "options"])}}, ["polls"])
+POLL_PROMPT = """Turn each question below into a poll for readers of a news story. For each, write:
+- question: the same question, worded so a reader can pick one answer. Keep its meaning. Neutral words.
+- options: 2 to 4 answers that are mutually exclusive, that together cover the main positions people across
+  the political spectrum actually hold, and that are worded with equal care, length and respect. No answer
+  may lead, mock or sound more reasonable than another by its wording. Don't add "Not sure": we add it.
+
+Story: {title}
+
+Questions:
+{questions}"""
 IMAGE_TITLES_SCHEMA = _item({"titles": {"type": "array", "items": {"type": "string"}}}, ["titles"])
 IMAGE_TITLES_PROMPT = """Suggest up to 3 exact English Wikipedia article titles whose main picture would illustrate this news
 story for a general reader, best first. Prefer the specific thing the story is about: a virus or other
@@ -622,6 +637,25 @@ def main():
                 brief["loaded_v"] = LOADED_VERSION
             except Exception as e:
                 print(f"  loaded-language pass failed: {e}")
+        # Reader polls: each values question with 2 to 4 neutral answers, plus "Not sure". Once per summary.
+        # The id includes a hash of the wording, so a reworded poll is a new poll, never a mix of two.
+        if brief.get("values_questions") and brief.get("poll_v") != POLL_VERSION and gemini_ok():
+            try:
+                out, usage = gemini_json(POLL_PROMPT.replace("{title}", story["working_title"])
+                                         .replace("{questions}", "\n".join(f"- {q}" for q in brief["values_questions"])), POLL_SCHEMA, "low")
+                charge_gemini(usage)
+                polls = []
+                for p in out.get("polls", [])[:2]:
+                    q = (p.get("question") or "").strip()
+                    opts = [o.strip() for o in p.get("options", []) if o.strip() and len(o.strip()) <= 100][:4]
+                    if not q or len(q) > 220 or len(opts) < 2 or len({o.casefold() for o in opts}) < len(opts):
+                        continue
+                    opts.append("Not sure")
+                    pid = f"{story['sid']}-{hashlib.sha1(json.dumps([q, opts]).encode()).hexdigest()[:8]}"
+                    polls.append({"id": pid, "question": q, "options": opts})
+                brief["polls"], brief["poll_v"] = polls, POLL_VERSION
+            except Exception as e:
+                print(f"  poll pass failed: {e}")
         # Each loaded term is shown in its sentence. Found in code, in text we already read; no model call.
         if any("quotes" not in t for t in brief.get("loaded") or []):
             try:

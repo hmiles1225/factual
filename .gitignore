@@ -4,3 +4,7 @@ config.local.json
 __pycache__/
 .venv/
 .claude/
+
+# Reader poll votes live only on the server
+web/api/data/*.sqlite*
+web/api/data/salt

@@ -1,0 +1,8 @@
+# WordPress's Wordfence prepends its firewall to every PHP file under public_html, and it fails outside
+# WordPress (every PHP file here returned an empty 500). Not in this folder.
+<IfModule LiteSpeed>
+php_value auto_prepend_file none
+</IfModule>
+<IfModule lsapi_module>
+php_value auto_prepend_file none
+</IfModule>

@@ -950,9 +950,13 @@ function renderStory(data) {
   if (values.length) {
     const sv = el("section", "block");
     sv.append(el("h2", "block-title", "Your call"));
-    const ul = el("ul", "open-list");
-    for (const q of values) { const li = el("li"); li.append(el("p", "open-point", q)); ul.append(li); }
-    sv.append(ul);
+    const polls = (brief && brief.polls) || [];
+    if (polls.length) for (const p of polls) sv.append(pollCard(p));
+    else {
+      const ul = el("ul", "open-list");
+      for (const q of values) { const li = el("li"); li.append(el("p", "open-point", q)); ul.append(li); }
+      sv.append(ul);
+    }
     body.append(sv);
   }
 
@@ -1023,6 +1027,85 @@ function shareButton(story, data, label) {
     b._t = setTimeout(() => { word.textContent = label; said.textContent = ""; b.classList.remove("is-done"); }, 2200);
   });
   return b;
+}
+
+/* ---------- Reader polls: vote once, then see the results; 24 hours, then results only ---------- */
+const POLL_API = "api/vote.php";
+function closesIn(t) {
+  const m = Math.max(1, Math.round((t * 1000 - Date.now()) / 60000));
+  return m < 60 ? `Closes in ${m} min` : `Closes in ${Math.round(m / 60)}h`;
+}
+
+function pollCard(p) {
+  const card = el("div", "poll");
+  const n = p.options.length;
+  const call = body => fetch(body ? POLL_API : `${POLL_API}?poll=${encodeURIComponent(p.id)}&n=${n}`, body
+    ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ poll: p.id, n, ...body }), credentials: "same-origin" }
+    : { credentials: "same-origin", cache: "no-store" }).then(r => r.json());
+  const form = el("form", "poll-form");
+  const fs = el("fieldset");
+  fs.append(el("legend", "poll-q", p.question));
+  p.options.forEach((o, i) => {
+    const lab = el("label", "poll-opt");
+    const r = el("input");
+    r.type = "radio"; r.name = `poll-${p.id}`; r.value = String(i);
+    lab.append(r, el("span", null, o));
+    fs.append(lab);
+  });
+  const vote = el("button", "poll-vote", "Vote");
+  vote.type = "submit"; vote.disabled = true;
+  const note = el("p", "poll-note");
+  note.setAttribute("aria-live", "polite");
+  fs.addEventListener("change", () => { vote.disabled = false; });
+  form.append(fs, vote, note);
+  card.append(form);
+  const show = st => {
+    if (st && st.counts) { card.replaceChildren(pollResults(p, st)); return true; }
+    return false;
+  };
+  call().then(st => {
+    if (show(st)) return;
+    if (!st || st.error) { note.textContent = "Voting isn\u2019t open for this question."; fs.disabled = true; vote.hidden = true; return; }
+    note.textContent = `${closesIn(st.closes)}. Vote to see the results.`;
+  }).catch(() => { note.textContent = "Voting isn\u2019t available right now."; fs.disabled = true; vote.hidden = true; });
+  form.addEventListener("submit", e => {
+    e.preventDefault();
+    const pick = form.querySelector("input:checked");
+    if (!pick) return;
+    vote.disabled = true; vote.textContent = "Voting\u2026";
+    call({ choice: +pick.value }).then(st => {
+      if (show(st)) { card.querySelector(".poll-results").focus(); return; }
+      vote.disabled = false; vote.textContent = "Vote";
+      note.textContent = st && st.error === "too many votes from this network" ? "This network has already sent the most votes we take for this question."
+        : st && st.error === "closed" ? "Voting has closed." : "Your vote didn\u2019t go through. Try again.";
+    }).catch(() => { vote.disabled = false; vote.textContent = "Vote"; note.textContent = "Your vote didn\u2019t go through. Try again."; });
+  });
+  return card;
+}
+
+function pollResults(p, st) {
+  const box = el("div", "poll-results");
+  box.tabIndex = -1;
+  box.append(el("p", "poll-q", p.question));
+  const total = st.total || 0;
+  const ul = el("ul", "poll-bars");
+  p.options.forEach((o, i) => {
+    const pct = total ? Math.round((st.counts[i] / total) * 100) : 0;
+    const li = el("li", st.mine === i ? "poll-bar is-mine" : "poll-bar");
+    const head = el("div", "poll-bar-head");
+    const label = el("span", "poll-bar-label", o);
+    if (st.mine === i) label.append(el("span", "poll-mine", " \u00b7 Your vote"));
+    head.append(label, el("span", "poll-bar-pct", `${pct}%`));
+    const track = el("div", "poll-track");
+    track.setAttribute("aria-hidden", "true");
+    const fill = el("div", "poll-fill");
+    fill.style.width = `${pct}%`;
+    track.append(fill);
+    li.append(head, track);
+    ul.append(li);
+  });
+  box.append(ul, el("p", "poll-meta", `${total} ${total === 1 ? "vote" : "votes"} \u00b7 ${st.open ? closesIn(st.closes) : "Voting closed"} \u00b7 Reader votes, one per device. Not a scientific poll.`));
+  return box;
 }
 
 // Back to where the reader came from: the story's section on Today (or the archive). Coming from Today,
