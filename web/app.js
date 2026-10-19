@@ -402,16 +402,48 @@ function drawToday() {
       sec.append(el("p", "topic-empty", `Nothing yet that both sides are covering.`));
     }
     $("sections").append(sec);
-    const chip = el("a", "topic-chip", t.name);
-    chip.href = `#${t.key}`;
-    chip.append(el("span", "topic-count", String(list.length)));
-    nav.append(chip);
+    const link = el("a", list.length ? "strip-link" : "strip-link is-empty", t.name);
+    link.href = `#${t.key}`;
+    link.dataset.key = t.key;
+    link.append(el("span", "strip-n", String(list.length)));
+    nav.append(link);
   }
-  const edit = el("button", "topic-chip topic-edit", "Edit topics");
+  const edit = el("button", "strip-edit");
   edit.type = "button";
+  edit.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="16" cy="7" r="2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="10" cy="17" r="2" fill="none" stroke="currentColor" stroke-width="2"/></svg>';
+  edit.append(document.createTextNode("Edit"));
+  edit.setAttribute("aria-label", "Edit topics");
   edit.addEventListener("click", () => openSettings("topic"));
   nav.append(edit);
+  spyStrip();
   if ($("today-count")) $("today-count").textContent = WORDS[total] || String(total);
+}
+
+// The section strip stays pinned while reading and underlines the section in view (scroll-spy). The
+// active name is kept visible inside the strip, which scrolls sideways on a phone.
+let spyOn = false;
+function spyStrip() {
+  const nav = $("topic-nav");
+  const update = () => {
+    const links = [...nav.querySelectorAll(".strip-link")];
+    if (!links.length) return;
+    const line = nav.getBoundingClientRect().bottom + 24;  // a section jumped to sits 60px down (scroll-margin)
+    let active = links[0];
+    for (const a of links) { const sec = document.getElementById(a.dataset.key); if (sec && sec.getBoundingClientRect().top <= line) active = a; }
+    for (const a of links) { if (a === active) a.setAttribute("aria-current", "location"); else a.removeAttribute("aria-current"); }
+    const l = active.offsetLeft, r = l + active.offsetWidth;
+    if (l < nav.scrollLeft + 16 || r > nav.scrollLeft + nav.clientWidth - 16) nav.scrollTo({ left: Math.max(0, l - 16), behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    nav.classList.toggle("more-right", nav.scrollLeft + nav.clientWidth < nav.scrollWidth - 4);
+    nav.classList.toggle("more-left", nav.scrollLeft > 4);
+  };
+  update();
+  if (spyOn) return;
+  spyOn = true;
+  let queued = false;
+  const later = () => { if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; update(); }); } };
+  window.addEventListener("scroll", later, { passive: true });
+  window.addEventListener("resize", later);
+  nav.addEventListener("scroll", () => { nav.classList.toggle("more-right", nav.scrollLeft + nav.clientWidth < nav.scrollWidth - 4); nav.classList.toggle("more-left", nav.scrollLeft > 4); }, { passive: true });
 }
 
 // First visit: choose what to follow, the first five already chosen. Not a modal: Today shows underneath.
@@ -620,7 +652,7 @@ function initSettings() {
   const close = (refocus) => { const d = document.querySelector(".settings[open]"); if (d) { d.open = false; if (refocus) d.querySelector("summary").focus(); } };
   document.addEventListener("keydown", e => { if (e.key === "Escape") close(true); });
   // A click or tap anywhere else closes it, and so does tabbing out of it.
-  document.addEventListener("pointerdown", e => { const d = document.querySelector(".settings[open]"); if (d && !d.contains(e.target) && !e.target.closest(".topic-edit")) close(false); });
+  document.addEventListener("pointerdown", e => { const d = document.querySelector(".settings[open]"); if (d && !d.contains(e.target) && !e.target.closest(".strip-edit")) close(false); });
   document.addEventListener("focusin", e => { const d = document.querySelector(".settings[open]"); if (d && !d.contains(e.target)) close(false); });
 }
 

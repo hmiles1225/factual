@@ -117,8 +117,6 @@ html.app .tab-bar { display: flex; }
 .picker-done { margin-top: 14px; min-height: 44px; padding: 0 18px; border: 0; border-radius: 8px; background: var(--brand); color: #fff; font: 700 0.9375rem/1 var(--cond); letter-spacing: 0.02em; cursor: pointer; }
 .picker-done:hover { filter: brightness(1.15); }
 .picker-done:disabled { opacity: 0.4; cursor: not-allowed; filter: none; }
-.topic-edit { border: 1px dashed var(--line); background: transparent; color: var(--ink-3); cursor: pointer; }
-.topic-edit:hover { border-style: solid; background: var(--surf); color: var(--ink); }
 .scanline { display: flex; align-items: center; gap: 7px; margin: 0; white-space: nowrap; font: 400 0.6875rem/1.3 var(--mono); letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-2); }
 .scanline::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--lav); flex: none; }
 .back, .nav-link { display: inline-flex; align-items: center; min-height: 44px; font: 600 0.9375rem/1 var(--cond); text-decoration: none; }
@@ -127,14 +125,25 @@ html.app .tab-bar { display: flex; }
 .page { padding-bottom: 80px; }
 
 /* ---------- Today ---------- */
-.intro { padding: 16px 0 4px; }
-.topic-nav { display: flex; flex-wrap: wrap; gap: 6px; }
-.topic-chip { display: inline-flex; align-items: baseline; gap: 7px; min-height: 44px; box-sizing: border-box; padding: 14px 12px; border-radius: 8px; background: var(--surf);
-  color: var(--ink-2); font: 600 0.9375rem/1 var(--cond); text-decoration: none; transition: background 150ms ease-out, color 150ms ease-out; }
-.topic-chip:hover { background: var(--brand); color: #fff; }
-.topic-chip:hover .topic-count { color: #fff; }
-.topic-count { font: 400 0.75rem/1 var(--mono); color: var(--ink-3); }
-.topic-section { margin-top: 32px; scroll-margin-top: 12px; }
+.intro { padding: 0; }
+/* The section strip: one line, pinned while reading, sideways on a phone. The underline marks the section
+   in view. A soft edge says there is more to swipe to. */
+.topic-nav { position: sticky; top: 0; z-index: 4; display: flex; align-items: stretch; gap: 22px; margin: 0 calc(-1 * var(--gutter)); padding: 0 var(--gutter);
+  background: var(--bg); border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; }
+.topic-nav::-webkit-scrollbar { display: none; }
+.topic-nav.more-right { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent); }
+.topic-nav.more-left.more-right { -webkit-mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 36px), transparent); }
+.topic-nav.more-left:not(.more-right) { -webkit-mask-image: linear-gradient(to right, transparent, #000 28px); mask-image: linear-gradient(to right, transparent, #000 28px); }
+.strip-link { flex: none; display: inline-flex; align-items: baseline; gap: 5px; padding: 14px 0 12px; border-bottom: 2px solid transparent; white-space: nowrap;
+  font: 600 1rem/1.1 var(--cond); color: var(--ink-2); text-decoration: none; transition: color 120ms ease-out, border-color 120ms ease-out; }
+.strip-link:hover { color: var(--ink); }
+.strip-link[aria-current] { color: var(--ink); border-bottom-color: var(--lav); }
+.strip-link.is-empty { color: var(--ink-3); }
+.strip-n { font: 400 0.6875rem/1 var(--mono); color: var(--ink-3); }
+.strip-edit { flex: none; display: inline-flex; align-items: center; gap: 6px; margin-left: auto; padding: 0 2px; border: 0; background: none; white-space: nowrap;
+  font: 600 0.875rem/1 var(--cond); color: var(--ink-3); cursor: pointer; }
+.strip-edit:hover { color: var(--ink); }
+.topic-section { margin-top: 32px; scroll-margin-top: 60px; }  /* clear of the pinned strip */
 .topic-section:first-child { margin-top: 16px; }
 .topic-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding-bottom: 10px; margin-bottom: 14px; border-bottom: 1px solid var(--line); }
 .topic-name { margin: 0; font: 700 1.375rem/1.1 var(--cond); }
@@ -455,7 +464,7 @@ details[open] > summary::after { content: "\2212"; }
 @media (max-width: 359px) { .scan-extra { display: none; } }  /* the header fits a 320 px phone */
 
 @media (prefers-reduced-motion: reduce) {
-  .photo-link img, .story, .topic-chip, .to-top, .to-top.is-on, .tile-link, .pick, .back-arrow, .more-tile, .share-btn, .poll-opt { transition: none; }
+  .photo-link img, .story, .strip-link, .to-top, .to-top.is-on, .tile-link, .pick, .back-arrow, .more-tile, .share-btn, .poll-opt { transition: none; }
   .photo-link:hover img, .to-top { transform: none; }
 }
 
