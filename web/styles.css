@@ -347,6 +347,7 @@ details[open] > summary::after { content: "\2212"; }
 .gap-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .gap-row { padding: 10px 14px 10px; background: var(--surf); border-radius: 10px; }
 .gap-stmt { margin: 0; font: 500 0.9375rem/1.35 var(--sans); }
+.gap-asked { margin: 2px 0 0; font: 400 0.75rem/1.4 var(--sans); color: var(--ink-3); }
 .gap-track { position: relative; height: 16px; margin: 8px 7px 2px; }
 .gap-track::before { content: ""; position: absolute; left: 0; right: 0; top: 7px; height: 2px; border-radius: 1px; background: var(--line); }
 .gap-span { position: absolute; top: 7px; height: 2px; background: var(--ink-3); }

@@ -380,9 +380,10 @@ function renderCommon(cg) {
   for (const grp of g.groups) {
     s2.append(el("h3", "gap-title", `What ${grp.guesser} think ${grp.who} believe`));
     const list = el("ul", "gap-list");
-    for (const [stmt, actual, guess] of grp.rows) {
+    for (const [stmt, actual, guess, asked] of grp.rows) {
       const li = el("li", "gap-row");
       li.append(el("p", "gap-stmt", stmt));
+      if (asked) li.append(el("p", "gap-asked", asked));  // the survey's own wording, when we restate it
       const track = el("div", "gap-track");
       track.setAttribute("aria-hidden", "true");
       const span = el("span", "gap-span");
@@ -391,7 +392,7 @@ function renderCommon(cg) {
       const gd = el("span", "gap-guess"), ad = el("span", "gap-actual");
       gd.style.left = `${guess}%`; ad.style.left = `${actual}%`;
       track.append(span, gd, ad);
-      li.append(track, el("p", "gap-nums", `${grp.guesser} guessed ${guess}% of ${grp.who} agree. ${actual}% do.`));
+      li.append(track, el("p", "gap-nums", `${grp.guesser} guessed ${guess}% of ${grp.who} hold this view. ${actual}% do.`));
       list.append(li);
     }
     s2.append(list);

@@ -138,9 +138,10 @@
     "avg_gap": 27,
     "rows": [
      [
-      "Disagree: “Most police are bad people”",
+      "Most police are not bad people",
       85,
-      48
+      48,
+      "Asked as disagreeing with “Most police are bad people”"
      ],
      [
       "I am proud to be American, though I acknowledge my country's flaws",
@@ -153,9 +154,10 @@
       45
      ],
      [
-      "Disagree: “The US should have completely open borders”",
+      "The US should not have completely open borders",
       71,
-      38
+      38,
+      "Asked as disagreeing with “The US should have completely open borders”"
      ],
      [
       "Law abiding citizens should have the right to bear firearms",
@@ -163,14 +165,16 @@
       44
      ],
      [
-      "Disagree: “America should be a socialist country”",
+      "America should not be a socialist country",
       62,
-      37
+      37,
+      "Asked as disagreeing with “America should be a socialist country”"
      ],
      [
-      "Disagree: “The US should abolish ICE”",
+      "The US should not abolish ICE",
       53,
-      40
+      40,
+      "Asked as disagreeing with “The US should abolish ICE”"
      ]
     ]
    }
