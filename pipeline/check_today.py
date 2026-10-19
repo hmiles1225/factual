@@ -594,6 +594,37 @@ def main():
                     print(f"  image lookup failed for {subj['name']}: {e}")
             if images.get(ikey):
                 pick_image(story, brief, images[ikey], ikey)
+        if not story.get("image"):
+            # The subject has no usable photo (a golf course, say): use a person named in the headline, but only
+            # one already matched and verified, by full name or a surname of five letters or more, as a whole word.
+            title = story["working_title"]
+            for k, rec in images.items():
+                if not (k.startswith("person:") and rec):
+                    continue
+                full = rec["subject"]
+                last = full.split()[-1]
+                if re.search(rf"\b{re.escape(full)}\b", title) or (len(last) >= 5 and re.search(rf"\b{re.escape(last)}\b", title)):
+                    story["image"] = rec
+                    break
+        if not story.get("image"):
+            # The headline's actor: a full name from the shared facts whose surname is in the headline ("Trump
+            # Says ..." -> Donald Trump). Heston: a person the headline is about beats a picture of the place.
+            headline = story["working_title"]
+            facts_text = " ".join(f["fact"] for f in brief["agreed"] if "left" in f["sides"] and "right" in f["sides"])
+            for name in person_names(facts_text)[:6]:
+                last = name.split()[-1]
+                if len(last) < 4 or not re.search(rf"\b{re.escape(last)}\b", headline):
+                    continue
+                ikey = f"person:{name.casefold()}"
+                if ikey not in images:
+                    try:
+                        images[ikey] = image_for(name, "person")
+                    except Exception as e:
+                        print(f"  image lookup failed for {name}: {e}")
+                        continue
+                if images.get(ikey):
+                    story["image"] = images[ikey]
+                    break
         if not story.get("image") and brief.get("img_v") != IMAGES_VERSION and gemini_ok():
             # No person to show: ask once which Wikipedia articles' main pictures would illustrate the story
             # (for an Ebola story, "Ebola virus": the virus, not a patient). Each title must exist, and its
@@ -616,18 +647,6 @@ def main():
                         print(f"  image lookup failed for {title}: {e}")
                         continue
                 if images.get(ikey) and pick_image(story, brief, images[ikey], ikey):
-                    break
-        if not story.get("image"):
-            # The subject has no usable photo (a golf course, say): use a person named in the headline, but only
-            # one already matched and verified, by full name or a surname of five letters or more, as a whole word.
-            title = story["working_title"]
-            for k, rec in images.items():
-                if not (k.startswith("person:") and rec):
-                    continue
-                full = rec["subject"]
-                last = full.split()[-1]
-                if re.search(rf"\b{re.escape(full)}\b", title) or (len(last) >= 5 and re.search(rf"\b{re.escape(last)}\b", title)):
-                    story["image"] = rec
                     break
         if not story.get("image"):
             # Still none: look up the people the headline and the shared facts name, in order, under the same
