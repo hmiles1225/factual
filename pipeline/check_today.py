@@ -48,6 +48,10 @@ MAX_NEW_PER_DAY = 30
 # day, nearly every politics account. At most $3.10/day, ~$93/month.
 ANTHROPIC_DAILY_USD = 1.10       # two Opus second opinions (~$0.51 each) a day
 GEMINI_DAILY_USD = 2.00          # summaries, checks, and searches past Google's free allowance
+# Testing period (Heston, 2026-10-19: "ok with going over cap, since we are testing"). A higher ceiling, not
+# none: it still stops a runaway loop. Ends by itself; the caps above apply again from TESTING_UNTIL + 1 day.
+TESTING_UNTIL = "2026-10-25"
+TESTING_GEMINI_USD, TESTING_ANTHROPIC_USD = 5.00, 2.00
 # One-off raises, approved by Heston for a specific date only. Expires by itself.
 GEMINI_EXTRA_USD = {"2026-10-19": 1.70}   # one-off, Heston "roll this out now": ~$0.75 past today's $2.95 spend, cap $3.70
 # Bump when the outlet list changes: a story whose outlets changed since its summary is re-summarized once.
@@ -307,7 +311,9 @@ def main():
     images = lib.setdefault("images", {})
     lib.pop("extractions", None)  # replaced by briefs
 
-    gemini_cap = GEMINI_DAILY_USD + GEMINI_EXTRA_USD.get(today, 0.0)
+    testing = today <= TESTING_UNTIL
+    gemini_cap = max(GEMINI_DAILY_USD + GEMINI_EXTRA_USD.get(today, 0.0), TESTING_GEMINI_USD if testing else 0.0)
+    anthropic_cap = TESTING_ANTHROPIC_USD if testing else ANTHROPIC_DAILY_USD
 
     def gemini_ok():
         return spend["gemini_usd"] < gemini_cap
@@ -413,7 +419,7 @@ def main():
         first.pop("trace", None)
         second, note, verdict = None, None, first["verdict"]
         if verdict == C.DHU:
-            if ANTHROPIC_DAILY_USD - spend["anthropic_usd"] >= OPUS_TYPICAL_USD:
+            if anthropic_cap - spend["anthropic_usd"] >= OPUS_TYPICAL_USD:
                 try:
                     second = C.check(text, "claude")
                     second.pop("trace", None)
@@ -563,11 +569,12 @@ def main():
     lib["briefs"] = {k: v for k, v in briefs.items() if k in live}
     lib["updated_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     lib["caps"] = {"anthropic_daily_usd": ANTHROPIC_DAILY_USD, "gemini_daily_usd": GEMINI_DAILY_USD,
+                   "today_gemini_cap": gemini_cap, "today_anthropic_cap": anthropic_cap, "testing_until": TESTING_UNTIL,
                    "gemini_free_searches": GEMINI_FREE_SEARCHES, "search_usd": SEARCH_USD, "new_claims_per_day": MAX_NEW_PER_DAY}
     (ROOT / "data/library.json").write_text(json.dumps(lib, indent=1))
     stories_path.write_text(json.dumps(data, indent=1))
     (ROOT / "data/.summarized").write_text(datetime.now(timezone.utc).isoformat())  # deploy publishes stories.json only with this
-    print(f"check_today: {state['new_this_scan']} new claims · today anthropic ${spend['anthropic_usd']:.2f}/{ANTHROPIC_DAILY_USD:.2f} · "
+    print(f"check_today: {state['new_this_scan']} new claims · today anthropic ${spend["anthropic_usd"]:.2f}/{anthropic_cap:.2f} · "
           f"gemini ${spend['gemini_usd']:.2f}/{gemini_cap:.2f}, searches {spend['gemini_searches']} ({GEMINI_FREE_SEARCHES} free), "
           f"thinking tokens {THOUGHTS['tokens']} over {THOUGHTS['calls']} calls")
     return 0
