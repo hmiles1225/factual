@@ -1,0 +1,47 @@
+{
+ "checked": "2026-10-19",
+ "note": "Every figure was read from its primary source on the date in 'checked'. Re-check when a source publishes a newer release.",
+ "unites": {
+  "source": "Program for Public Consultation, University of Maryland",
+  "title": "The National Common Ground",
+  "url": "https://vop.org/cgoap/",
+  "fielded": "February 11 to March 19, 2026",
+  "sample": "3,709 U.S. adults",
+  "method": "Online opt-in panels (Cint, Dynata, Prodege), weighted to the population; margin of error ±2.9 points.",
+  "items": [
+   {"policy": "Cap drug prices at what other developed countries pay", "rep": 90, "dem": 86},
+   {"policy": "Term limits for Congress, by constitutional amendment", "rep": 85, "dem": 83},
+   {"policy": "Let Congress and the states limit corporate and PAC election spending", "rep": 82, "dem": 85},
+   {"policy": "Require E-Verify, and add work visas when employers need workers", "rep": 82, "dem": 84},
+   {"policy": "New AI that makes major decisions about people must first pass a government test", "rep": 78, "dem": 82},
+   {"policy": "Ban members of Congress from trading individual stocks", "rep": 78, "dem": 75},
+   {"policy": "Cap childcare costs at 7% of family income", "rep": 77, "dem": 89}
+  ]
+ },
+ "misread": [
+  {
+   "finding": "We underestimate how varied the other side is.",
+   "detail": "Democrats and Republicans underestimated the range of views inside both parties by more than a factor of two. They did not measurably overestimate how extreme the average member of the other party is. People who saw more variety in the other party liked it more and worried less about it.",
+   "source": "Dias, Lelkes and Pearl, Annenberg School for Communication, University of Pennsylvania. Political Science Research and Methods",
+   "date": "2024",
+   "sample": "9,400+ participants",
+   "url": "https://www.asc.upenn.edu/news-events/news/new-study-reveals-democrats-and-republicans-vastly-underestimate-diversity-each-others-views"
+  },
+  {
+   "finding": "The famous 'perception gap' is older, and contested.",
+   "detail": "Democrats and Republicans imagined almost twice as many of their opponents held views they consider extreme as actually did. Later studies, including the two here, question how far this holds.",
+   "source": "More in Common, with YouGov. The Perception Gap",
+   "date": "2019",
+   "sample": "2,100 Americans",
+   "url": "https://perceptiongap.us/"
+  },
+  {
+   "finding": "Most of our disagreement is real.",
+   "detail": "Democrats and Republicans made similar mistakes about both parties, and disliking the other party did not make people see it as more uniformly extreme. The researchers' conclusion: “real disagreements, not necessarily misperceptions.”",
+   "source": "Huber and Orr, Yale ISPS. Frontiers in Political Science",
+   "date": "August 2026",
+   "sample": "YouGov surveys of 5,000+ adults, before the 2020 and 2024 elections",
+   "url": "https://isps.yale.edu/news/2026-09-09-political-polarization-may-be-driven-by-real-disagreements-not-misperceptions"
+  }
+ ]
+}

@@ -292,10 +292,83 @@ function renderToday(data) {
   }
   if ($("today-count")) $("today-count").textContent = WORDS[total] || String(total);
 
-  const ok = feeds.filter(f => f.ok).sort((a, b) => a.source.localeCompare(b.source));
-  $("feeds").append(el("p", "feeds-list", ok.map(f => f.source).join(", ")));
+}
+
+/* ---------- How it works: the outlets we read, by side ---------- */
+function renderHow(data) {
+  const feeds = (data && data.feeds) || [];
+  if (!$("feeds")) return;
+  for (const [k, name] of [["left", "Left-leaning"], ["center", "Center"], ["right", "Right-leaning"], ["unplaced", "Not placed"]]) {
+    const list = feeds.filter(f => f.ok && (f.side || "unplaced") === k).map(f => f.source).sort();
+    if (!list.length) continue;
+    $("feeds").append(el("p", "feeds-side", `${name} \u00b7 ${list.length}`), el("p", "feeds-list", list.join(", ")));
+  }
   const down = feeds.filter(f => !f.ok).map(f => f.source);
   if (down.length) $("feeds").append(el("p", "feeds-down", `Not reachable in the last scan: ${down.join(", ")}.`));
+}
+
+/* ---------- Common ground: shared ground, and what we get wrong about each other ---------- */
+function renderCommon(cg) {
+  const box = $("common");
+  const u = cg.unites;
+  const s1 = el("section", "block");
+  s1.append(el("h2", "block-title", "What unites us"));
+  s1.append(el("p", "cg-lede", "Policies backed by at least three in four Republicans and three in four Democrats."));
+  const ul = el("ul", "agree-list");
+  for (const it of u.items) {
+    const li = el("li", "agree");
+    li.append(el("p", "agree-policy", it.policy));
+    for (const [label, v] of [["Republicans", it.rep], ["Democrats", it.dem]]) {
+      const row = el("div", "agree-row");
+      const bar = el("span", "agree-bar");
+      const fill = el("span", "agree-fill");
+      fill.style.width = `${v}%`;
+      bar.append(fill);
+      row.append(el("span", "agree-who", label), bar, el("span", "agree-v", `${v}%`));
+      li.append(row);
+    }
+    ul.append(li);
+  }
+  s1.append(ul);
+  const src = el("p", "cg-source");
+  const a = el("a", null, `${u.source}, \u201c${u.title}\u201d`);
+  a.href = u.url; a.rel = "noopener";
+  src.append(a, document.createTextNode(`. Surveyed ${u.fielded}, ${u.sample}. ${u.method}`));
+  s1.append(src);
+  box.append(s1);
+
+  const s2 = el("section", "block");
+  s2.append(el("h2", "block-title", "What we get wrong about each other"));
+  s2.append(el("p", "cg-lede", "The other side is more varied than most of us think. Whether we also exaggerate how extreme it is, researchers disagree."));
+  const ol = el("ol", "misread-list");
+  for (const m of cg.misread) {
+    const li = el("li", "misread");
+    li.append(el("h3", "misread-finding", m.finding), el("p", "misread-detail", m.detail));
+    const meta = el("p", "cg-source");
+    const link = el("a", null, m.source);
+    link.href = m.url; link.rel = "noopener";
+    meta.append(link, document.createTextNode(` \u00b7 ${m.date} \u00b7 ${m.sample}`));
+    li.append(meta);
+    ol.append(li);
+  }
+  s2.append(ol);
+  box.append(s2, el("p", "disclosure", `Figures read from each primary source on ${new Date(cg.checked + "T12:00:00").toLocaleDateString([], { month: "long", day: "numeric", year: "numeric" })}.`));
+}
+
+/* ---------- Settings: theme, remembered on this device only ---------- */
+function initSettings() {
+  const form = document.querySelector(".settings-panel");
+  if (!form) return;
+  let current = "dark";
+  try { current = localStorage.getItem("fx-theme") || "dark"; } catch (e) {}
+  const box = form.querySelector(`input[value="${current}"]`);
+  if (box) box.checked = true;
+  form.addEventListener("change", e => {
+    const v = e.target.value;
+    if (v === "dark") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = v;
+    try { localStorage.setItem("fx-theme", v); } catch (err) {}
+  });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") { const d = document.querySelector(".settings[open]"); if (d) { d.open = false; d.querySelector("summary").focus(); } } });
 }
 
 /* ---------- Archive ---------- */
@@ -624,7 +697,7 @@ function renderStory(data) {
   const foot = el("p", "disclosure");
   foot.append(document.createTextNode("Written and checked by AI. No human review. "));
   const m = el("a", null, "Method \u2192");
-  m.href = "./#about";
+  m.href = "how.html";
   foot.append(m);
   s4.append(foot);
   body.append(s4);
@@ -633,7 +706,7 @@ function renderStory(data) {
 function fail() {
   const box = el("div", "error");
   box.append(el("p", null, "We couldn't load the latest scan. Reload the page in a minute. If it keeps happening, the scan itself may have failed; the last good one stays up when that happens."));
-  ($("sections") || $("story-body") || $("archive-days")).after(box);
+  ($("sections") || $("story-body") || $("archive-days") || $("common") || $("main")).after(box);
 }
 
 const getJSON = (url, optional) => fetch(url, { cache: "no-cache" })
@@ -645,7 +718,10 @@ const fromArchive = (arch, day) => ({ stories: Object.values(arch.stories || {})
 
 async function load() {
   const page = document.body.dataset.page;
+  initSettings();
   if (page === "archive") return renderArchive(await getJSON("data/archive/index.json", true));
+  if (page === "common") return renderCommon(await getJSON("common-ground.json"));
+  if (page === "how") return renderHow(await getJSON("data/stories.json", true));
   const library = getJSON("data/library.json", true);
   const params = new URLSearchParams(location.search);
   let data;

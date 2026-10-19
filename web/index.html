@@ -6,7 +6,7 @@
 <title>fACTUAL</title>
 <meta name="description" content="The stories both left- and right-leaning outlets are covering: what they agree on, where they differ, and what holds up.">
 <meta name="theme-color" content="#0F1113">
-<meta name="color-scheme" content="dark">
+<meta name="color-scheme" content="dark light">
 <link rel="preload" href="fonts/barlowsc-700-v16.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/barlow-400-v13.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="icon" href="favicon-v1.svg" type="image/svg+xml">
@@ -16,6 +16,7 @@
 <meta name="apple-mobile-web-app-title" content="fACTUAL">
 <meta name="application-name" content="fACTUAL">
 <meta name="msapplication-TileColor" content="#4B3A9E">
+<script>try{var t=localStorage.getItem("fx-theme");if(t==="light"||t==="auto")document.documentElement.dataset.theme=t}catch(e){}</script>
 <link rel="stylesheet" href="styles.css">
 <script src="app.js" defer></script>
 </head>
@@ -24,12 +25,23 @@
 
 <header class="masthead">
   <div class="masthead-inner">
-    <a class="wordmark" href="./" aria-label="fACTUAL"><span class="f" aria-hidden="true">f</span><span aria-hidden="true">ACTUAL</span></a>
-    <nav class="mast-nav" aria-label="Site">
-      <p class="scanline" id="scanline" aria-live="polite">Loading the latest scan…</p>
-      <a class="nav-link" href="archive.html">Archive</a>
-    </nav>
+    <a class="wordmark" href="./" aria-label="fACTUAL, today's stories"><span class="f" aria-hidden="true">f</span><span aria-hidden="true">ACTUAL</span></a>
+    <div class="mast-right">
+      <p class="scanline" id="scanline" aria-live="polite">Loading…</p>
+    <details class="settings">
+      <summary aria-label="Settings"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.5 7.5 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7.4 7.4 0 0 0-1.7-1L15 3.5h-4L10.7 6a7.4 7.4 0 0 0-1.7 1l-2.4-1-2 3.4 2 1.6a7.5 7.5 0 0 0 0 2l-2 1.6 2 3.4 2.4-1c.5.4 1.1.7 1.7 1l.3 2.5h4l.3-2.5c.6-.3 1.2-.6 1.7-1l2.4 1 2-3.4zM13 15.5A3.5 3.5 0 1 1 13 8.5a3.5 3.5 0 0 1 0 7z" transform="translate(-1 0)"/></svg></summary>
+      <form class="settings-panel">
+        <fieldset>
+          <legend>Theme</legend>
+          <label><input type="radio" name="theme" value="dark"> Dark</label>
+          <label><input type="radio" name="theme" value="light"> Light</label>
+          <label><input type="radio" name="theme" value="auto"> Match my device</label>
+        </fieldset>
+      </form>
+    </details>
+    </div>
   </div>
+  <nav class="site-nav" aria-label="Site"><div class="site-nav-inner"><a href="./" aria-current="page">Today</a><a href="common.html">Common ground</a><a href="archive.html">Archive</a><a href="how.html">How it works</a></div></nav>
 </header>
 
 <main id="main" class="page">
@@ -39,46 +51,6 @@
   </section>
   <div id="sections"></div>
 
-  <section class="about" id="about" aria-labelledby="about-title">
-    <h2 id="about-title">Method</h2>
-    <div class="about-cols">
-      <div>
-        <h3>What makes Today</h3>
-        <p>Every hour we read the public news feeds of a fixed list of outlets and group the articles that cover
-          the same event. A story makes Today only if outlets on both the left and the right are covering it.
-          Every story that appears is kept in the <a href="archive.html">archive</a>.</p>
-        <h3>Agreed</h3>
-        <p>Only facts that at least one left-leaning and one right-leaning outlet state in their own words, and that
-          no outlet we read contradicts. One side's reporting alone never makes this list.</p>
-        <h3>Splits</h3>
-        <p>Where the coverage tells it differently. Each side's account names the outlets that gave it; the words
-          that differ are in bold. Where an account rests on a factual claim, that claim is checked.</p>
-        <h3>Checks</h3>
-        <p>Claims are checked by AI against primary sources: court records, official statements, government data.
-          Our code confirms every quoted passage is on its source page. Doesn't hold up needs two different AI models
-          to agree. Outlets are never evidence. No person reviews a check before it appears.</p>
-        <h3>Loaded words</h3>
-        <p>Charged or slanted words an outlet used in its own voice, not words it quoted. Each is confirmed to appear
-          in that outlet's headline, summary or opening, with a plainer way to say it.</p>
-        <h3>Who covered it</h3>
-        <p>Dots place outlets by Pew Research Center's 2025 data on who gets news there: toward the left, Democrats
-          are more likely than Republicans to; toward the right, the reverse. Outlets Pew did not survey are placed by
-          their AllSides rating and drawn as squares. Each side counts equally, whatever its number of outlets.</p>
-        <h3>Sources and privacy</h3>
-        <p>Headlines are the outlets' own words. To write each summary we read the opening paragraphs of each article
-          once; that text is never stored or republished. We link to every article. Pictures are freely licensed,
-          from Wikimedia Commons, and credited. The code is public:
-          <a href="https://github.com/hmiles1225/factual">github.com/hmiles1225/factual</a>.</p>
-        <h3>For publishers</h3>
-        <p>Our scanner identifies itself as <code>fACTUAL-scan</code> and reads each feed once an hour. To ask a
-          question or request a change, <a href="https://github.com/hmiles1225/factual/issues">open an issue on GitHub</a>.</p>
-      </div>
-      <div>
-        <h3>Outlets we read</h3>
-        <div id="feeds"></div>
-      </div>
-    </div>
-  </section>
 </main>
 </body>
 </html>
