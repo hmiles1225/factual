@@ -189,6 +189,16 @@ For each term give every article number that uses it, why it is loaded, and a ne
 Coverage:
 {coverage}"""
 
+LEFT_OUT_VERSION = "1"
+LEFT_OUT_SCHEMA = _item({"left_out": {"type": "string"}}, ["left_out"])
+LEFT_OUT_PROMPT = """A fact-checker found this claim true as stated, but missing context that changes the picture.
+
+Claim: {claim}
+The checker's finding: {finding}
+
+Write the missing context itself as one plain sentence of at most 25 words, using only facts in the
+finding: what a reader would need to know that the claim leaves out. No opinion, no judgment of the claim,
+no "the claim" or "the statement". If the finding does not say what is missing, return an empty string."""
 POLL_VERSION = "1"
 POLL_SCHEMA = _item({"polls": {"type": "array", "items": _item({
     "question": {"type": "string", "description": "The question as a reader would answer it, neutral, at most 25 words."},
@@ -752,6 +762,23 @@ def main():
                 story["on_today"] = True
         print(f"  {topic}: {done} of {quota} on Today ({len(cands)} stories covered by both sides)")
 
+    # Missing context, said plainly: one line of what each such claim leaves out, from its finding, shown
+    # under the claim without a tap. Once per claim; only for claims on stories that are on Today.
+    on_today_checks = {k for s in data["stories"] if s.get("on_today") for k in s.get("checks", [])}
+    for k in sorted(on_today_checks):
+        c = claims.get(k)
+        if not c or c.get("verdict") != "Missing context" or c.get("left_out_v") == LEFT_OUT_VERSION or not gemini_ok():
+            continue
+        try:
+            out, usage = gemini_json(LEFT_OUT_PROMPT.replace("{claim}", c["claim"]).replace("{finding}", (c.get("finding") or "")[:1500]),
+                                     LEFT_OUT_SCHEMA, "low")
+            charge_gemini(usage)
+            line = (out.get("left_out") or "").strip()
+            c["left_out"] = line if 0 < len(line) <= 220 else ""
+            c["left_out_v"] = LEFT_OUT_VERSION
+            print(f"  left out: {c['left_out'][:90]}")
+        except Exception as e:
+            print(f"  left-out line failed: {e}")
     write_archive([s for s in data["stories"] if s.get("on_today")], data.get("feeds", []))
     write_share_pages([s for s in data["stories"] if s.get("on_today")])
 
