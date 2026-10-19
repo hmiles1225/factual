@@ -179,7 +179,11 @@
     "confidence": "High",
     "as_of": "2026-10",
     "url": "https://www.allsides.com/news-source/washington-examiner-media-bias"
-   }
+   },
+   "sections": [
+    "https://www.washingtonexaminer.com/policy/healthcare/feed/",
+    "https://www.washingtonexaminer.com/policy/energy-and-environment/feed/"
+   ]
   },
   {
    "source": "The Daily Wire",
@@ -255,7 +259,11 @@
     "as_of": "2025-09",
     "note": "Moved from Right to Lean Right in a September 2025 editorial review; reviewers named sensationalism as its defining bias.",
     "url": "https://www.allsides.com/media-bias"
-   }
+   },
+   "sections": [
+    "https://www.dailymail.co.uk/health/index.rss",
+    "https://www.dailymail.co.uk/sciencetech/index.rss"
+   ]
   },
   {
    "source": "The Epoch Times",
@@ -265,7 +273,12 @@
     "as_of": "2025-11",
     "note": "Two 2025 editorial reviews placed it on the border of Center and Lean Right; rated Lean Right.",
     "url": "https://www.allsides.com/media-bias"
-   }
+   },
+   "sections": [
+    "https://feed.theepochtimes.com/health/feed",
+    "https://feed.theepochtimes.com/science/feed",
+    "https://feed.theepochtimes.com/us/environment/feed"
+   ]
   }
  ],
  "placement_source": {
@@ -294,6 +307,10 @@
    "date": "2026-10-19",
    "change": "Added three right-leaning outlets placed by AllSides (current pages, not low confidence): The Dispatch (Lean Right), Daily Mail US (Lean Right), The Epoch Times (Lean Right, borderline Center). Considered and not added: The Free Press (rating disputed), The Daily Signal (AllSides low confidence), Townhall, Reason and The Federalist (no current AllSides rating found). Right side: 11 outlets listed.",
    "by": "Heston's call"
+  },
+  {
+   "date": "2026-10-19",
+   "change": "Added right-leaning health, science and environment section feeds (checked live): Daily Mail Health and Science & Tech; The Epoch Times Health, Science, Environment; Washington Examiner Healthcare and Energy & Environment. Left-leaning outlets had most of the topic sections, so the new topics were thin on the right. Checked and not available: Fox Science (stale since 2026-09-27), Daily Caller, Daily Wire and National Review health or energy feeds."
   }
  ],
  "_note_allsides": "Outlets Pew did not survey are placed from AllSides Media Bias Ratings (allsides.com), read from each outlet's AllSides page on 2026-10-19: Left and Lean Left are left-leaning, Center is center, Lean Right and Right are right-leaning. AllSides is a category, not a number, so these outlets count fully toward their side but are not drawn on the Pew audience chart. Ratings AllSides itself marks as low confidence are not used (TheBlaze). Reason and The Federalist have no current AllSides page we could verify, so they stay Unplaced."
