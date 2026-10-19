@@ -44,8 +44,9 @@ EXCERPT_CHARS = 900              # opening of each article read for the brief; n
 REBRIEF_HOURS = 6                # a story is re-summarized when a new side joins, else at most this often
 MAX_NEW_PER_SCAN = 5
 MAX_NEW_PER_DAY = 30
-ANTHROPIC_DAILY_USD = 0.75       # ~$3/day in all with Gemini (Heston's call, 2026-10-18)
-GEMINI_DAILY_USD = 2.25
+# Proof of concept, no audience yet: keep it cheap (Heston's call, 2026-10-19). At most $1.60/day, ~$48/month.
+ANTHROPIC_DAILY_USD = 0.60       # just above one Opus second opinion (~$0.51), so Doesn't hold up can still publish
+GEMINI_DAILY_USD = 1.00
 # One-off raises, approved by Heston for a specific date only. Expires by itself.
 GEMINI_EXTRA_USD = {}             # date -> extra dollars; none approved beyond the ~$3/day plan
 GEMINI_FREE_SEARCHES = 150      # Google gives 5,000 free a month across Gemini 3 models; ~150 a day
@@ -361,7 +362,9 @@ def main():
         if rec and fresh and not rec.get("pending_second") and not forced:
             rec["stories"] = sorted(set(rec.get("stories", [])) | {story_sid})
             return existing
-        if state["new_this_scan"] >= MAX_NEW_PER_SCAN or spend["new_claims"] >= MAX_NEW_PER_DAY or not gemini_ok():
+        # No paid searches: new checks stop once Google's free daily search allowance is used.
+        if state["new_this_scan"] >= MAX_NEW_PER_SCAN or spend["new_claims"] >= MAX_NEW_PER_DAY or not gemini_ok() \
+                or spend["gemini_searches"] >= GEMINI_FREE_SEARCHES:
             return existing
         try:
             first = C.check(text, "gemini")
