@@ -427,12 +427,14 @@ function spyStrip() {
   const update = () => {
     const links = [...nav.querySelectorAll(".strip-link")];
     if (!links.length) return;
-    const line = nav.getBoundingClientRect().bottom + 24;  // a section jumped to sits 60px down (scroll-margin)
+    // The reading line: under the strip (phone, tablet), or under the header beside the index (wide screens).
+    const rail = getComputedStyle(nav).flexDirection === "column";
+    const line = rail ? document.querySelector(".masthead").getBoundingClientRect().bottom + 40 : nav.getBoundingClientRect().bottom + 24;
     let active = links[0];
     for (const a of links) { const sec = document.getElementById(a.dataset.key); if (sec && sec.getBoundingClientRect().top <= line) active = a; }
     for (const a of links) { if (a === active) a.setAttribute("aria-current", "location"); else a.removeAttribute("aria-current"); }
     const l = active.offsetLeft, r = l + active.offsetWidth;
-    if (l < nav.scrollLeft + 16 || r > nav.scrollLeft + nav.clientWidth - 16) nav.scrollTo({ left: Math.max(0, l - 16), behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    if (!rail && (l < nav.scrollLeft + 16 || r > nav.scrollLeft + nav.clientWidth - 16)) nav.scrollTo({ left: Math.max(0, l - 16), behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
     nav.classList.toggle("more-right", nav.scrollLeft + nav.clientWidth < nav.scrollWidth - 4);
     nav.classList.toggle("more-left", nav.scrollLeft > 4);
   };
@@ -601,12 +603,14 @@ function initHeader() {
     const y = window.scrollY;
     if (Date.now() < holdUntil) { last = y; return; }  // a jump from the section strip: stay as set
     const open = document.querySelector(".settings[open]");
+    root.classList.toggle("scrolled", y > 4);
     if (!phone.matches || open || y < 120) root.classList.remove("mast-away");
     else if (y > last + 6) root.classList.add("mast-away");
     else if (y < last - 6) root.classList.remove("mast-away");
     last = y;
   };
   window.addEventListener("scroll", () => { if (!queued) { queued = true; requestAnimationFrame(update); } }, { passive: true });
+  update();
   // Keyboard focus in the header brings it back.
   document.querySelector(".masthead")?.addEventListener("focusin", () => root.classList.remove("mast-away"));
 }
