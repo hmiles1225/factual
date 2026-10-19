@@ -31,10 +31,6 @@ function reply(array $body, int $code = 200): void {
 }
 
 if (($_GET['v'] ?? '') === '1') reply(['ok' => true, 'version' => VERSION]);
-// TEMPORARY (2026-10-19): which header carries the reader's address behind the host's CDN. Shows a caller
-// only their own address. Remove once the network count uses the right one.
-if (($_GET['v'] ?? '') === 'net') reply(['remote' => $_SERVER['REMOTE_ADDR'] ?? null, 'xff' => $_SERVER['HTTP_X_FORWARDED_FOR'] ?? null,
-    'real' => $_SERVER['HTTP_X_REAL_IP'] ?? null, 'true' => $_SERVER['HTTP_TRUE_CLIENT_IP'] ?? null, 'cf' => $_SERVER['HTTP_CF_CONNECTING_IP'] ?? null]);
 
 $post = ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST';
 $in = $post ? (json_decode((string) file_get_contents('php://input'), true) ?: []) : $_GET;
@@ -53,7 +49,11 @@ $db->exec('CREATE INDEX IF NOT EXISTS votes_net ON votes (poll, net)');
 
 $saltFile = $dir . '/salt';
 if (!is_file($saltFile)) file_put_contents($saltFile, bin2hex(random_bytes(32)), LOCK_EX);
-$net = hash('sha256', trim((string) file_get_contents($saltFile)) . '|' . ($_SERVER['REMOTE_ADDR'] ?? ''));
+// The host's CDN passes the reader's own address as REMOTE_ADDR (checked 2026-10-19). An IPv6 device
+// changes its address within its network's /64, so IPv6 counts by that prefix.
+$addr = (string) ($_SERVER['REMOTE_ADDR'] ?? '');
+if (filter_var($addr, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) $addr = bin2hex(substr((string) inet_pton($addr), 0, 8)) . '::/64';
+$net = hash('sha256', trim((string) file_get_contents($saltFile)) . '|' . $addr);
 
 // The device: a random id in an HttpOnly cookie, set on first visit.
 $voter = (string) ($_COOKIE['fx_voter'] ?? '');
