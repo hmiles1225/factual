@@ -401,7 +401,7 @@ def _walk(node, fn):
 
 
 def search_budget():
-    """Optional cap on searches per claim (FACTUAL_MAX_SEARCHES), under test; production sets none."""
+    """Cap on searches per claim (FACTUAL_MAX_SEARCHES). Production sets 6 (scan.yml), tested 2026-10-19."""
     n = os.environ.get("FACTUAL_MAX_SEARCHES")
     return f"\n\nSearch budget: use at most {int(n)} web searches in total for this claim. Choose each one carefully." if n else ""
 
