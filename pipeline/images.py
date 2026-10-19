@@ -69,6 +69,8 @@ def image_for(name, kind):
         is_human = any(isinstance(v, dict) and v.get("id") == "Q5" for v in val(e, "P31"))
         if kind == "person" and (not is_human or val(e, "P570")):
             continue  # people must be living humans: a historical namesake is never today's subject
+        if kind == "place" and not val(e, "P625"):
+            continue  # a place must have coordinates: "china" the tableware is not China the country
         cands.append((len(e.get("sitelinks", {})), q, e))
     cands.sort(key=lambda c: -c[0])
     if not cands:
@@ -134,6 +136,7 @@ def _record(qid, ent, label, word):
         out.write_bytes(data)
         return {
             "src": f"data/images/{fname}", "alt": label, "subject": label, "wikidata": qid,
+            "about": about.strip()[:500],  # the file's own description and categories, for the relevance check
             "artist": artist[:120], "license": license_, "source": info.get("descriptionurl"),
             "caption": f"{label}. {word}: {artist[:80]} · {license_} · Wikimedia Commons",
         }

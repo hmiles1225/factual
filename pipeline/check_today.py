@@ -155,7 +155,7 @@ SUPPORT_SCHEMA = _item({"established": {"type": "string", "enum": ["all", "part"
                         "missing": {"type": "string", "description": "Only the part of the claim the evidence does not establish, as a short phrase starting with 'that' (e.g. 'that other work was paused'). Empty if all is established."}},
                        ["established", "missing"])
 LOADED_VERSION = "2"
-IMAGES_VERSION = "4"   # 2: aliases, transliterations, headline fallback; 3: no maps, flags, logos; 4: article pictures, nothing graphic
+IMAGES_VERSION = "5"   # 2: aliases, transliterations, headline fallback; 3: no maps, flags, logos; 4: article pictures, nothing graphic
 LOADED_SCHEMA = _item({"terms": {"type": "array", "items": _item({
     "term": {"type": "string", "description": "Copied exactly as the outlet wrote it."},
     "articles": _ints,
@@ -186,6 +186,16 @@ Avoid articles whose main picture would likely show sick, injured or dead people
 use, or anything graphic. Avoid maps and flags. Use titles exactly as they appear on Wikipedia.
 
 Story: {story}"""
+
+FITS_SCHEMA = _item({"fits": {"type": "boolean"}, "why": {"type": "string"}}, ["fits", "why"])
+FITS_PROMPT = """A news site wants to show this picture next to this story. Using the picture's own description,
+answer whether it makes sense there for a reader: it shows the thing, place, institution or kind of event
+the story is about, and it would not mislead (a different country, a different event, a different person,
+an unrelated object that shares a name). A generic picture of the right thing is fine; a picture from
+somewhere else that could be mistaken for this story is not. Anything graphic is not.
+
+Story: {story}
+Picture: {subject}. Description: {about}"""
 
 CLAIM_SCHEMA = _item({"claim": {"type": "string", "description": "One checkable factual claim, or empty."}}, ["claim"])
 CLAIM_PROMPT = """One side of a news story's coverage is summarized below. Write the single most important factual
@@ -460,6 +470,32 @@ def main():
             print(f"  recheck {k}: {why}")
             check_claim(rec["claim"], (rec.get("stories") or ["recheck"])[0], rec.get("said_by", []))
 
+    def pick_image(story, brief, rec, key):
+        """Portraits are exact name matches; any other picture must also pass the relevance check, once per
+        story and picture, before it is shown."""
+        if not rec:
+            return False
+        if key.startswith("person:"):
+            story["image"] = rec
+            return True
+        seen = brief.setdefault("image_fits", {})
+        if key not in seen:
+            if not gemini_ok():
+                return False
+            facts = " ".join(f["fact"] for f in brief["agreed"] if "left" in f["sides"] and "right" in f["sides"])
+            try:
+                out, usage = gemini_json(FITS_PROMPT.replace("{story}", f"{story['working_title']}. {facts}"[:1200])
+                                         .replace("{subject}", rec["subject"]).replace("{about}", rec.get("about", "")[:500]), FITS_SCHEMA, "low")
+                charge_gemini(usage)
+                seen[key] = bool(out.get("fits"))
+                print(f"  picture {'fits' if seen[key] else 'rejected'}: {rec['subject']} ({(out.get('why') or '')[:80]})")
+            except Exception as e:
+                print(f"  picture check failed: {e}")
+                return False
+        if seen[key]:
+            story["image"] = rec
+        return seen[key]
+
     def process(story):
         """Summarize one story (cached unless stale), check its claims, find its image. True if summarized."""
         arts = pick_articles(story["articles"], side_of, ARTICLES_PER_BRIEF)
@@ -557,7 +593,7 @@ def main():
                 except Exception as e:
                     print(f"  image lookup failed for {subj['name']}: {e}")
             if images.get(ikey):
-                story["image"] = images[ikey]
+                pick_image(story, brief, images[ikey], ikey)
         if not story.get("image") and brief.get("img_v") != IMAGES_VERSION and gemini_ok():
             # No person to show: ask once which Wikipedia articles' main pictures would illustrate the story
             # (for an Ebola story, "Ebola virus": the virus, not a patient). Each title must exist, and its
@@ -579,8 +615,7 @@ def main():
                     except Exception as e:
                         print(f"  image lookup failed for {title}: {e}")
                         continue
-                if images.get(ikey):
-                    story["image"] = images[ikey]
+                if images.get(ikey) and pick_image(story, brief, images[ikey], ikey):
                     break
         if not story.get("image"):
             # The subject has no usable photo (a golf course, say): use a person named in the headline, but only
