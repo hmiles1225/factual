@@ -1,0 +1,51 @@
+# Site-only deploy: a push that changes only web/ uploads the site in about a minute, without running
+# the scan (no fetch, no summaries, no spend). Pipeline changes still go through scan.yml, which deploys
+# the site too. Uses the same FTP secrets and upload as scan.yml.
+name: site
+
+on:
+  push:
+    branches: [main]
+    paths: ["web/**", ".github/workflows/site.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: site
+  cancel-in-progress: true   # each run uploads the whole site, so the newest push is the one that counts
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Upload the site
+        env:
+          FTP_HOST: ${{ secrets.FTP_HOST }}
+          FTP_USER: ${{ secrets.FTP_USER }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        run: |
+          if [ -z "$FTP_HOST" ] || [ -z "$FTP_USER" ] || [ -z "$FTP_PASSWORD" ]; then
+            echo "::notice::FTP secrets not set. Skipping deploy."
+            exit 0
+          fi
+          # Hostinger's FTPS certificate is issued to *.hstgr.io, not to our domain or IP.
+          # Connect to FTP_HOST but verify the certificate as hstgr.io, so TLS stays verified.
+          # Upload under a temp name, then rename, so a reader never gets half a file.
+          # The rename runs after curl has changed into the file's folder, so it uses the bare name.
+          put() {  # put <local file> <remote path>
+            name=$(basename "$2")
+            # Hostinger's FTP occasionally stalls (run 81 timed out, curl exit 28): retry each file.
+            curl --fail --silent --show-error --ssl-reqd --ftp-create-dirs \
+              --connect-timeout 30 --max-time 180 --retry 4 --retry-delay 5 --retry-all-errors \
+              --connect-to "hstgr.io:21:$FTP_HOST:21" \
+              --user "$FTP_USER:$FTP_PASSWORD" \
+              -T "$1" "ftp://hstgr.io/$2.tmp" \
+              -Q "-RNFR $name.tmp" -Q "-RNTO $name"
+            echo "uploaded $2"
+          }
+          (cd web && find . -type f | sed 's|^\./||') | while read -r rel; do put "web/$rel" "$rel"; done
