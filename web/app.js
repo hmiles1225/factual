@@ -292,10 +292,18 @@ function brokeAgo(s) {
   return d === 1 ? "Broke yesterday" : `Broke ${d} days ago`;
 }
 
+// Photo subjects already on the home page, top to bottom. A repeat uses the story's second picture, or none.
+let SHOWN = new Set();
+function photoFor(story) {
+  for (const img of [story.image, story.image_alt]) if (img && !SHOWN.has(img.subject)) { SHOWN.add(img.subject); return img; }
+  return null;
+}
+
 function storyCard(story, i, data, isLead) {
   const li = el("li", isLead ? "story story-lead" : "story");
-  // The first story in each section shows its photo, when it has one.
-  if (story.image && (isLead || i === 0)) li.append(figure(story.image, isLead ? "lead-photo" : "card-photo", storyHref(story)));
+  // The first story in each section shows its photo, when it has one, and never one already shown higher up.
+  const img = (isLead || i === 0) ? photoFor(story) : null;
+  if (img) li.append(figure(img, isLead ? "lead-photo" : "card-photo", storyHref(story)));
   const main = el("div", "story-main");
   const when = brokeAgo(story);
   if (when) main.append(el("p", "story-when", when));
@@ -327,6 +335,7 @@ const shownToday = s => s.related_to === null && s.on_today && s.brief && (s.bri
 function drawToday() {
   const data = TODAY;
   const follow = new Set(followedTopics());
+  SHOWN = new Set();
   const nav = $("topic-nav");
   nav.replaceChildren();
   $("sections").replaceChildren();

@@ -476,13 +476,12 @@ def main():
             print(f"  recheck {k}: {why}")
             check_claim(rec["claim"], (rec.get("stories") or ["recheck"])[0], rec.get("said_by", []))
 
-    def pick_image(story, brief, rec, key):
+    def fits(story, brief, rec, key):
         """Portraits are exact name matches; any other picture must also pass the relevance check, once per
         story and picture, before it is shown."""
         if not rec:
             return False
         if key.startswith("person:"):
-            story["image"] = rec
             return True
         seen = brief.setdefault("image_fits", {})
         if key not in seen:
@@ -498,9 +497,79 @@ def main():
             except Exception as e:
                 print(f"  picture check failed: {e}")
                 return False
-        if seen[key]:
-            story["image"] = rec
         return seen[key]
+
+    def person(name):
+        """A verified portrait for a full name, looked up once and cached (a miss is cached as None)."""
+        ikey = f"person:{name.casefold()}"
+        if ikey not in images:
+            try:
+                images[ikey] = image_for(name, "person")
+            except Exception as e:
+                print(f"  image lookup failed for {name}: {e}")
+                return None
+        return images.get(ikey)
+
+    def find_image(story, brief, avoid=frozenset()):
+        """The story's picture, best first, skipping any subject in avoid (so a second call finds a different
+        one): the main subject, a verified person named in the headline, the headline's actor from the shared
+        facts, a Wikipedia article's picture, then any person the facts name."""
+        ok = lambda rec: bool(rec) and rec.get("subject") not in avoid
+        subj = brief.get("main_subject") or {}
+        if subj.get("name") and subj.get("kind") in ("person", "organization", "place"):
+            ikey = f"{subj['kind']}:{subj['name'].casefold()}"
+            if ikey not in images:
+                try:
+                    images[ikey] = image_for(subj["name"], subj["kind"])  # None is cached too: no safe image
+                except Exception as e:
+                    print(f"  image lookup failed for {subj['name']}: {e}")
+            if ok(images.get(ikey)) and fits(story, brief, images[ikey], ikey):
+                return images[ikey]
+        # The subject has no usable photo (a golf course, say): a person named in the headline, but only one
+        # already matched and verified, by full name or a surname of five letters or more, as a whole word.
+        title = story["working_title"]
+        for k, rec in images.items():
+            if not (k.startswith("person:") and ok(rec)):
+                continue
+            full = rec["subject"]
+            last = full.split()[-1]
+            if re.search(rf"\b{re.escape(full)}\b", title) or (len(last) >= 5 and re.search(rf"\b{re.escape(last)}\b", title)):
+                return rec
+        # The headline's actor: a full name from the shared facts whose surname is in the headline ("Trump
+        # Says ..." -> Donald Trump). Heston: a person the headline is about beats a picture of the place.
+        facts_text = " ".join(f["fact"] for f in brief["agreed"] if "left" in f["sides"] and "right" in f["sides"])
+        for name in person_names(facts_text)[:6]:
+            last = name.split()[-1]
+            if len(last) >= 4 and re.search(rf"\b{re.escape(last)}\b", title) and ok(person(name)):
+                return person(name)
+        if brief.get("img_v") != IMAGES_VERSION and gemini_ok():
+            # Ask once which Wikipedia articles' main pictures would illustrate the story (for an Ebola story,
+            # "Ebola virus": the virus, not a patient). Each title must exist, and its picture passes the same
+            # rules: freely licensed, not a map, flag or logo, nothing graphic.
+            brief["img_v"] = IMAGES_VERSION
+            try:
+                out, usage = gemini_json(IMAGE_TITLES_PROMPT.replace("{story}", f"{title}. {facts_text}"[:1500]), IMAGE_TITLES_SCHEMA, "low")
+                charge_gemini(usage)
+                brief["image_titles"] = [t.strip() for t in out.get("titles", [])[:3] if t.strip()]
+            except Exception as e:
+                print(f"  image title suggestion failed: {e}")
+        for t in brief.get("image_titles", []):
+            ikey = f"title:{t.casefold()}"
+            if ikey not in images:
+                try:
+                    images[ikey] = image_for_title(t)
+                except Exception as e:
+                    print(f"  image lookup failed for {t}: {e}")
+                    continue
+            if ok(images.get(ikey)) and fits(story, brief, images[ikey], ikey):
+                return images[ikey]
+        # Any person the shared facts or the headline name, in order, under the same strict rules. Facts first:
+        # they are in sentence case, so capitalized runs are names; headlines are in title case.
+        text = " ".join([f["fact"] for f in brief["agreed"] if "left" in f["sides"] and "right" in f["sides"]][:3] + [title])
+        for name in person_names(text)[:6]:
+            if ok(person(name)):
+                return person(name)
+        return None
 
     def process(story):
         """Summarize one story (cached unless stale), check its claims, find its image. True if summarized."""
@@ -608,91 +677,17 @@ def main():
         story["checks"] = [k for d in brief["differences"] for k in [d.get("check")] + [p.get("check") for p in d["positions"]] if k]
         # A picture approved for this summary is kept: stable from scan to scan, and no lookup or check repeats
         # (so pictures don't drop when the day's budget is spent). A new summary or rule version re-picks.
-        if brief.get("image_v") == IMAGES_VERSION and brief.get("image"):
-            story["image"] = brief["image"]
-        subj = brief.get("main_subject") or {}
-        if not story.get("image") and subj.get("name") and subj.get("kind") in ("person", "organization", "place"):
-            ikey = f"{subj['kind']}:{subj['name'].casefold()}"
-            if ikey not in images:
-                try:
-                    images[ikey] = image_for(subj["name"], subj["kind"])  # None is cached too: no safe image
-                except Exception as e:
-                    print(f"  image lookup failed for {subj['name']}: {e}")
-            if images.get(ikey):
-                pick_image(story, brief, images[ikey], ikey)
-        if not story.get("image"):
-            # The subject has no usable photo (a golf course, say): use a person named in the headline, but only
-            # one already matched and verified, by full name or a surname of five letters or more, as a whole word.
-            title = story["working_title"]
-            for k, rec in images.items():
-                if not (k.startswith("person:") and rec):
-                    continue
-                full = rec["subject"]
-                last = full.split()[-1]
-                if re.search(rf"\b{re.escape(full)}\b", title) or (len(last) >= 5 and re.search(rf"\b{re.escape(last)}\b", title)):
-                    story["image"] = rec
-                    break
-        if not story.get("image"):
-            # The headline's actor: a full name from the shared facts whose surname is in the headline ("Trump
-            # Says ..." -> Donald Trump). Heston: a person the headline is about beats a picture of the place.
-            headline = story["working_title"]
-            facts_text = " ".join(f["fact"] for f in brief["agreed"] if "left" in f["sides"] and "right" in f["sides"])
-            for name in person_names(facts_text)[:6]:
-                last = name.split()[-1]
-                if len(last) < 4 or not re.search(rf"\b{re.escape(last)}\b", headline):
-                    continue
-                ikey = f"person:{name.casefold()}"
-                if ikey not in images:
-                    try:
-                        images[ikey] = image_for(name, "person")
-                    except Exception as e:
-                        print(f"  image lookup failed for {name}: {e}")
-                        continue
-                if images.get(ikey):
-                    story["image"] = images[ikey]
-                    break
-        if not story.get("image") and brief.get("img_v") != IMAGES_VERSION and gemini_ok():
-            # No person to show: ask once which Wikipedia articles' main pictures would illustrate the story
-            # (for an Ebola story, "Ebola virus": the virus, not a patient). Each title must exist, and its
-            # picture passes the same rules: freely licensed, not a map, flag or logo, nothing graphic.
-            brief["img_v"] = IMAGES_VERSION
-            facts = " ".join(f["fact"] for f in brief["agreed"] if "left" in f["sides"] and "right" in f["sides"])
-            try:
-                out, usage = gemini_json(IMAGE_TITLES_PROMPT.replace("{story}", f"{story['working_title']}. {facts}"[:1500]), IMAGE_TITLES_SCHEMA, "low")
-                charge_gemini(usage)
-                brief["image_titles"] = [t.strip() for t in out.get("titles", [])[:3] if t.strip()]
-            except Exception as e:
-                print(f"  image title suggestion failed: {e}")
-        if not story.get("image"):
-            for title in brief.get("image_titles", []):
-                ikey = f"title:{title.casefold()}"
-                if ikey not in images:
-                    try:
-                        images[ikey] = image_for_title(title)
-                    except Exception as e:
-                        print(f"  image lookup failed for {title}: {e}")
-                        continue
-                if images.get(ikey) and pick_image(story, brief, images[ikey], ikey):
-                    break
-        if not story.get("image"):
-            # Still none: look up the people the headline and the shared facts name, in order, under the same
-            # strict rules (exact name or alias, living person, a clearly famous one if several share the name).
-            # Every lookup, hit or miss, is cached, so a name is asked about once.
-            # Facts first: they are in sentence case, so capitalized runs are names; headlines are in title case.
-            text = " ".join([f["fact"] for f in brief["agreed"] if "left" in f["sides"] and "right" in f["sides"]][:3] + [story["working_title"]])
-            for name in person_names(text)[:6]:
-                ikey = f"person:{name.casefold()}"
-                if ikey not in images:
-                    try:
-                        images[ikey] = image_for(name, "person")
-                    except Exception as e:
-                        print(f"  image lookup failed for {name}: {e}")
-                        continue
-                if images.get(ikey):
-                    story["image"] = images[ikey]
-                    break
-        if story.get("image"):
-            brief["image"], brief["image_v"] = story["image"], IMAGES_VERSION
+        if brief.get("image_v") != IMAGES_VERSION or not brief.get("image"):
+            found = find_image(story, brief)
+            if found:
+                brief["image"], brief["image_v"] = found, IMAGES_VERSION
+        story["image"] = brief.get("image") if brief.get("image_v") == IMAGES_VERSION else None
+        # A second picture of a different subject, for when the home page has already shown the first one
+        # higher up (two Trump portraits in two sections). Found once, like the first.
+        if story["image"] and brief.get("image_alt_v") != IMAGES_VERSION:
+            brief["image_alt"] = find_image(story, brief, avoid={story["image"]["subject"]})
+            brief["image_alt_v"] = IMAGES_VERSION
+        story["image_alt"] = brief.get("image_alt") if story["image"] else None
         shared = [f for f in brief["agreed"] if "left" in f["sides"] and "right" in f["sides"]]
         print(f"  {story['sid']} [{story['topic']}]: {len(shared)} common ground of {len(brief['agreed'])} agreed, {len(brief['differences'])} differences")
         return bool(shared)  # Today shows only what both sides report; no common ground, no slot
@@ -937,7 +932,7 @@ def write_archive(stories, feeds):
         print(f"  archive not readable ({e}); not writing it this scan")
         return
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    keep = ("sid", "working_title", "topic", "span", "outlets", "sources", "coverage", "articles", "checks", "image")
+    keep = ("sid", "working_title", "topic", "span", "outlets", "sources", "coverage", "articles", "checks", "image", "image_alt")
     for st in stories:
         rec = {k: st[k] for k in keep if k in st}
         rec["brief"] = {k: v for k, v in st["brief"].items() if k != "dropped_agreed"}
