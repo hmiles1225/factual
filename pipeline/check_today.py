@@ -381,6 +381,13 @@ def main():
         print(f"  {record['verdict']:<16} {text[:80]}")
         return k
 
+    # One-off fresh checks run on their own: a claim already attached to a story is never asked for again.
+    for k, why in FORCE_RECHECK.items():
+        rec = claims.get(k)
+        if rec and not rec.get("rechecked"):
+            print(f"  recheck {k}: {why}")
+            check_claim(rec["claim"], (rec.get("stories") or ["recheck"])[0], rec.get("said_by", []))
+
     def process(story):
         """Summarize one story (cached unless stale), check its claims, find its image. True if summarized."""
         arts = pick_articles(story["articles"], side_of, ARTICLES_PER_BRIEF)
