@@ -12,7 +12,7 @@ of each dataset, found by a freshness check at the time the claim is checked.
 
 | Verdict | Means |
 | --- | --- |
-| Holds up | True as stated, on the newest evidence. |
+| Confirmed | True as stated, on the newest evidence. (Stored in the data as `Holds up`.) |
 | Missing context | True as stated, but it leaves out something that changes the picture. |
 | Doesn't hold up | Not true as stated. Overstated and out-of-date claims count. |
 | Unproven | Not enough evidence either way, yet. |

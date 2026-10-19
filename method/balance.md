@@ -40,3 +40,13 @@ Every story shows its coverage the same way, for example "Left 4 of 10 · Center
 - Common ground is only what outlets on both sides state in their own text. The confirmation reads
   every article in the story, not just the ones the summary writer cited.
 - Every story that appears on Today is kept in the archive, by day (U.S. Eastern).
+
+## Outlets Pew did not survey (2026-10-19)
+
+Pew's 2025 survey covers 17 of the outlets we read. An outlet it did not survey is placed from its
+published AllSides Media Bias Rating instead (Left and Lean Left are left-leaning, Center is center,
+Lean Right and Right are right-leaning), read from the outlet's AllSides page. AllSides is a category,
+not a number, so these outlets count fully toward their side but are not drawn on the Pew audience
+chart; the page names them under it. Ratings AllSides marks as low confidence are not used. Within a
+side every outlet counts once, and the three sides count equally, so adding outlets to one side spreads
+that side's weight rather than adding to it.

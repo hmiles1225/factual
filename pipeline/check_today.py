@@ -52,6 +52,8 @@ GEMINI_FREE_SEARCHES = 150      # Google gives 5,000 free a month across Gemini 
 SEARCH_USD = 0.014               # then $14 per 1,000 searches (ai.google.dev pricing, 2026-10-18), charged to the Gemini cap
 UNDERCOUNT = 1.7                 # our cost log ran this far under the real bill (2026-10-17)
 RECHECK_AFTER_DAYS = 7
+# One-off fresh checks, by library key, when a verdict is known to rest on thin evidence. Runs once each.
+FORCE_RECHECK = {"ff5e92501774": "court order cited never names the course; look for a filing that does (2026-10-19)"}
 OPUS_TYPICAL_USD = 0.51          # measured mean per Opus second opinion, 2026-10-17 eval
 SAME_CLAIM = 0.93                # embedding similarity at which two wordings are one claim
 MIN_OUTLETS_AGREED = 2           # an agreed fact needs at least this many outlets to state it
@@ -341,7 +343,8 @@ def main():
         existing = find_existing(text)
         rec = claims.get(existing) if existing else None
         fresh = rec and datetime.fromisoformat(rec["checked_at"]) > datetime.now(timezone.utc) - timedelta(days=RECHECK_AFTER_DAYS)
-        if rec and fresh and not rec.get("pending_second"):
+        forced = existing in FORCE_RECHECK and not (rec or {}).get("rechecked")
+        if rec and fresh and not rec.get("pending_second") and not forced:
             rec["stories"] = sorted(set(rec.get("stories", [])) | {story_sid})
             return existing
         if state["new_this_scan"] >= MAX_NEW_PER_SCAN or spend["new_claims"] >= MAX_NEW_PER_DAY or not gemini_ok():
@@ -371,6 +374,8 @@ def main():
                 verdict, note = C.UN, "second opinion waiting for budget"
         k = existing or key_of(text)
         record = public_record(text, first, second, verdict, note, sorted(set((rec or {}).get("stories", [])) | {story_sid}), said_by)
+        if forced:
+            record["rechecked"] = FORCE_RECHECK[existing]
         support_ok(record)
         claims[k] = record
         print(f"  {record['verdict']:<16} {text[:80]}")

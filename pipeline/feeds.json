@@ -164,11 +164,22 @@
   },
   {
    "source": "Vox",
-   "url": "https://www.vox.com/rss/index.xml"
+   "url": "https://www.vox.com/rss/index.xml",
+   "allsides": {
+    "rating": "Left",
+    "as_of": "2026",
+    "url": "https://www.allsides.com/news-source/vox-media-bias"
+   }
   },
   {
    "source": "Washington Examiner",
-   "url": "https://www.washingtonexaminer.com/feed/"
+   "url": "https://www.washingtonexaminer.com/feed/",
+   "allsides": {
+    "rating": "Lean Right",
+    "confidence": "High",
+    "as_of": "2026-10",
+    "url": "https://www.allsides.com/news-source/washington-examiner-media-bias"
+   }
   },
   {
    "source": "The Daily Wire",
@@ -186,6 +197,45 @@
     "dem": 10
    },
    "_note": "Google News sitemap, listed in Forbes' robots.txt."
+  },
+  {
+   "source": "Washington Times",
+   "url": "https://www.washingtontimes.com/rss/headlines/news/",
+   "allsides": {
+    "rating": "Lean Right",
+    "confidence": "Medium",
+    "as_of": "2026-10",
+    "url": "https://www.allsides.com/news-source/washington-times-media-bias"
+   }
+  },
+  {
+   "source": "National Review",
+   "url": "https://www.nationalreview.com/feed/",
+   "allsides": {
+    "rating": "Lean Right",
+    "note": "AllSides rates National Review news Lean Right and its opinion Right; opinion pieces are filtered out of the scan.",
+    "url": "https://www.allsides.com/media-bias"
+   }
+  },
+  {
+   "source": "Daily Caller",
+   "url": "https://dailycaller.com/feed/",
+   "allsides": {
+    "rating": "Lean Right",
+    "note": "AllSides moved it from Right to Lean Right in a September 2026 editorial review; both place it right-leaning here.",
+    "as_of": "2026-09",
+    "url": "https://www.allsides.com/news-source/daily-caller-media-bias"
+   }
+  },
+  {
+   "source": "Washington Free Beacon",
+   "url": "https://freebeacon.com/feed/",
+   "allsides": {
+    "rating": "Right",
+    "confidence": "High",
+    "as_of": "2026-09",
+    "url": "https://www.allsides.com/news-source/washington-free-beacon-media-bias"
+   }
   }
  ],
  "placement_source": {
@@ -204,6 +254,12 @@
   {
    "date": "2026-10-18",
    "change": "Added section feeds (health, science, climate) for NPR, New York Times, ABC News, CBS News, Fox News, New York Post and Breitbart; see _note_sections."
+  },
+  {
+   "date": "2026-10-19",
+   "change": "Added a second placement source, AllSides, for outlets Pew did not survey. Placed Washington Examiner (Lean Right) and Vox (Left); added Washington Times, National Review, Daily Caller and Washington Free Beacon (all right-leaning by AllSides). Right side goes from 3 to 8 outlets, left from 10 to 11.",
+   "by": "Heston's call"
   }
- ]
+ ],
+ "_note_allsides": "Outlets Pew did not survey are placed from AllSides Media Bias Ratings (allsides.com), read from each outlet's AllSides page on 2026-10-19: Left and Lean Left are left-leaning, Center is center, Lean Right and Right are right-leaning. AllSides is a category, not a number, so these outlets count fully toward their side but are not drawn on the Pew audience chart. Ratings AllSides itself marks as low confidence are not used (TheBlaze). Reason and The Federalist have no current AllSides page we could verify, so they stay Unplaced."
 }

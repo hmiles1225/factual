@@ -20,7 +20,7 @@ const DECIDED = ["Holds up", "Missing context", "Doesn't hold up"];
 
 // Verdicts: always a glyph and a word, never color alone (Figma Foundations 5:119).
 const VERDICT = {
-  "Holds up": { cls: "hold", glyph: "✓" },
+  "Holds up": { cls: "hold", glyph: "✓", label: "Confirmed" },   // stored as "Holds up"; readers see Confirmed
   "Missing context": { cls: "ctx", glyph: "◐" },
   "Doesn't hold up": { cls: "no", glyph: "✕" },
   "Unproven": { cls: "unk", glyph: "?" },
@@ -68,7 +68,7 @@ function decided(story, lib) {
 function chip(verdict) {
   const v = VERDICT[verdict] || VERDICT.Unproven;
   const c = el("span", `chip chip-${v.cls}`);
-  c.append(el("span", "chip-glyph", v.glyph), el("span", "chip-word", verdict));
+  c.append(el("span", "chip-glyph", v.glyph), el("span", "chip-word", v.label || verdict));
   return c;
 }
 
@@ -111,7 +111,7 @@ function spectrum(points, legend, ariaLabel) {
     fig.append(lg);
   }
   fig.draw = () => {
-    const W = Math.max(260, Math.round(wrap.clientWidth)), padX = 14, axisY = 34, r = 6;
+    const W = Math.max(200, Math.round(wrap.clientWidth)), padX = 14, axisY = 34, r = 6;
     const x = v => padX + v * (W - 2 * padX);
     // Simple stacking so dots never hide each other: each row holds dots at least 2r+3 apart.
     const rows = [], placed = [];
@@ -158,11 +158,11 @@ function spectrum(points, legend, ariaLabel) {
 }
 
 // Name a group of outlets by where their audiences sit, from Pew data, never by hand.
-const sideOfLean = v => v < 0.4 ? "left" : v > 0.6 ? "right" : "center";
-const sidesIn = (outlets, leanOf) => new Set(outlets.map(o => leanOf[o]).filter(v => v != null).map(sideOfLean));
+let SIDE = {};  // outlet -> left/center/right, placed in the scan from Pew, else AllSides
+const sidesIn = outlets => new Set(outlets.map(o => SIDE[o]).filter(x => x && x !== "unplaced"));
 function sideName(outlets, leanOf) {
   // Names exactly what is in the group, the same way for both sides. No averages, no "mostly".
-  const has = sidesIn(outlets, leanOf);
+  const has = sidesIn(outlets);
   if (!has.size) return "Outlets Pew did not survey";
   if (has.has("left") && has.has("right")) return "Outlets on both sides";
   const words = { left: "Left-leaning", center: "Center", right: "Right-leaning" };
@@ -220,7 +220,11 @@ function storyCard(story, i, data, isLead) {
     const ul = el("ul", "checks");
     for (const { c } of rows) {
       const r = el("li");
-      r.append(chip(c.verdict), el("span", "check-claim", c.claim));
+      const txt = el("div");
+      txt.append(el("span", "check-claim", c.claim));
+      const src = sourcesLine(c);
+      if (src) txt.append(src);
+      r.append(chip(c.verdict), txt);
       ul.append(r);
     }
     li.append(ul);
@@ -317,7 +321,27 @@ function renderArchive(index) {
 
 /* ---------- One story ---------- */
 
+// The sources a check rests on, always visible: one link per page, publisher named.
+function sourcesLine(c) {
+  const seen = new Set(), links = [];
+  for (const e of c.evidence || []) {
+    if (!e.url || seen.has(e.url)) continue;
+    seen.add(e.url);
+    const a = el("a", "src-link", `${e.publisher} \u2197`);
+    a.href = e.url;
+    a.rel = "noopener";
+    links.push(a);
+  }
+  if (!links.length) return null;
+  const p = el("p", "check-sources");
+  p.append(el("span", null, links.length === 1 ? "Source: " : "Sources: "));
+  links.slice(0, 4).forEach((a, i) => { if (i) p.append(document.createTextNode(" \u00b7 ")); p.append(a); });
+  if (links.length > 4) p.append(document.createTextNode(` and ${links.length - 4} more`));
+  return p;
+}
+
 function claimDetails(c) {
+  const wrap = el("div", "check");
   const det = el("details", "check-row");
   const sum = el("summary");
   sum.append(chip(c.verdict), el("span", "check-claim", c.claim));
@@ -343,14 +367,18 @@ function claimDetails(c) {
   const by = [c.checked_by, c.second_opinion].filter(Boolean).map(m => MODEL_NAMES[m] || m).join(" and ");
   body.append(el("p", "check-meta", `Checked ${stamp(c.checked_at)} by ${by}. Every quote above was found on its source page.`));
   det.append(body);
-  return det;
+  wrap.append(det);
+  const src = sourcesLine(c);
+  if (src) wrap.append(src);
+  return wrap;
 }
 
-const meanLean = (outlets, leanOf) => { const v = outlets.map(o => leanOf[o]).filter(x => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+// For ordering only (left account first): Pew position, else the middle of the outlet's AllSides side.
+const meanLean = (outlets, leanOf) => { const v = outlets.map(o => leanOf[o] ?? { left: 0.2, center: 0.5, right: 0.8 }[SIDE[o]]).filter(x => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
 
 // Does a disagreement follow the left-right line? Read from where each side's outlets sit, never by hand.
 function splitLine(pos, leanOf) {
-  const [a, b] = pos.map(p => sidesIn(p.outlets, leanOf));
+  const [a, b] = pos.map(p => sidesIn(p.outlets));
   if (!a.size || !b.size) return null;
   const shared = pos[0].outlets.filter(o => pos[1].outlets.includes(o));
   const both = shared.length ? ` ${listNames(shared, 3)} reported both.` : "";
@@ -364,6 +392,7 @@ function splitLine(pos, leanOf) {
 
 // The words that are the actual difference, in bold. The phrase was checked in code to be in the text.
 function withCrux(node, text, crux) {
+  text = text.charAt(0).toUpperCase() + text.slice(1);  // the summarizer sometimes starts mid-sentence
   const i = crux ? text.indexOf(crux) : -1;
   if (i < 0) { node.textContent = text; return node; }
   node.append(document.createTextNode(text.slice(0, i)), el("strong", null, crux), document.createTextNode(text.slice(i + crux.length)));
@@ -437,6 +466,7 @@ function renderStory(data) {
 
   const leanOf = Object.fromEntries((data.feeds || []).filter(f => f.lean != null).map(f => [f.source, f.lean]));
   PEW = Object.fromEntries((data.feeds || []).filter(f => f.pew).map(f => [f.source, f.pew]));
+  SIDE = Object.fromEntries((data.feeds || []).map(f => [f.source, f.side]));
   // 1. The story: every fact several outlets confirm, both-sides facts first, one-side facts tagged.
   // 1. The story: only facts outlets on both the left and the right report.
   if (agreed.some(acrossSides)) {
@@ -469,10 +499,11 @@ function renderStory(data) {
       [["fill", "Covered this story"], ["ghost", "Did not"]],
       `Outlets that covered this story, placed by audience: ${story.sources.join(", ")}`);
     sc.append(fig);
-    const unplaced = story.sources.filter(o => leanOf[o] == null);
+    const byAllSides = story.sources.filter(o => leanOf[o] == null && SIDE[o] && SIDE[o] !== "unplaced");
+    const unplaced = story.sources.filter(o => leanOf[o] == null && !byAllSides.includes(o));
     const who = sideName(story.sources, leanOf);
     if (/^(Left|Right)-leaning outlets$/.test(who)) fig.before(el("p", "diff-split", `Only ${who.toLowerCase()} covered this story.`));
-    sc.append(el("p", "block-note", `Each dot is an outlet we read. Toward the left, Democrats are more likely than Republicans to get news there; toward the right, Republicans are. Center outlets are used about equally (Pew Research Center, 2025).${unplaced.length ? ` Also covered by ${listNames(unplaced, 4)}, which Pew did not survey.` : ""}`));
+    sc.append(el("p", "block-note", `Each dot is an outlet we read. Toward the left, Democrats are more likely than Republicans to get news there; toward the right, Republicans are. Center outlets are used about equally (Pew Research Center, 2025).${byAllSides.length ? ` Also covered by ${byAllSides.map(o => `${o} (${SIDE[o] === "center" ? "center" : SIDE[o] + "-leaning"})`).join(", ")}, placed by AllSides because Pew did not survey ${byAllSides.length === 1 ? "it" : "them"}.` : ""}${unplaced.length ? ` And by ${listNames(unplaced, 4)}, which neither rates.` : ""}`));
     body.append(sc);
     fig.draw();
   }

@@ -124,12 +124,18 @@ def previous_ids():
         return {}
 
 
+ALLSIDES_SIDE = {"Left": "left", "Lean Left": "left", "Center": "center", "Lean Right": "right", "Right": "right"}
+
+
 def side_of(feed):
+    """Pew's audience data first. An outlet Pew did not survey is placed from its published AllSides
+    rating, if it has one (feeds.json says which). Never set by hand."""
     pew = feed.get("pew")
-    if not pew:
-        return "unplaced"
-    share = pew["rep"] / (pew["rep"] + pew["dem"])
-    return "left" if share < LEFT_BELOW else "right" if share > RIGHT_ABOVE else "center"
+    if pew:
+        share = pew["rep"] / (pew["rep"] + pew["dem"])
+        return "left" if share < LEFT_BELOW else "right" if share > RIGHT_ABOVE else "center"
+    rating = (feed.get("allsides") or {}).get("rating")
+    return ALLSIDES_SIDE.get(rating, "unplaced")
 
 
 def is_opinion(art):
@@ -216,6 +222,7 @@ def main():
     # Audience lean, 0 = all Democratic users, 1 = all Republican users (Pew), for the spectrum charts.
     lean = {f["source"]: round(f["pew"]["rep"] / (f["pew"]["rep"] + f["pew"]["dem"]), 3) for f in feeds["feeds"] if f.get("pew")}
     pew = {f["source"]: {"rep": f["pew"]["rep"], "dem": f["pew"]["dem"]} for f in feeds["feeds"] if f.get("pew")}
+    allsides = {f["source"]: f["allsides"]["rating"] for f in feeds["feeds"] if not f.get("pew") and (f.get("allsides") or {}).get("rating") in ALLSIDES_SIDE}
     working = {f["source"] for f in scan.get("feeds", []) if f["ok"]}
     roster = {k: sorted(src for src in working if side.get(src, "unplaced") == k) for k in (*SIDES, "unplaced")}
 
@@ -278,7 +285,9 @@ def main():
     out = {
         "scanned_at": scan["fetched_at"],
         "articles_scanned": len(articles),
-        "feeds": [{**f, "side": side.get(f["source"], "unplaced"), "lean": lean.get(f["source"]), "pew": pew.get(f["source"])}
+        "feeds": [{**f, "side": side.get(f["source"], "unplaced"), "lean": lean.get(f["source"]), "pew": pew.get(f["source"]),
+                   "placed_by": "Pew" if f["source"] in pew else "AllSides" if allsides.get(f["source"]) else None,
+                   "allsides": allsides.get(f["source"])}
                   for f in scan.get("feeds", [])],
         "method": {"model": MODEL, "threshold": THRESHOLD, "window_hours": WINDOW_HOURS, "linkage": "average", "related": RELATED,
                    "topics": {"politics": "U.S. politics and U.S. policy abroad", "environment": "Environment and climate",
