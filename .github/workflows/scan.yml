@@ -91,6 +91,13 @@ jobs:
           }
           # The site first, then the data it reads.
           (cd web && find . -type f | sed 's|^\./||') | while read -r rel; do put "web/$rel" "$rel"; done
-          for f in data/images/*; do [ -f "$f" ] && put "$f" "data/images/$(basename "$f")"; done
-          for f in data/*.json; do put "$f" "data/$(basename "$f")"; done
-          for f in data/archive/*.json; do [ -f "$f" ] && put "$f" "data/archive/$(basename "$f")"; done
+          for f in data/images/*; do if [ -f "$f" ]; then put "$f" "data/images/$(basename "$f")"; fi; done
+          # stories.json goes up only when the summarizing step finished. Otherwise the site keeps the last
+          # summarized list: an unsummarized one would empty Today, since Today shows summarized stories only.
+          for f in data/*.json; do
+            if [ "$(basename "$f")" = "stories.json" ] && [ ! -f data/.summarized ]; then
+              echo "::warning::Summarizing did not finish; keeping the live stories.json"; continue
+            fi
+            put "$f" "data/$(basename "$f")"
+          done
+          for f in data/archive/*.json; do if [ -f "$f" ]; then put "$f" "data/archive/$(basename "$f")"; fi; done
