@@ -49,9 +49,9 @@ MAX_NEW_PER_DAY = 30
 ANTHROPIC_DAILY_USD = 1.10       # two Opus second opinions (~$0.51 each) a day
 GEMINI_DAILY_USD = 2.00          # summaries, checks, and searches past Google's free allowance
 # One-off raises, approved by Heston for a specific date only. Expires by itself.
-GEMINI_EXTRA_USD = {"2026-10-19": 0.50}   # one-off, approved by Heston: today's total stays at the $2.50 he approved
+GEMINI_EXTRA_USD = {"2026-10-19": 1.70}   # one-off, Heston "roll this out now": ~$0.75 past today's $2.95 spend, cap $3.70
 # Bump when the outlet list changes: a story whose outlets changed since its summary is re-summarized once.
-ROSTER_VERSION = "2026-10-19"
+ROSTER_VERSION = "2026-10-19b"   # 35 outlets, 15 left / 15 right
 GEMINI_FREE_SEARCHES = 150      # Google gives 5,000 free a month across Gemini 3 models; ~150 a day
 SEARCH_USD = 0.014               # then $14 per 1,000 searches (ai.google.dev pricing, 2026-10-18), charged to the Gemini cap
 CHECK_RESERVE_USD = 0.35         # most one fact-check has cost (tokens plus paid searches), with margin
