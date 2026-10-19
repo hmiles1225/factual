@@ -72,10 +72,16 @@ def image_for(name, kind):
             continue  # people must be living humans: a historical namesake is never today's subject
         if kind == "place" and not val(e, "P625"):
             continue  # a place must have coordinates: "china" the tableware is not China the country
+        if val(e, "P171") or val(e, "P105"):
+            continue  # a species is never the subject: "turkey" the bird, "apple" the fruit
+        if kind == "organization" and not any(val(e, p) for p in ("P571", "P159", "P112", "P856")):
+            continue  # an organization has a founding date, headquarters, founder or website
         cands.append((len(e.get("sitelinks", {})), q, e))
     cands.sort(key=lambda c: -c[0])
     if not cands:
         return None
+    if kind != "person" and len(cands) > 1 and cands[0][0] < 3 * max(cands[1][0], 1):
+        return None  # two real places or bodies share the name (Georgia the country, Georgia the state): no guess
     if kind == "person" and len(cands) > 1:
         # Several living people share the name: take the most widely documented one only when it is
         # clearly the famous one (at least 20 linked Wikipedias and 5 times the next), else no image.
