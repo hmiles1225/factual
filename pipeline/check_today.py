@@ -48,7 +48,9 @@ MAX_NEW_PER_DAY = 30
 ANTHROPIC_DAILY_USD = 0.60       # just above one Opus second opinion (~$0.51), so Doesn't hold up can still publish
 GEMINI_DAILY_USD = 1.00
 # One-off raises, approved by Heston for a specific date only. Expires by itself.
-GEMINI_EXTRA_USD = {}             # date -> extra dollars; none approved beyond the ~$3/day plan
+GEMINI_EXTRA_USD = {"2026-10-19": 1.50}   # one-off, approved by Heston: re-summarize Today with the new right-leaning outlets
+# Bump when the outlet list changes: a story whose outlets changed since its summary is re-summarized once.
+ROSTER_VERSION = "2026-10-19"
 GEMINI_FREE_SEARCHES = 150      # Google gives 5,000 free a month across Gemini 3 models; ~150 a day
 SEARCH_USD = 0.014               # then $14 per 1,000 searches (ai.google.dev pricing, 2026-10-18), charged to the Gemini cap
 UNDERCOUNT = 1.7                 # our cost log ran this far under the real bill (2026-10-17)
@@ -415,7 +417,8 @@ def main():
         # Re-summarize on a new brief version, or when the outlets changed and either a new side joined or
         # REBRIEF_HOURS have passed. A new article from an outlet already in the story never triggers it.
         stale = not cached or cached.get("version") != BRIEF_VERSION or (
-            cached.get("outlets") != outlets_now and (cached.get("sides") != sides_now or age_h >= REBRIEF_HOURS))
+            cached.get("outlets") != outlets_now and (cached.get("sides") != sides_now or age_h >= REBRIEF_HOURS
+                                                      or cached.get("roster") != ROSTER_VERSION))
         brief = cached["brief"] if cached else None
         if stale and gemini_ok():
             with ThreadPoolExecutor(max_workers=8) as pool:
@@ -429,7 +432,7 @@ def main():
                 raw, usage = gemini_json(BRIEF_PROMPT.replace("{coverage}", "\n".join(lines)), BRIEF_SCHEMA)
                 charge_gemini(usage)
                 brief = build_brief(raw, arts, lines, side_of, gemini_json, charge_gemini)
-                briefs[story["sid"]] = {"version": BRIEF_VERSION, "outlets": outlets_now, "sides": sides_now, "brief": brief,
+                briefs[story["sid"]] = {"version": BRIEF_VERSION, "roster": ROSTER_VERSION, "outlets": outlets_now, "sides": sides_now, "brief": brief,
                                         "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                                         "openings_read": sum(1 for x in excerpts if x)}
             except Exception as e:
