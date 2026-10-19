@@ -44,6 +44,7 @@ TOPIC_QUOTAS = {"politics": 5, "elections": 3, "economy": 3, "immigration": 3, "
 EXTRA_CANDIDATES = 3             # stories tried past the quota, in rank order, when one won't summarize
 ARTICLES_PER_BRIEF = 14          # picked round-robin by side, so one side can't fill the brief
 EXCERPT_CHARS = 900              # opening of each article read for the brief; never published
+FRESH_HOURS = 24               # Today's daily sections prefer stories that broke this recently (Heston, 2026-10-19)
 REBRIEF_HOURS = 6                # a story is re-summarized when a new side joins, else at most this often
 MAX_NEW_PER_SCAN = 5
 MAX_NEW_PER_DAY = 30
@@ -702,6 +703,10 @@ def main():
     both = lambda s: bool(s["coverage"].get("left")) and bool(s["coverage"].get("right"))
     for topic, quota in TOPIC_QUOTAS.items():
         cands = [s for s in data["stories"] if s.get("related_to") is None and s.get("topic") == topic and both(s)]
+        # Daily sections: stories that broke in the last FRESH_HOURS go first, in ranking order; older ones
+        # only fill what is left. Weekly sections (span "week") keep their whole pool.
+        fresh = [s for s in cands if s.get("span") != "week" and hours_since_broke(s) <= FRESH_HOURS]
+        cands = fresh + [s for s in cands if s not in fresh]
         done = 0
         for story in cands[:quota + EXTRA_CANDIDATES]:
             if done >= quota:
@@ -958,6 +963,18 @@ def deattribute(claim, outlets):
     out = re.sub(rf"^(?:the\s+)?(?:{names})\s+(?:reported|reports|says|said|states|stated|writes|wrote)\s+(?:that\s+)?",
                  "", claim.strip(), flags=re.I) if names else claim.strip()
     return out[:1].upper() + out[1:]
+
+
+def hours_since_broke(story):
+    """Hours since a story's first article was published; very large when no article has a date."""
+    times = []
+    for a in story.get("articles", []):
+        try:
+            t = datetime.fromisoformat((a.get("published") or "").replace("Z", "+00:00"))
+            times.append(t if t.tzinfo else t.replace(tzinfo=timezone.utc))
+        except ValueError:
+            pass
+    return (datetime.now(timezone.utc) - min(times)).total_seconds() / 3600 if times else 1e9
 
 
 def keep_checked_splits(new, old, claims, vec, limit=3):
