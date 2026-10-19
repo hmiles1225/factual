@@ -584,8 +584,12 @@ def main():
                     pos["check"] = check_claim(pos["checkable_claim"], story["sid"], pos["outlets"])
         story["brief"] = brief
         story["checks"] = [k for d in brief["differences"] for k in [d.get("check")] + [p.get("check") for p in d["positions"]] if k]
+        # A picture approved for this summary is kept: stable from scan to scan, and no lookup or check repeats
+        # (so pictures don't drop when the day's budget is spent). A new summary or rule version re-picks.
+        if brief.get("image_v") == IMAGES_VERSION and brief.get("image"):
+            story["image"] = brief["image"]
         subj = brief.get("main_subject") or {}
-        if subj.get("name") and subj.get("kind") in ("person", "organization", "place"):
+        if not story.get("image") and subj.get("name") and subj.get("kind") in ("person", "organization", "place"):
             ikey = f"{subj['kind']}:{subj['name'].casefold()}"
             if ikey not in images:
                 try:
@@ -665,6 +669,8 @@ def main():
                 if images.get(ikey):
                     story["image"] = images[ikey]
                     break
+        if story.get("image"):
+            brief["image"], brief["image_v"] = story["image"], IMAGES_VERSION
         shared = [f for f in brief["agreed"] if "left" in f["sides"] and "right" in f["sides"]]
         print(f"  {story['sid']} [{story['topic']}]: {len(shared)} common ground of {len(brief['agreed'])} agreed, {len(brief['differences'])} differences")
         return bool(shared)  # Today shows only what both sides report; no common ground, no slot
