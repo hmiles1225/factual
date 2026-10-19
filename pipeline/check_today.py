@@ -135,21 +135,23 @@ Facts:
 Articles:
 {articles}"""
 
-SUPPORT_SCHEMA = _item({"established": {"type": "string", "enum": ["all", "part", "none"]}, "missing": {"type": "string"}},
+SUPPORT_SCHEMA = _item({"established": {"type": "string", "enum": ["all", "part", "none"]},
+                        "missing": {"type": "string", "description": "Only the part of the claim the evidence does not establish, as a short phrase starting with 'that' (e.g. 'that other work was paused'). Empty if all is established."}},
                        ["established", "missing"])
-SUPPORT_VERSION = "3"   # 2: quotes judged in their page passage; 3: plus the page's sentences naming the claim's terms, editor's standard
+SUPPORT_VERSION = "4"   # 2: quotes judged in their page passage; 3: plus the page's sentences naming the claim's terms, editor's standard
 SUPPORT_PROMPT = """Below is a claim and the evidence for it. Each item is a quote copied word for word from its
 source page, shown with the page's address and the passage around the quote on that page, which our
 code read itself, and other sentences from the same page that mention names or numbers in the claim.
 Using ONLY this evidence, not anything you know, decide whether it establishes every part of the claim.
 The address, passage and other sentences can establish what a quote is about (which court, case, place,
 person or date). Judge as a careful editor would: ordinary paraphrase and plain implication count (2,700
-events are thousands of events; events that took place were planned). Words that change the meaning do
+events are thousands of events; events that took place were planned; the same place, person or body under
+a slightly different name is the same). Words that change the meaning do
 not: a quote saying someone left or was asked to reconsider does not establish that they were fired; a
 total does not establish a record; an endorsement does not establish when it was withheld.
 
 Answer "all" only if every part of the claim, as worded, is established. Answer "part" if some of it is
-and some is not, and say what is missing. Answer "none" if the evidence does not support it.
+and some is not, and in "missing" name only the part that is not established, briefly. Answer "none" if the evidence does not support it.
 
 Claim: {claim}
 

@@ -368,6 +368,15 @@ function claimDetails(c) {
   body.append(el("p", "check-meta", `Checked ${stamp(c.checked_at)} by ${by}. Every quote above was found on its source page.`));
   det.append(body);
   wrap.append(det);
+  // Partly confirmed: say plainly what the sources do establish and what they don't, so an Unproven
+  // never reads as doubt about the part that is true.
+  const missing = (c.note || "").match(/not all of it as stated:\s*(.+)$/);
+  if (c.verdict === "Unproven" && c.support === "partial" && c.finding && missing) {
+    const part = el("div", "check-partial");
+    part.append(el("p", null, `Partly confirmed: ${c.finding.split(/(?<=[a-z0-9)\u201d"]\.)\s+(?=[A-Z])/)[0]}`),
+      el("p", null, `Not established: ${missing[1].replace(/\.?$/, ".")}`));
+    wrap.append(part);
+  }
   const src = sourcesLine(c);
   if (src) wrap.append(src);
   return wrap;
