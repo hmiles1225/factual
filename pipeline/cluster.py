@@ -138,6 +138,15 @@ def side_of(feed):
     return ALLSIDES_SIDE.get(rating, "unplaced")
 
 
+MEDIA_TITLE = re.compile(r"[\u2013\u2014|:-]\s*(video|watch|in pictures|photos?|gallery|live( updates| blog)?|podcast|audio)\s*\)?$|^(watch|video|live( updates)?|photos?|in pictures)\s*[:|]|\((video|watch|photos)\)", re.I)
+MEDIA_PATH = re.compile(r"/(video|videos|gallery|galleries|pictures|in-pictures|photos|podcasts?|audio)(/|-)|/live(/|-updates|-blog)", re.I)
+
+
+def is_media(art):
+    """A video, gallery, live or audio page: real coverage, but not a headline for a written summary."""
+    return bool(MEDIA_TITLE.search(art["title"]) or MEDIA_PATH.search(art["url"]))
+
+
 def is_opinion(art):
     return bool(OPINION_PATH.search(art["url"]) or OPINION_TITLE.search(art["title"]))
 
@@ -233,9 +242,12 @@ def main():
         sources = sorted({a["source"] for a in arts})
         if len(sources) < 2:
             continue
-        # Working title: the article closest to the story's centre of meaning.
+        # Working title: the article closest to the story's centre of meaning, preferring a written article:
+        # a video, gallery, live blog or podcast headline ("... - video") promises media we don't show.
         centre = vectors[idx].mean(axis=0)
-        lead = arts[int(np.argmax(vectors[idx] @ centre))]
+        closeness = vectors[idx] @ centre
+        order = [int(i) for i in np.argsort(-closeness)]
+        lead = next((arts[i] for i in order if not is_media(arts[i])), arts[order[0]])
         coverage = {k: [src for src in sources if side.get(src, "unplaced") == k] for k in (*SIDES, "unplaced")}
         shares = [len(coverage[k]) / len(roster[k]) if roster[k] else 0.0 for k in SIDES]
         # A story keeps its id from the last scan when most of its articles were in that story, so
