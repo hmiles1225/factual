@@ -48,6 +48,7 @@ FRESH_HOURS = 24               # Today's daily sections prefer stories that brok
 REBRIEF_HOURS = 6                # a story is re-summarized when a new side joins, else at most this often
 MAX_NEW_PER_SCAN = 5
 MAX_NEW_PER_DAY = 30
+CLAIMS_EXTRA = {"2026-10-19": (30, 10)}   # one-off (more per day, more per scan), Heston: check the new sections now
 # "Decent" fact-check coverage for the proof of concept (Heston's call, 2026-10-19): about 16 to 20 checks a
 # day, nearly every politics account. At most $3.10/day, ~$93/month.
 ANTHROPIC_DAILY_USD = 1.10       # two Opus second opinions (~$0.51 each) a day
@@ -344,6 +345,8 @@ def main():
     testing = today <= TESTING_UNTIL
     gemini_cap = max(GEMINI_DAILY_USD + GEMINI_EXTRA_USD.get(today, 0.0), TESTING_GEMINI_USD if testing else 0.0)
     anthropic_cap = TESTING_ANTHROPIC_USD if testing else ANTHROPIC_DAILY_USD
+    more_day, more_scan = CLAIMS_EXTRA.get(today, (0, 0))
+    new_per_day, new_per_scan = MAX_NEW_PER_DAY + more_day, MAX_NEW_PER_SCAN + more_scan
 
     def gemini_ok():
         return spend["gemini_usd"] < gemini_cap
@@ -434,7 +437,7 @@ def main():
         # Searches past Google's free allowance are paid, and charged to the Gemini cap (charge_gemini).
         # Start a check only with room for a worst-case one: the cap is checked before a check, but its
         # paid searches are charged after, and one overran the cap by $0.45 on 2026-10-19.
-        if state["new_this_scan"] >= MAX_NEW_PER_SCAN or spend["new_claims"] >= MAX_NEW_PER_DAY \
+        if state["new_this_scan"] >= new_per_scan or spend["new_claims"] >= new_per_day \
                 or spend["gemini_usd"] + CHECK_RESERVE_USD > gemini_cap:
             return existing
         try:
@@ -718,7 +721,7 @@ def main():
     lib["updated_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     lib["caps"] = {"anthropic_daily_usd": ANTHROPIC_DAILY_USD, "gemini_daily_usd": GEMINI_DAILY_USD,
                    "today_gemini_cap": gemini_cap, "today_anthropic_cap": anthropic_cap, "testing_until": TESTING_UNTIL,
-                   "gemini_free_searches": GEMINI_FREE_SEARCHES, "search_usd": SEARCH_USD, "new_claims_per_day": MAX_NEW_PER_DAY}
+                   "gemini_free_searches": GEMINI_FREE_SEARCHES, "search_usd": SEARCH_USD, "new_claims_per_day": new_per_day}
     (ROOT / "data/library.json").write_text(json.dumps(lib, indent=1))
     stories_path.write_text(json.dumps(data, indent=1))
     (ROOT / "data/.summarized").write_text(datetime.now(timezone.utc).isoformat())  # deploy publishes stories.json only with this
