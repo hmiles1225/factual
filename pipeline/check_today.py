@@ -155,6 +155,7 @@ SUPPORT_SCHEMA = _item({"established": {"type": "string", "enum": ["all", "part"
                         "missing": {"type": "string", "description": "Only the part of the claim the evidence does not establish, as a short phrase starting with 'that' (e.g. 'that other work was paused'). Empty if all is established."}},
                        ["established", "missing"])
 LOADED_VERSION = "2"
+IMAGES_VERSION = "2"   # 2: Wikidata aliases and transliteration variants; headline-person fallback
 LOADED_SCHEMA = _item({"terms": {"type": "array", "items": _item({
     "term": {"type": "string", "description": "Copied exactly as the outlet wrote it."},
     "articles": _ints,
@@ -309,6 +310,9 @@ def main():
     claims = lib.setdefault("claims", {})
     briefs = lib.setdefault("briefs", {})
     images = lib.setdefault("images", {})
+    if lib.get("images_v") != IMAGES_VERSION:  # the matcher improved: retry names that found no image before
+        images = lib["images"] = {k: v for k, v in images.items() if v}
+        lib["images_v"] = IMAGES_VERSION
     lib.pop("extractions", None)  # replaced by briefs
 
     testing = today <= TESTING_UNTIL
@@ -544,6 +548,18 @@ def main():
                     print(f"  image lookup failed for {subj['name']}: {e}")
             if images.get(ikey):
                 story["image"] = images[ikey]
+        if not story.get("image"):
+            # The subject has no usable photo (a golf course, say): use a person named in the headline, but only
+            # one already matched and verified, by full name or a surname of five letters or more, as a whole word.
+            title = story["working_title"]
+            for k, rec in images.items():
+                if not (k.startswith("person:") and rec):
+                    continue
+                full = rec["subject"]
+                last = full.split()[-1]
+                if re.search(rf"\b{re.escape(full)}\b", title) or (len(last) >= 5 and re.search(rf"\b{re.escape(last)}\b", title)):
+                    story["image"] = rec
+                    break
         shared = [f for f in brief["agreed"] if "left" in f["sides"] and "right" in f["sides"]]
         print(f"  {story['sid']} [{story['topic']}]: {len(shared)} common ground of {len(brief['agreed'])} agreed, {len(brief['differences'])} differences")
         return bool(shared)  # Today shows only what both sides report; no common ground, no slot

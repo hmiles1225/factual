@@ -41,11 +41,20 @@ def image_for(name, kind):
     api = "https://www.wikidata.org/w/api.php?"
     hits = _get(api + urllib.parse.urlencode(
         {"action": "wbsearchentities", "search": name, "language": "en", "format": "json", "limit": 10})).get("search", [])
-    ids = [h["id"] for h in hits if (h.get("label") or "").casefold() == name.casefold()][:10]
+    # The name must be the entity's own label or one of its listed aliases ("Volodymyr Zelensky" is an alias
+    # of "Volodymyr Zelenskyy"), read from the entity itself. Never a partial or keyword match.
+    ids = [h["id"] for h in hits][:10]
     if not ids:
         return None
-    ents = _get(api + urllib.parse.urlencode({"action": "wbgetentities", "ids": "|".join(ids), "props": "sitelinks|claims",
-                                               "format": "json"})).get("entities", {})
+    ents = _get(api + urllib.parse.urlencode({"action": "wbgetentities", "ids": "|".join(ids), "props": "labels|aliases|sitelinks|claims",
+                                               "languages": "en", "format": "json"})).get("entities", {})
+    # Compare whole names, case-folded, with doubled letters collapsed so a transliteration variant still
+    # matches ("Zelensky" = "Zelenskyy"). Still a full-name match, never partial.
+    fold = lambda t: re.sub(r"(.)\1+", r"\1", (t or "").casefold())
+    names = lambda e: {fold((e.get("labels", {}).get("en") or {}).get("value"))} | {fold(a["value"]) for a in e.get("aliases", {}).get("en", [])}
+    ids = [q for q in ids if fold(name) in names(ents.get(q, {}))]
+    if not ids:
+        return None
     val = lambda e, p: [c["mainsnak"].get("datavalue", {}).get("value") for c in e.get("claims", {}).get(p, [])]
     cands = []
     for q in ids:
