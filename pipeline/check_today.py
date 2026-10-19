@@ -56,9 +56,11 @@ GEMINI_FREE_SEARCHES = 150      # Google gives 5,000 free a month across Gemini 
 SEARCH_USD = 0.014               # then $14 per 1,000 searches (ai.google.dev pricing, 2026-10-18), charged to the Gemini cap
 UNDERCOUNT = 1.7                 # our cost log ran this far under the real bill (2026-10-17)
 RECHECK_AFTER_DAYS = 7
+DECIDED = ("Holds up", "Missing context", "Doesn't hold up")
 # One-off fresh checks, by library key, when a verdict is known to rest on thin evidence. Runs once each.
 FORCE_RECHECK = {"ff5e92501774": "court order cited never names the course; look for a filing that does (2026-10-19)"}
 OPUS_TYPICAL_USD = 0.51          # measured mean per Opus second opinion, 2026-10-17 eval
+CARRY_OVER = 0.80               # same story, same side: an earlier decided claim this close is the same claim, reworded
 SAME_CLAIM = 0.93                # embedding similarity at which two wordings are one claim
 MIN_OUTLETS_AGREED = 2           # an agreed fact needs at least this many outlets to state it
 BRIEF_VERSION = "8"              # bump when the brief instructions change, so cached briefs regenerate
@@ -125,6 +127,10 @@ Rules:
   Most stories have at least two agreed facts.
 - Use only what is in the coverage below. Add nothing from your own knowledge. Do not judge which side
   is right. Do not use loaded words. Use only article numbers from the list.
+
+Claims already checked for this story. If a side's position still rests on one of these, copy it word
+for word as that position's checkable_claim, so its check carries over:
+{prior}
 
 Coverage:
 {coverage}"""
@@ -429,7 +435,9 @@ def main():
                 lines.append(f"{i + 1}. {a['source']} ({side_of.get(a['source'], 'unplaced')}): {a['title']}"
                              + (f" | {summ}" if summ else "") + (f" | Opening: {ex}" if ex else ""))
             try:
-                raw, usage = gemini_json(BRIEF_PROMPT.replace("{coverage}", "\n".join(lines)), BRIEF_SCHEMA)
+                prior = [c["claim"] for c in claims.values() if story["sid"] in c.get("stories", []) and c.get("verdict") in DECIDED]
+                raw, usage = gemini_json(BRIEF_PROMPT.replace("{prior}", "\n".join(f"- {t}" for t in prior[:12]) or "(none)")
+                                         .replace("{coverage}", "\n".join(lines)), BRIEF_SCHEMA)
                 charge_gemini(usage)
                 brief = build_brief(raw, arts, lines, side_of, gemini_json, charge_gemini)
                 briefs[story["sid"]] = {"version": BRIEF_VERSION, "roster": ROSTER_VERSION, "outlets": outlets_now, "sides": sides_now, "brief": brief,
@@ -454,6 +462,29 @@ def main():
                         print(f"  claim extraction failed: {e}")
             # an account with no check yet goes first, so the per-scan cap never starves one side
             d["positions"].sort(key=lambda q: bool(q.get("check")))
+        # A re-summary rewords claims. Where a side's new claim is undecided and an earlier decided claim from
+        # the same side of this story says the same thing, keep the earlier one, so a Confirmed doesn't
+        # silently turn into a fresh Unproven. Same side means the claim's outlets share a side and none oppose.
+        earlier = [(k, c) for k, c in claims.items() if story["sid"] in c.get("stories", []) and c.get("verdict") in DECIDED]
+        used = {p.get("check") for d in brief["differences"] for p in d["positions"]}
+        for d in brief["differences"]:
+            for pos in d["positions"]:
+                cur = claims.get(pos.get("check")) if pos.get("check") else None
+                if not pos.get("checkable_claim") or (cur and cur.get("verdict") in DECIDED) or not earlier:
+                    continue
+                mine = {side_of.get(o) for o in pos["outlets"]} - {"unplaced", None}
+                best, best_k = 0.0, None
+                for k, c in earlier:
+                    theirs = {side_of.get(o) for o in c.get("said_by", [])} - {"unplaced", None}
+                    if k in used or not (mine & theirs) or ({"left", "right"} <= (mine | theirs)):
+                        continue
+                    sim = float(vec([pos["checkable_claim"]])[0] @ vec([c["claim"]])[0])
+                    if sim > best:
+                        best, best_k = sim, k
+                if best_k and best >= CARRY_OVER:
+                    print(f"  carry over ({best:.2f}): {claims[best_k]['claim'][:70]}")
+                    pos["checkable_claim"], pos["check"] = claims[best_k]["claim"], best_k
+                    used.add(best_k)
         # Factual differences are checked against primary sources (cached in the library).
         for d in brief["differences"]:
             if d.get("checkable_claim") and not d.get("check"):  # briefs written before per-side claims
