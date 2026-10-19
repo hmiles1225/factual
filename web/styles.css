@@ -71,6 +71,18 @@ code { font: 400 0.8125rem var(--mono); }
 .site-nav a:hover { color: var(--ink); }
 .site-nav a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--lav); }
 
+/* Home-screen app: a bottom tab bar replaces the top nav row. Focused items scroll clear of it (WCAG 2.4.11). */
+.tab-bar { display: none; }
+html.app .site-nav { display: none; }
+html.app { scroll-padding-bottom: calc(84px + env(safe-area-inset-bottom)); }
+html.app body { padding-bottom: calc(66px + env(safe-area-inset-bottom)); }
+html.app .tab-bar { display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; padding: 6px max(6px, env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left));
+  background: var(--surf); border-top: 1px solid var(--line); }
+.tab-bar a { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-height: 52px;
+  font: 600 0.71875rem/1 var(--cond); color: var(--ink-3); text-decoration: none; border-radius: 8px; }
+.tab-bar a:hover { color: var(--ink); }
+.tab-bar a[aria-current="page"] { color: var(--lav); }
+
 /* Settings: a small panel under a gear button */
 .settings { position: relative; }
 .settings > summary { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 8px; color: var(--ink-2); }
