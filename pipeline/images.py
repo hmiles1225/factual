@@ -22,8 +22,9 @@ import check as C
 ROOT = Path(__file__).resolve().parent.parent
 UA = {"User-Agent": "fACTUAL-scan/0.1 (+https://hestonmiles.com/factual/)"}
 # A place's or organization's Wikidata picture is often a map, flag, seal or logo: not a news photo.
-NOT_A_PHOTO = re.compile(r"\b(map|maps|locator|location|orthographic|flag|flags|coat[ _]of[ _]arms|seal|emblem|logo|logotype|"
-                         r"wordmark|insignia|diagram|chart|globe|satellite)\b", re.I)
+NOT_A_PHOTO = re.compile(r"\b(flag|flags|coat[ _]of[ _]arms|seal|emblem|logo|logotype|wordmark|insignia|diagram|chart)\b", re.I)
+# A map is not a photo, but for a country or region with no photo it is the right picture (Heston, 2026-10-19).
+MAP = re.compile(r"\b(map|maps|locator|location|orthographic|globe|satellite)\b", re.I)
 # Nothing graphic: judged on the file name and on the file's own Commons description and categories.
 GRAPHIC = re.compile(r"\b(patients?|victims?|corpses?|cadavers?|dead bod(y|ies)|bodies|wounded|injur(y|ies|ed)|blood(y|ied)?|bleeding|"
                      r"autops(y|ies)|lesions?|rash|gore|graphic|casualt(y|ies)|funerals?|burials?|massacre|executions?|killed|"
@@ -82,7 +83,10 @@ def image_for(name, kind):
         if top < 20 or top < 5 * max(nxt, 1):
             return None
     _, qid, ent = cands[0]
-    return _record(qid, ent, name, "Photo" if kind == "person" else "Image")
+    rec = _record(qid, ent, name, "Photo" if kind == "person" else "Image")
+    if not rec and kind == "place":
+        rec = _record(qid, ent, name, "Map", maps=True)  # no photo of the place: its map
+    return rec
 
 
 def image_for_title(title):
@@ -104,22 +108,29 @@ def image_for_title(title):
     return _record(qid, ent, label, "Image")
 
 
-def _record(qid, ent, label, word):
+def _record(qid, ent, label, word, maps=False):
     """The first P18 file that is a real picture (not a map, flag, seal or logo), not graphic, freely
     licensed, and a JPEG, PNG or WebP. Downloaded to data/images so readers only contact our domain."""
     files = [c["mainsnak"]["datavalue"]["value"] for c in ent.get("claims", {}).get("P18", []) if "datavalue" in c["mainsnak"]]
     for f in files:
-        if NOT_A_PHOTO.search(f.replace("_", " ")) or GRAPHIC.search(f.replace("_", " ")):
-            continue
+        fn = f.replace("_", " ")
+        if NOT_A_PHOTO.search(fn) or GRAPHIC.search(fn) or (bool(MAP.search(fn)) != maps):
+            continue  # photos pass first; maps only when asked for (a place with no photo)
         page = next(iter(_get("https://commons.wikimedia.org/w/api.php?" + urllib.parse.urlencode(
             {"action": "query", "titles": "File:" + f, "prop": "imageinfo", "iiprop": "url|extmetadata|mime",
              "iiurlwidth": 1200, "format": "json"}))["query"]["pages"].values()))
         info = (page.get("imageinfo") or [None])[0]
-        if not info or info.get("mime") not in ("image/jpeg", "image/png", "image/webp"):
+        if not info:
+            continue
+        mime = info.get("mime")
+        if mime == "image/svg+xml" and maps and (info.get("thumburl") or "").endswith(".png"):
+            mime = "image/png"  # Commons renders vector maps to PNG; use that copy
+        elif mime not in ("image/jpeg", "image/png", "image/webp"):
             continue
         md = info.get("extmetadata", {})
         about = _plain(md.get("ImageDescription", {}).get("value")) + " " + _plain(md.get("Categories", {}).get("value"))
-        if GRAPHIC.search(about) or NOT_A_PHOTO.search(_plain(md.get("Categories", {}).get("value"))):
+        if GRAPHIC.search(about) or NOT_A_PHOTO.search(_plain(md.get("Categories", {}).get("value"))) or \
+                (not maps and MAP.search(_plain(md.get("Categories", {}).get("value")))):
             continue  # the file's own description or categories say it is graphic, or a map or logo
         license_ = _plain(md.get("LicenseShortName", {}).get("value"))
         if not ALLOWED.match(license_):
@@ -127,7 +138,7 @@ def _record(qid, ent, label, word):
         artist = _plain(md.get("Artist", {}).get("value")) or "Unknown author"
         artist = re.sub(r"^(.+?)(?:\s+\1)+$", r"\1", artist)  # "Unknown author Unknown author" -> once
         url = info.get("thumburl") or info.get("url")
-        ext = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}[info["mime"]]
+        ext = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}[mime]
         fname = hashlib.sha1(url.encode()).hexdigest()[:12] + "." + ext
         out = ROOT / "data/images" / fname
         out.parent.mkdir(parents=True, exist_ok=True)

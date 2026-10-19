@@ -205,11 +205,18 @@ function statTiles(figures) {
 /* ---------- Today ---------- */
 
 // A license-verified photo with its caption: what, who made it, license, source. Text never sits on it.
-function figure(img, cls) {
+function figure(img, cls, href) {
   const f = el("figure", cls);
   const im = el("img");
   im.src = img.src; im.alt = img.alt; im.loading = "lazy"; im.decoding = "async";
-  f.append(im);
+  if (href) {
+    // On Today the picture opens the story too. The headline is the one link screen readers and the
+    // keyboard use, so this one is skipped by both instead of repeating it.
+    const a = el("a", "photo-link");
+    a.href = href; a.tabIndex = -1; a.setAttribute("aria-hidden", "true");
+    a.append(im);
+    f.append(a);
+  } else f.append(im);
   const cap = el("figcaption");
   const a = el("a", null, img.caption);
   a.href = img.source; a.rel = "noopener";
@@ -221,8 +228,8 @@ function figure(img, cls) {
 function storyCard(story, i, data, isLead) {
   const li = el("li", isLead ? "story story-lead" : "story");
   // The first story in each section shows its photo, when it has one: large for the lead, a band for the others.
-  if (story.image && isLead) li.append(figure(story.image, "lead-photo"));
-  else if (story.image && i === 0) li.append(figure(story.image, "card-photo"));
+  if (story.image && isLead) li.append(figure(story.image, "lead-photo", storyHref(story)));
+  else if (story.image && i === 0) li.append(figure(story.image, "card-photo", storyHref(story)));
   const main = el("div", "story-main");
   main.append(el("p", "story-num", String(i + 1).padStart(2, "0")));
   const h = el("h2", "headline");

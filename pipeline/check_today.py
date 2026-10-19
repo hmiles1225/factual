@@ -155,7 +155,7 @@ SUPPORT_SCHEMA = _item({"established": {"type": "string", "enum": ["all", "part"
                         "missing": {"type": "string", "description": "Only the part of the claim the evidence does not establish, as a short phrase starting with 'that' (e.g. 'that other work was paused'). Empty if all is established."}},
                        ["established", "missing"])
 LOADED_VERSION = "2"
-IMAGES_VERSION = "5"   # 2: aliases, transliterations, headline fallback; 3: no maps, flags, logos; 4: article pictures, nothing graphic
+IMAGES_VERSION = "6"   # 2: aliases, transliterations, headline fallback; 3: no maps, flags, logos; 4: article pictures, nothing graphic
 LOADED_SCHEMA = _item({"terms": {"type": "array", "items": _item({
     "term": {"type": "string", "description": "Copied exactly as the outlet wrote it."},
     "articles": _ints,
