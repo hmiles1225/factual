@@ -243,6 +243,21 @@ function metricRow(story, cls) {
   return ul;
 }
 
+// Each number at the top of a story jumps to its section, when that section is on the page.
+const TILE_TARGET = { outlets: "outlets", agreed: "agreed", split: "splits", splits: "splits", loaded: "loaded" };
+function linkTiles(ul) {
+  if (!ul) return;
+  for (const li of ul.children) {
+    const id = TILE_TARGET[li.querySelector(".m-l").textContent];
+    if (!id || !document.getElementById(id) || li.querySelector(".m-n").textContent === "0") continue;
+    const a = el("a", "tile-link");
+    a.href = `#${id}`;
+    a.append(...li.childNodes);
+    li.append(a);
+    li.classList.add("is-link");
+  }
+}
+
 function storyCard(story, i, data, isLead) {
   const li = el("li", isLead ? "story story-lead" : "story");
   // The first story in each section shows its photo, when it has one.
@@ -398,6 +413,27 @@ function renderCommon(cg) {
   }
   s2.append(ol);
   box.append(s2, el("p", "disclosure", `Figures read from each primary source on ${new Date(cg.checked + "T12:00:00").toLocaleDateString([], { month: "long", day: "numeric", year: "numeric" })}.`));
+}
+
+/* ---------- Back to top: appears once the reader is a screen and a half down ---------- */
+function initToTop() {
+  const main = document.getElementById("main");
+  if (!main) return;
+  const btn = el("button", "to-top");
+  btn.type = "button";
+  btn.setAttribute("aria-label", "Back to top");
+  btn.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  btn.addEventListener("click", () => {
+    const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    window.scrollTo({ top: 0, behavior: still ? "auto" : "smooth" });
+    if (!main.hasAttribute("tabindex")) main.setAttribute("tabindex", "-1");
+    main.focus({ preventScroll: true });  // keyboard and screen reader users land at the top too
+  });
+  document.body.append(btn);
+  let on = false, queued = false;
+  const update = () => { queued = false; const want = window.scrollY > innerHeight * 1.5; if (want !== on) { on = want; btn.classList.toggle("is-on", on); } };
+  window.addEventListener("scroll", () => { if (!queued) { queued = true; requestAnimationFrame(update); } }, { passive: true });
+  update();
 }
 
 /* ---------- Settings: theme, remembered on this device only ---------- */
@@ -681,6 +717,7 @@ function renderStory(data) {
   // 1. Agreed: only facts outlets on both the left and the right report.
   if (agreed.some(acrossSides)) {
     const s1 = el("section", "block");
+    s1.id = "agreed";
     s1.append(el("h2", "block-title", "Agreed \u00b7 left and right"));
     const ul = el("ul", "facts");
     for (const f of agreed.filter(acrossSides).slice(0, 12)) {
@@ -696,6 +733,7 @@ function renderStory(data) {
   const diffs = (brief && brief.differences) || [];
   if (diffs.length) {
     const s3 = el("section", "block");
+    s3.id = "splits";
     s3.append(el("h2", "block-title", diffs.length === 1 ? "Split" : `Splits \u00b7 ${diffs.length}`));
     for (const d of diffs) s3.append(differenceBlock(d, data.library, leanOf));
     body.append(s3);
@@ -707,6 +745,7 @@ function renderStory(data) {
     const group = t => { const p = t.sides.filter(x => x !== "unplaced"); return p.length && p.every(x => x === "left") ? "Left" : p.length && p.every(x => x === "right") ? "Right" : "Both"; };
     const by = k => loaded.filter(t => group(t) === k);
     const sl = el("section", "block");
+    sl.id = "loaded";
     sl.append(el("h2", "block-title", `Loaded words \u00b7 ${by("Left").length} left \u00b7 ${by("Right").length} right`));
     if (!loaded.length) sl.append(el("p", "topic-empty", "None found on either side."));
     else {
@@ -721,6 +760,7 @@ function renderStory(data) {
   const placed = (data.feeds || []).filter(f => f.ok && (f.lean != null || ALLSIDES[f.source]));
   if (placed.length) {
     const sc = el("section", "block");
+    sc.id = "outlets";
     sc.append(el("h2", "block-title", "Who covered it"));
     const covered = new Set(story.sources);
     const fig = spectrum(placed.map(f => ({ name: f.source, lean: f.lean, rating: ALLSIDES[f.source], style: covered.has(f.source) ? "fill" : "ghost",
@@ -768,6 +808,7 @@ function renderStory(data) {
   foot.append(m);
   s4.append(foot);
   body.append(s4);
+  linkTiles($("story-sub").querySelector(".metrics-tiles"));
 }
 
 function fail() {
@@ -786,6 +827,7 @@ const fromArchive = (arch, day) => ({ stories: Object.values(arch.stories || {})
 async function load() {
   const page = document.body.dataset.page;
   initSettings();
+  initToTop();
   if (page === "archive") return renderArchive(await getJSON("data/archive/index.json", true));
   if (page === "common") return renderCommon(await getJSON("common-ground.json"));
   if (page === "how") return renderHow(await getJSON("data/stories.json", true));
