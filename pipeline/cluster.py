@@ -45,18 +45,42 @@ LEFT_BELOW, RIGHT_ABOVE = 0.40, 0.60
 # distinct stories apart, so they are linked rather than merged.
 RELATED = 0.74
 
-# Today has four sections: U.S. politics (and U.S. policy abroad), and three topics that get
-# politicized: environment, science and health (Heston's call, 2026-10-18). A story takes the topic
-# whose examples its meaning is closest to, if that beats the non-topic examples by TOPIC_MARGIN.
+# Today's sections: U.S. politics and the topics that get politicized (Heston's calls, 2026-10-18 and -19).
+# A story takes the topic whose examples its meaning is closest to, if that beats the non-topic examples by
+# TOPIC_MARGIN. Elections and immigration have their own sections, so their examples left POLITICS.
 # Politics examples tuned by eye on the 2026-10-18 scan: celebrity trials, foreign wars and disasters
-# fall out; Senate debates, rallies, sanctions and agency actions stay in.
+# fall out; Senate debates, sanctions and agency actions stay in.
 POLITICS = [
     "U.S. Congress passes a bill; senators and representatives vote", "The White House and the president announce a policy",
-    "U.S. election campaign, candidates, voters, polls and midterms", "A federal court rules on a Trump administration policy or a state law",
+    "A federal court rules on a Trump administration policy or a state law",
     "Federal agency, Justice Department, FBI or Pentagon action on policy", "U.S. foreign policy: sanctions, tariffs, military aid, treaties",
-    "Government spending, the budget, taxes and the national debt", "Immigration and border policy decided by the U.S. government",
+    "Government spending, the budget, taxes and the national debt",
     "Republicans and Democrats clash over legislation", "A White House official or cabinet member resigns or is fired",
-    "The president holds a campaign rally for midterm candidates", "Congressional or Senate candidates debate before the election",
+]
+ELECTIONS = [
+    "U.S. election campaign, candidates, voters, polls and midterms",
+    "The president holds a campaign rally for midterm candidates",
+    "Congressional or Senate candidates debate before the election",
+    "Early voting, mail ballots, voter ID and how elections are run",
+    "Redistricting, gerrymandering and lawsuits over election rules",
+    "A poll shows a tight race for governor, Senate or the House",
+    "A candidate drops out of the race or ends a campaign after a scandal",
+]
+IMMIGRATION = [
+    "Immigration and border policy decided by the U.S. government",
+    "ICE arrests, deportations and immigration raids",
+    "Asylum seekers, refugees and the southern border",
+    "Birthright citizenship, visas, green cards and denaturalization",
+    "Sanctuary cities and states clash with federal immigration enforcement",
+    "Temporary protected status ends for immigrants from a country",
+]
+CRIME = [
+    "Crime rates, policing and public safety in American cities",
+    "A shooting or killing in a U.S. city and the police investigation",
+    "Prosecutors, district attorneys, bail and criminal justice reform",
+    "Gun laws, gun violence and the Second Amendment",
+    "Prisons, sentencing, pardons and the death penalty",
+    "The Justice Department charges or drops a case against a public figure",
 ]
 ECONOMY = [
     "Inflation, consumer prices and the cost of living",
@@ -67,21 +91,31 @@ ECONOMY = [
     "Recession fears, economic growth and the stock market",
     "Taxes, wages and the federal budget's effect on households",
 ]
-ENVIRONMENT = [
+ENVIRONMENT = [  # shown as "Energy & environment"
     "Climate change policy: emissions rules, the Paris agreement, carbon pollution",
     "The EPA changes environmental rules on air, water or chemical pollution",
     "Oil and gas drilling, pipelines, coal and fossil fuel policy",
     "Renewable energy, electric vehicles, solar and wind power subsidies",
     "Public lands, national parks, endangered species and conservation",
     "Scientists link extreme heat, floods or drought to climate change",
+    "Electricity prices, the power grid and utility bills",
+    "OPEC, oil prices and the supply of gasoline",
+    "Nuclear power plants and data centers' demand for electricity",
+]
+TECH = [
+    "Artificial intelligence companies, chatbots and AI models",
+    "Government regulation of artificial intelligence and its risks",
+    "Big Tech antitrust cases, social media and online speech",
+    "Data privacy, surveillance and cybersecurity breaches",
+    "Chips, semiconductors and technology export controls",
+    "A tech company or billionaire announces a deal, stake, investment or giveaway",
 ]
 SCIENCE = [
     "NASA, space missions and rocket launches",
     "Federal science funding, research grants and the National Science Foundation",
     "Scientists publish a study in a journal; new research findings",
     "Gene editing, genetics, evolution and scientific consensus",
-    "Government regulation of artificial intelligence and its risks",
-    "Nuclear power, fusion and energy research",
+    "Fusion and physics research",
 ]
 HEALTH = [
     "Vaccines: safety, schedules, mandates and vaccine advisers",
@@ -92,21 +126,31 @@ HEALTH = [
     "Disease outbreaks: measles, flu, COVID and the public health response",
     "Fluoride, food dyes, nutrition and chronic disease policy",
 ]
-TOPICS = {"politics": POLITICS, "economy": ECONOMY, "environment": ENVIRONMENT, "science": SCIENCE, "health": HEALTH}
+EDUCATION = [
+    "Schools, teachers, curriculum and school boards",
+    "Student loans, college tuition and higher education",
+    "The Education Department and federal school funding",
+    "Universities, campus protests and federal research money",
+    "School choice, vouchers and charter schools",
+    "What schools teach about race, gender and history; book removals",
+]
+TOPICS = {"politics": POLITICS, "elections": ELECTIONS, "economy": ECONOMY, "immigration": IMMIGRATION, "crime": CRIME,
+          "environment": ENVIRONMENT, "health": HEALTH, "tech": TECH, "science": SCIENCE, "education": EDUCATION}
 NOT_POLITICS = [
-    "A shooting, crime or police investigation in a city", "A wildfire, storm, earthquake or accident kills people",
-    "Sports: a game, a team, a player, a championship", "Business, company earnings, a product launch, technology",
+    "An accident, fire or animal attack injures or kills people", "A wildfire, storm, earthquake or accident kills people",
+    "Sports: a game, a team, a player, a championship", "Business, company earnings and a product launch",
     "Celebrity, entertainment, movies and music", "Religion: the Pope and the Vatican",
     "A foreign country's internal politics, protests or election abroad", "Weather and travel",
-    "A celebrity, athlete or murderer on trial; a judge sentences a defendant",
+    "A celebrity or athlete on trial; a judge sentences a celebrity",
     "A celebrity's looks, body, diet, weight loss or fitness routine",
-    "A tech company or billionaire announces a business deal, stake, investment or giveaway",
     "A foreign separatist movement or referendum in Canada or Europe", "A war between other countries: battlefield news, drones, front lines",
+    "Israel, the West Bank and Gaza: settlers, arrests and clashes",
+    "A football, basketball or baseball player is ejected, suspended or injured", "College football and basketball games and coaches",
 ]
 TOPIC_MARGIN = 0.01
-# Politics moves by the day; environment, science and health move by the week. Politics is grouped from
+# Politics moves by the day; energy and environment, science, health and education move by the week. Politics is grouped from
 # the last RECENT_HOURS of articles; the slow topics from the whole pool (fetch.py keeps POOL_DAYS).
-SLOW_TOPICS = ("environment", "science", "health")
+SLOW_TOPICS = ("environment", "science", "health", "education")
 RECENT_HOURS = 48
 POOL_DAYS = 7
 SIDES = ("left", "center", "right")
@@ -312,8 +356,9 @@ def main():
                    "allsides": allsides.get(f["source"])}
                   for f in scan.get("feeds", [])],
         "method": {"model": MODEL, "threshold": THRESHOLD, "window_hours": WINDOW_HOURS, "linkage": "average", "related": RELATED,
-                   "topics": {"politics": "U.S. politics and U.S. policy abroad", "economy": "Economy", "environment": "Environment and climate",
-                              "science": "Science", "health": "Health"}, "topic_margin": TOPIC_MARGIN},
+                   "topics": {"politics": "U.S. politics and U.S. policy abroad", "elections": "Elections", "economy": "Economy",
+                              "immigration": "Immigration", "crime": "Crime and justice", "environment": "Energy and environment",
+                              "health": "Health", "tech": "AI and tech", "science": "Science", "education": "Education"}, "topic_margin": TOPIC_MARGIN},
         "placement": {"source": feeds["placement_source"], "left_below": LEFT_BELOW, "right_above": RIGHT_ABOVE,
                       "measure": "Republican users / (Republican + Democratic users)"},
         "roster": roster,

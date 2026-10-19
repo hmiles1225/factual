@@ -37,7 +37,10 @@ from images import image_for, image_for_title  # noqa: E402
 ROOT = Path(__file__).resolve().parent.parent
 LIBRARY_URL = "https://hestonmiles.com/factual/data/library.json"
 ARCHIVE_URL = "https://hestonmiles.com/factual/data/archive/"
-TOPIC_QUOTAS = {"politics": 5, "economy": 3, "environment": 3, "science": 3, "health": 3}   # Heston's calls, 2026-10-18 and -20
+# In this order: when the day's budget runs out, the sections later in the list wait. The first five are the
+# ones pre-selected for readers.
+TOPIC_QUOTAS = {"politics": 5, "elections": 3, "economy": 3, "immigration": 3, "crime": 3,
+                "environment": 3, "health": 3, "tech": 3, "science": 3, "education": 3}   # Heston's calls, 2026-10-18 to -19
 EXTRA_CANDIDATES = 3             # stories tried past the quota, in rank order, when one won't summarize
 ARTICLES_PER_BRIEF = 14          # picked round-robin by side, so one side can't fill the brief
 EXCERPT_CHARS = 900              # opening of each article read for the brief; never published

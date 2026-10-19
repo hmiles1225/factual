@@ -30,9 +30,13 @@ Every story shows its coverage the same way, for example "Left 4 of 10 · Center
 
 ## Which stories appear (2026-10-18)
 
-- Today has four sections: Politics (5 stories, grouped over the last 48 hours) and Environment,
-  Science and Health (3 each, grouped over a 7-day pool of articles, because these topics move by the
-  week: one outlet covers a story on Monday, another on Wednesday).
+- Today has ten sections (2026-10-19). Politics has 5 stories; Elections, Economy, Immigration, Crime &
+  justice, Energy & environment, Health, AI & tech, Science and Education have 3 each. Most are grouped over
+  the last 48 hours; Energy & environment, Science, Health and Education over a 7-day pool of articles,
+  because they move by the week: one outlet covers a story on Monday, another on Wednesday.
+- Readers choose which sections they follow (first five by default). Every section is still written and
+  checked for everyone; the choice only filters what a reader sees.
+- When the day's budget runs out, checks wait in section order, so the default five are checked first.
 - A story appears only if at least one left-leaning **and** one right-leaning outlet covered it. A
   section with no such story says so instead of filling the slot.
 - Each summary reads up to 14 articles, dealt round-robin left, right, center, unplaced (one per

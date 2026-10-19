@@ -9,13 +9,32 @@
 
 const WORDS = ["no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen"];
 // Today's sections. Politics moves by the day; the others are grouped over the week.
-const TOPICS = [
+const TOPICS = [  // in this order everywhere; the first five are followed until a reader chooses
   { key: "politics", name: "Politics", span: "Today" },
+  { key: "elections", name: "Elections", span: "Today" },
   { key: "economy", name: "Economy", span: "Today" },
-  { key: "environment", name: "Environment", span: "This week" },
-  { key: "science", name: "Science", span: "This week" },
+  { key: "immigration", name: "Immigration", span: "Today" },
+  { key: "crime", name: "Crime & justice", span: "Today" },
+  { key: "environment", name: "Energy & environment", span: "This week" },
   { key: "health", name: "Health", span: "This week" },
+  { key: "tech", name: "AI & tech", span: "Today" },
+  { key: "science", name: "Science", span: "This week" },
+  { key: "education", name: "Education", span: "This week" },
 ];
+const DEFAULT_TOPICS = TOPICS.slice(0, 5).map(t => t.key);
+// The sections a reader follows, kept on this device only. null until they have chosen.
+function chosenTopics() {
+  try {
+    const v = JSON.parse(localStorage.getItem("fx-topics"));
+    if (Array.isArray(v)) { const keys = v.filter(k => TOPICS.some(t => t.key === k)); if (keys.length) return keys; }
+  } catch (e) {}
+  return null;
+}
+const followedTopics = () => chosenTopics() || DEFAULT_TOPICS;
+function saveTopics(keys) {
+  try { localStorage.setItem("fx-topics", JSON.stringify(keys)); } catch (e) {}
+  document.dispatchEvent(new CustomEvent("fx-topics"));
+}
 const topicName = k => (TOPICS.find(t => t.key === k) || { name: "" }).name;
 const DECIDED = ["Holds up", "Missing context", "Doesn't hold up"];
 
@@ -295,12 +314,25 @@ function renderToday(data) {
   $("scanline").replaceChildren(el("span", "sr-only", "Live. Updated "), document.createTextNode(clock(data.scanned_at)),
     el("span", "scan-extra", ` \u00b7 ${feeds.filter(f => f.ok).length} outlets`));
 
-  // Only stories with a written summary, chosen by the scan for Today (covered by both sides). Never a bare headline.
-  const shown = s => s.related_to === null && s.on_today && s.brief && (s.brief.agreed || []).some(acrossSides);
-  let total = 0;
+  TODAY = data;
+  drawToday();
+  document.addEventListener("fx-topics", drawToday);
+}
+
+let TODAY = null;
+// Only stories with a written summary, chosen by the scan for Today (covered by both sides). Never a bare headline.
+const shownToday = s => s.related_to === null && s.on_today && s.brief && (s.brief.agreed || []).some(acrossSides);
+
+function drawToday() {
+  const data = TODAY;
+  const follow = new Set(followedTopics());
   const nav = $("topic-nav");
-  for (const t of TOPICS) {
-    const ranked = data.stories.filter(s => shown(s) && s.topic === t.key);
+  nav.replaceChildren();
+  $("sections").replaceChildren();
+  drawPicker();
+  let total = 0;
+  for (const t of TOPICS.filter(t => follow.has(t.key))) {
+    const ranked = data.stories.filter(s => shownToday(s) && s.topic === t.key);
     const list = ranked.slice(0, 1).concat(ranked.slice(1).sort((a, b) => brokeAt(b) - brokeAt(a)));
     total += list.length;
     const sec = el("section", "topic-section");
@@ -322,8 +354,45 @@ function renderToday(data) {
     chip.append(el("span", "topic-count", String(list.length)));
     nav.append(chip);
   }
+  const edit = el("button", "topic-chip topic-edit", "Edit topics");
+  edit.type = "button";
+  edit.addEventListener("click", () => openSettings("topic"));
+  nav.append(edit);
   if ($("today-count")) $("today-count").textContent = WORDS[total] || String(total);
+}
 
+// First visit: choose what to follow, the first five already chosen. Not a modal: Today shows underneath.
+function drawPicker() {
+  const old = $("picker");
+  if (chosenTopics()) { if (old) old.remove(); return; }
+  if (old) return;
+  const box = el("section", "picker");
+  box.id = "picker";
+  box.setAttribute("aria-labelledby", "picker-title");
+  const h = el("h2", "picker-title", "What do you want to follow?");
+  h.id = "picker-title";
+  box.append(h, el("p", "picker-sub", "Choose any. You can change this any time in Settings."));
+  const grid = el("div", "picker-grid");
+  for (const t of TOPICS) {
+    const lab = el("label", "pick");
+    const box2 = el("input");
+    box2.type = "checkbox"; box2.value = t.key; box2.checked = DEFAULT_TOPICS.includes(t.key);
+    lab.append(box2, el("span", null, t.name));
+    grid.append(lab);
+  }
+  const done = el("button", "picker-done", "Show my stories");
+  done.type = "button";
+  const sync = () => { done.disabled = !grid.querySelector("input:checked"); };
+  grid.addEventListener("change", sync);
+  done.addEventListener("click", () => {
+    const keys = [...grid.querySelectorAll("input:checked")].map(i => i.value);
+    if (!keys.length) return;
+    box.remove();
+    saveTopics(keys);
+    $("topic-nav").querySelector("a, button").focus();
+  });
+  box.append(grid, done);
+  $("topic-nav").before(box);
 }
 
 /* ---------- How it works: the outlets we read, by side ---------- */
@@ -455,6 +524,14 @@ function initToTop() {
 }
 
 /* ---------- Settings: theme, remembered on this device only ---------- */
+function openSettings(focus) {
+  const d = document.querySelector(".settings");
+  if (!d) return;
+  d.open = true;
+  const target = focus === "topic" ? d.querySelector('input[name="topic"]') : d.querySelector("input");
+  if (target) target.focus();
+}
+
 function initSettings() {
   const form = document.querySelector(".settings-panel");
   if (!form) return;
@@ -462,12 +539,36 @@ function initSettings() {
   try { current = localStorage.getItem("fx-theme") || "dark"; } catch (e) {}
   const box = form.querySelector(`input[value="${current}"]`);
   if (box) box.checked = true;
+  // Topics: which sections Today shows. At least one stays on.
+  const fs = el("fieldset", "settings-topics");
+  fs.append(el("legend", null, "Topics"));
+  for (const t of TOPICS) {
+    const lab = el("label");
+    const cb = el("input");
+    cb.type = "checkbox"; cb.name = "topic"; cb.value = t.key;
+    lab.append(cb, document.createTextNode(` ${t.name}`));
+    fs.append(lab);
+  }
+  form.append(fs);
+  const syncTopics = () => { const f = new Set(followedTopics()); fs.querySelectorAll("input").forEach(i => { i.checked = f.has(i.value); }); };
+  syncTopics();
+  document.addEventListener("fx-topics", syncTopics);
   form.addEventListener("change", e => {
+    if (e.target.name === "topic") {
+      const keys = [...fs.querySelectorAll("input:checked")].map(i => i.value);
+      if (!keys.length) { e.target.checked = true; return; }
+      saveTopics(keys);
+      return;
+    }
     const v = e.target.value;
     if (v === "dark") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = v;
     try { localStorage.setItem("fx-theme", v); } catch (err) {}
   });
-  document.addEventListener("keydown", e => { if (e.key === "Escape") { const d = document.querySelector(".settings[open]"); if (d) { d.open = false; d.querySelector("summary").focus(); } } });
+  const close = (refocus) => { const d = document.querySelector(".settings[open]"); if (d) { d.open = false; if (refocus) d.querySelector("summary").focus(); } };
+  document.addEventListener("keydown", e => { if (e.key === "Escape") close(true); });
+  // A click or tap anywhere else closes it, and so does tabbing out of it.
+  document.addEventListener("pointerdown", e => { const d = document.querySelector(".settings[open]"); if (d && !d.contains(e.target) && !e.target.closest(".topic-edit")) close(false); });
+  document.addEventListener("focusin", e => { const d = document.querySelector(".settings[open]"); if (d && !d.contains(e.target)) close(false); });
 }
 
 /* ---------- Archive ---------- */
