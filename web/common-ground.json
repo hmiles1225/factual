@@ -5,18 +5,62 @@
   "source": "Program for Public Consultation, University of Maryland",
   "title": "The National Common Ground",
   "url": "https://vop.org/cgoap/",
-  "fielded": "February 11 to March 19, 2026",
-  "sample": "3,709 U.S. adults",
-  "method": "Online opt-in panels (Cint, Dynata, Prodege), weighted to the population; margin of error ±2.9 points.",
+  "fielded": "February 11 to 26, 2026",
+  "sample": "2,509 U.S. adults (each question asked of four of five random subsamples, about 2,000 people)",
+  "method": "Online opt-in panels (Cint, Dynata, Prodege), weighted by age, race, ethnicity, gender, education, income, region, home ownership and party. Margin of error ±2.9 points. Response rate 7.6%.",
   "items": [
-   {"policy": "Cap drug prices at what other developed countries pay", "rep": 90, "dem": 86},
-   {"policy": "Term limits for Congress, by constitutional amendment", "rep": 85, "dem": 83},
-   {"policy": "Let Congress and the states limit corporate and PAC election spending", "rep": 82, "dem": 85},
-   {"policy": "Require E-Verify, and add work visas when employers need workers", "rep": 82, "dem": 84},
-   {"policy": "New AI that makes major decisions about people must first pass a government test", "rep": 78, "dem": 82},
-   {"policy": "Ban members of Congress from trading individual stocks", "rep": 78, "dem": 75},
-   {"policy": "Cap childcare costs at 7% of family income", "rep": 77, "dem": 89}
-  ]
+   {
+    "policy": "Cap drug prices at what other developed countries pay",
+    "rep": 90,
+    "dem": 86,
+    "q": "Q1",
+    "page": 1
+   },
+   {
+    "policy": "Term limits for Congress, by constitutional amendment",
+    "rep": 85,
+    "dem": 83,
+    "q": "Q110",
+    "page": 29
+   },
+   {
+    "policy": "Let Congress and the states limit corporate and PAC election spending",
+    "rep": 82,
+    "dem": 85,
+    "q": "Q102",
+    "page": 27
+   },
+   {
+    "policy": "Require E-Verify, and add work visas when employers need workers",
+    "rep": 82,
+    "dem": 84,
+    "q": "Q24",
+    "page": 7
+   },
+   {
+    "policy": "New AI that makes major decisions about people must first pass a government test",
+    "rep": 78,
+    "dem": 82,
+    "q": "Q73",
+    "page": 20
+   },
+   {
+    "policy": "Ban members of Congress from trading individual stocks",
+    "rep": 78,
+    "dem": 75,
+    "q": "Q114",
+    "page": 30
+   },
+   {
+    "policy": "Cap childcare costs at 7% of family income",
+    "rep": 77,
+    "dem": 89,
+    "q": "Q10",
+    "page": 4
+   }
+  ],
+  "questionnaire": "https://publicconsultation.org/wp-content/uploads/2026/06/Common-Ground-National-Questionnaire-2026.pdf",
+  "survey": "Survey 1"
  },
  "misread": [
   {
@@ -28,14 +72,6 @@
    "url": "https://www.asc.upenn.edu/news-events/news/new-study-reveals-democrats-and-republicans-vastly-underestimate-diversity-each-others-views"
   },
   {
-   "finding": "The famous 'perception gap' is older, and contested.",
-   "detail": "Democrats and Republicans imagined almost twice as many of their opponents held views they consider extreme as actually did. Later studies, including the two here, question how far this holds.",
-   "source": "More in Common, with YouGov. The Perception Gap",
-   "date": "2019",
-   "sample": "2,100 Americans",
-   "url": "https://perceptiongap.us/"
-  },
-  {
    "finding": "Most of our disagreement is real.",
    "detail": "Democrats and Republicans made similar mistakes about both parties, and disliking the other party did not make people see it as more uniformly extreme. The researchers' conclusion: “real disagreements, not necessarily misperceptions.”",
    "source": "Huber and Orr, Yale ISPS. Frontiers in Political Science",
@@ -43,5 +79,101 @@
    "sample": "YouGov surveys of 5,000+ adults, before the 2020 and 2024 elections",
    "url": "https://isps.yale.edu/news/2026-09-09-political-polarization-may-be-driven-by-real-disagreements-not-misperceptions"
   }
- ]
+ ],
+ "gap": {
+  "source": "More in Common, with YouGov",
+  "title": "The Perception Gap",
+  "url": "https://www.moreincommon.com/media/0fmblxb3/the-perception-gap.pdf",
+  "page": 18,
+  "fielded": "November 7 to 10, 2018",
+  "published": "June 2019",
+  "sample": "2,100 U.S. adults",
+  "method": "Each person said whether they agreed with seven statements, then guessed, from 0 to 100, what share of the other party agreed. Margin of error ±2.1 points.",
+  "groups": [
+   {
+    "who": "Republicans",
+    "guesser": "Democrats",
+    "avg_gap": 19,
+    "rows": [
+     [
+      "Properly controlled immigration can be good for America",
+      85,
+      52
+     ],
+     [
+      "Racism still exists in America",
+      79,
+      51
+     ],
+     [
+      "Many Muslims are good Americans",
+      70,
+      41
+     ],
+     [
+      "Sexism still exists in America",
+      66,
+      47
+     ],
+     [
+      "The government should do more to stop guns getting into the hands of bad people",
+      65,
+      47
+     ],
+     [
+      "Donald Trump is a flawed person",
+      48,
+      47
+     ],
+     [
+      "People are right to be concerned about how climate change might affect us",
+      46,
+      44
+     ]
+    ]
+   },
+   {
+    "who": "Democrats",
+    "guesser": "Republicans",
+    "avg_gap": 27,
+    "rows": [
+     [
+      "Disagree: “Most police are bad people”",
+      85,
+      48
+     ],
+     [
+      "I am proud to be American, though I acknowledge my country's flaws",
+      82,
+      54
+     ],
+     [
+      "It is important that men are protected from false accusations pertaining to sexual assault",
+      74,
+      45
+     ],
+     [
+      "Disagree: “The US should have completely open borders”",
+      71,
+      38
+     ],
+     [
+      "Law abiding citizens should have the right to bear firearms",
+      68,
+      44
+     ],
+     [
+      "Disagree: “America should be a socialist country”",
+      62,
+      37
+     ],
+     [
+      "Disagree: “The US should abolish ICE”",
+      53,
+      40
+     ]
+    ]
+   }
+  ]
+ }
 }

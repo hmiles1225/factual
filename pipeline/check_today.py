@@ -534,6 +534,13 @@ def main():
                 brief["loaded_v"] = LOADED_VERSION
             except Exception as e:
                 print(f"  loaded-language pass failed: {e}")
+        # Each loaded term is shown in its sentence. Found in code, in text we already read; no model call.
+        if any("quotes" not in t for t in brief.get("loaded") or []):
+            try:
+                qlines, _ = coverage_lines(arts, side_of, summaries)
+                loaded_quotes(brief["loaded"], arts, qlines)
+            except Exception as e:
+                print(f"  loaded-language quotes failed: {e}")
         # Every side's account gets the same chance of a check: if the brief left an account without a
         # claim, ask for the one factual claim it makes (or confirm it makes none). Once per account.
         for d in brief["differences"]:
@@ -770,6 +777,35 @@ def verify_loaded(raw, arts, lines, side_of):
             out.append({"term": term, "outlets": outlets, "sides": sorted({side_of.get(o, "unplaced") for o in outlets}),
                         "why": (t.get("why") or "").strip(), "neutral": (t.get("neutral") or "").strip()})
     return out
+
+
+_SENTENCE = re.compile(r"(?<=[.!?\u201d\"])\s+(?=[A-Z\u201c\"])")
+
+
+def loaded_quotes(terms, arts, lines, limit=220):
+    """For each loaded term, the sentence it appears in, from up to two of the outlets that used it: the
+    headline, summary or opening line we read, outside quotation marks, trimmed around the term. A
+    sentence is a short quotation for comment, with a link; whole openings are never stored."""
+    for t in terms:
+        if "quotes" in t:
+            continue
+        term, quotes = t["term"].casefold(), []
+        for i, a in enumerate(arts):
+            if len(quotes) == 2 or a["source"] not in t["outlets"] or any(q["outlet"] == a["source"] for q in quotes):
+                continue
+            body = lines[i].split(": ", 1)[-1] if i < len(lines) else ""
+            for part in body.split(" | "):
+                part = part[len("Opening: "):] if part.startswith("Opening: ") else part
+                sent = next((x for x in _SENTENCE.split(part) if term in _QUOTED.sub(" ", x).casefold()), None)
+                if sent:
+                    sent = sent.strip()
+                    if len(sent) > limit:  # keep a window around the term
+                        at = sent.casefold().find(term)
+                        lo = max(0, at - limit // 2)
+                        sent = ("\u2026" if lo else "") + sent[lo:lo + limit].strip() + "\u2026"
+                    quotes.append({"outlet": a["source"], "text": sent, "url": a["url"]})
+                    break
+        t["quotes"] = quotes
 
 
 def coverage_lines(arts, side_of, summaries):

@@ -71,13 +71,20 @@ code { font: 400 0.8125rem var(--mono); }
 .site-nav a:hover { color: var(--ink); }
 .site-nav a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--lav); }
 
-/* Home-screen app: a bottom tab bar replaces the top nav row. Focused items scroll clear of it (WCAG 2.4.11). */
-.tab-bar { display: none; }
+/* Phones and the home-screen app: one nav, a bottom tab bar, in place of the top nav row.
+   Focused items scroll clear of it (WCAG 2.4.11). */
+.tab-bar { display: none; position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; padding: 6px max(6px, env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left));
+  background: var(--surf); border-top: 1px solid var(--line); }
 html.app .site-nav { display: none; }
 html.app { scroll-padding-bottom: calc(84px + env(safe-area-inset-bottom)); }
 html.app body { padding-bottom: calc(66px + env(safe-area-inset-bottom)); }
-html.app .tab-bar { display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; padding: 6px max(6px, env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left));
-  background: var(--surf); border-top: 1px solid var(--line); }
+html.app .tab-bar { display: flex; }
+@media (max-width: 719px) {
+  .site-nav { display: none; }
+  html { scroll-padding-bottom: calc(84px + env(safe-area-inset-bottom)); }
+  body { padding-bottom: calc(66px + env(safe-area-inset-bottom)); }
+  .tab-bar { display: flex; }
+}
 .tab-bar a { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-height: 52px;
   font: 600 0.71875rem/1 var(--cond); color: var(--ink-3); text-decoration: none; border-radius: 8px; }
 .tab-bar a:hover { color: var(--ink); }
@@ -174,14 +181,16 @@ figcaption a:hover { text-decoration: underline; }
 .diff-point { margin: 0 0 10px; font: 600 1.125rem/1.25 var(--cond); }
 .diff-split { margin: 0 0 10px; font-size: 0.875rem; line-height: 1.45; color: var(--ink-2); }
 .sides { display: grid; gap: 8px; }
-@media (min-width: 360px) { .sides { grid-template-columns: 1fr 1fr; } }
+/* Side by side only where each side gets a readable measure; on a phone they stack. */
+@media (min-width: 640px) { .sides { grid-template-columns: 1fr 1fr; } }
 .side { display: flex; flex-direction: column; gap: 8px; padding: 12px; background: var(--surf); border-radius: 10px; }
 .side, .side > * { min-width: 0; }
 /* Which side is talking can't be missed: a solid label. Text, never color. */
 .side-tag { align-self: flex-start; margin: 0; padding: 2px 8px; border-radius: 5px; background: var(--brand); color: #fff; font: 700 0.75rem/1.5 var(--cond); letter-spacing: 0.04em; text-transform: uppercase; }
 .side-says { margin: 0; font: 400 0.96875rem/1.45 var(--sans); color: var(--ink-2); }
 .side-says strong { font-weight: 600; color: var(--ink); }
-.side-outlets { margin: auto 0 0; font: 400 0.65625rem/1.45 var(--mono); color: var(--ink-3); }
+.side > .check, .side > .side-pending { margin-top: auto; }
+.side-outlets { margin: 0; font: 400 0.65625rem/1.45 var(--mono); color: var(--ink-3); }
 .side-pending { margin: 0; font-size: 0.8125rem; color: var(--ink-3); }
 
 /* Checks */
@@ -189,6 +198,7 @@ figcaption a:hover { text-decoration: underline; }
 .check-row > summary { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: baseline; padding: 10px 0 4px; min-height: 44px; }
 .check-row > summary::after { align-self: center; }
 .check-claim { font: 400 0.875rem/1.4 var(--sans); color: var(--ink); overflow-wrap: anywhere; }
+.check-claim.is-echo { font: 500 0.8125rem/1.4 var(--cond); color: var(--ink-2); }
 .diff > .check-row { margin-top: 10px; }
 /* Inside a half-width side panel there is no room beside the chip: the chip and the open marker share the
    first row, the claim takes the full width below (a long chip had squeezed it to one letter a line). */
@@ -227,6 +237,11 @@ figcaption a:hover { text-decoration: underline; }
 .loaded-arrow { color: var(--ink-3); }
 .loaded-neutral { color: var(--lav); }
 .loaded-why { margin: 4px 0 0; font-size: 0.8125rem; line-height: 1.45; color: var(--ink-3); }
+.loaded-quote { margin: 8px 0 0; padding: 2px 0 2px 12px; border-left: 2px solid var(--line); }
+.loaded-quote p { margin: 0; font: 400 0.9375rem/1.5 var(--sans); color: var(--ink-2); overflow-wrap: anywhere; }
+.loaded-quote mark { background: none; color: var(--ink); font-weight: 600; text-decoration: underline; text-decoration-color: var(--ink-3); text-underline-offset: 3px; }
+.loaded-quote .loaded-by { margin-top: 2px; font: 400 0.75rem/1.5 var(--mono); }
+.loaded-by a { color: var(--lav); }
 
 /* Who covered it */
 .spectrum { margin: 6px 0 0; }
@@ -302,6 +317,29 @@ details[open] > summary::after { content: "\2212"; }
 .agree-v { font: 700 0.8125rem/1 var(--mono); text-align: right; }
 .cg-source { margin: 12px 0 0; max-width: 72ch; font: 400 0.75rem/1.55 var(--mono); color: var(--ink-3); }
 .cg-source a { color: var(--lav); }
+.agree-cite { margin: 8px 0 0; font: 400 0.6875rem/1.5 var(--mono); color: var(--ink-3); }
+.agree-cite a { color: var(--lav); }
+/* Perception gap: a guess (ring) and the real figure (dot) on one 0 to 100 track. Numbers are printed under it. */
+.gap-heads { display: grid; gap: 8px; margin: 0 0 14px; }
+@media (min-width: 640px) { .gap-heads { grid-template-columns: 1fr 1fr; } }
+.gap-head { display: flex; align-items: baseline; gap: 10px; padding: 12px 14px; background: var(--surf); border-radius: 10px; }
+.gap-head-n { font: 700 2.25rem/1 var(--cond); color: var(--lav); }
+.gap-head-l { font: 500 0.875rem/1.35 var(--cond); color: var(--ink-2); }
+.gap-key { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 0 0 4px; font: 500 0.8125rem/1.3 var(--cond); color: var(--ink-2); }
+.gap-key-guess, .gap-key-actual { display: inline-block; width: 12px; height: 12px; border-radius: 50%; }
+.gap-key-guess { border: 2px solid var(--ink-2); }
+.gap-key-actual { margin-left: 8px; background: var(--lav); }
+.gap-title { margin: 18px 0 8px; font: 600 1.0625rem/1.3 var(--cond); }
+.gap-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.gap-row { padding: 10px 14px 10px; background: var(--surf); border-radius: 10px; }
+.gap-stmt { margin: 0; font: 500 0.9375rem/1.35 var(--sans); }
+.gap-track { position: relative; height: 16px; margin: 8px 7px 2px; }
+.gap-track::before { content: ""; position: absolute; left: 0; right: 0; top: 7px; height: 2px; border-radius: 1px; background: var(--line); }
+.gap-span { position: absolute; top: 7px; height: 2px; background: var(--ink-3); }
+.gap-guess, .gap-actual { position: absolute; top: 1px; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%; box-sizing: border-box; }
+.gap-guess { border: 2px solid var(--ink-2); background: var(--surf); }
+.gap-actual { background: var(--lav); box-shadow: 0 0 0 2px var(--surf); }
+.gap-nums { margin: 2px 0 0; font: 400 0.75rem/1.45 var(--mono); color: var(--ink-3); }
 .misread-list { list-style: none; margin: 0; padding: 0; counter-reset: m; }
 .misread { position: relative; padding: 14px 0 16px 34px; border-top: 1px solid var(--line); counter-increment: m; }
 .misread::before { content: counter(m, decimal-leading-zero); position: absolute; left: 0; top: 17px; font: 700 0.8125rem/1 var(--mono); color: var(--lav); }

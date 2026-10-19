@@ -308,6 +308,12 @@ function renderHow(data) {
 }
 
 /* ---------- Common ground: shared ground, and what we get wrong about each other ---------- */
+function sourceLink(text, href) {
+  const a = el("a", null, text);
+  a.href = href; a.rel = "noopener";
+  return a;
+}
+
 function renderCommon(cg) {
   const box = $("common");
   const u = cg.unites;
@@ -327,27 +333,66 @@ function renderCommon(cg) {
       row.append(el("span", "agree-who", label), bar, el("span", "agree-v", `${v}%`));
       li.append(row);
     }
+    // Every figure carries its own source: the question it answers, in the published questionnaire.
+    const cite = el("p", "agree-cite", `${u.survey}, February 2026, ${it.q} · `);
+    cite.append(sourceLink("Question and results ↗", `${u.questionnaire}#page=${it.page}`));
+    li.append(cite);
     ul.append(li);
   }
   s1.append(ul);
   const src = el("p", "cg-source");
-  const a = el("a", null, `${u.source}, \u201c${u.title}\u201d`);
-  a.href = u.url; a.rel = "noopener";
-  src.append(a, document.createTextNode(`. Surveyed ${u.fielded}, ${u.sample}. ${u.method}`));
+  src.append(document.createTextNode("Source: "), sourceLink(`${u.source}, “${u.title}”`, u.url),
+    document.createTextNode(`. ${u.survey}, fielded ${u.fielded}: ${u.sample}. ${u.method} `),
+    sourceLink("Full questionnaire (PDF) ↗", u.questionnaire));
   s1.append(src);
   box.append(s1);
 
+  const g = cg.gap;
   const s2 = el("section", "block");
   s2.append(el("h2", "block-title", "What we get wrong about each other"));
-  s2.append(el("p", "cg-lede", "The other side is more varied than most of us think. Whether we also exaggerate how extreme it is, researchers disagree."));
+  s2.append(el("p", "cg-lede", "Asked what share of the other party holds a mainstream view, both sides guessed too low, often by half."));
+  const heads = el("div", "gap-heads");
+  for (const grp of g.groups) {
+    const t = el("div", "gap-head");
+    t.append(el("span", "gap-head-n", `${grp.avg_gap}`), el("span", "gap-head-l", `points: how far ${grp.guesser} missed, on average, about ${grp.who}`));
+    heads.append(t);
+  }
+  s2.append(heads);
+  const key = el("p", "gap-key");
+  key.append(el("span", "gap-key-guess"), document.createTextNode("Their guess"), el("span", "gap-key-actual"), document.createTextNode("What the other side actually said"));
+  key.querySelectorAll("span").forEach(n => n.setAttribute("aria-hidden", "true"));
+  s2.append(key);
+  for (const grp of g.groups) {
+    s2.append(el("h3", "gap-title", `What ${grp.guesser} think ${grp.who} believe`));
+    const list = el("ul", "gap-list");
+    for (const [stmt, actual, guess] of grp.rows) {
+      const li = el("li", "gap-row");
+      li.append(el("p", "gap-stmt", stmt));
+      const track = el("div", "gap-track");
+      track.setAttribute("aria-hidden", "true");
+      const span = el("span", "gap-span");
+      span.style.left = `${Math.min(actual, guess)}%`;
+      span.style.width = `${Math.abs(actual - guess)}%`;
+      const gd = el("span", "gap-guess"), ad = el("span", "gap-actual");
+      gd.style.left = `${guess}%`; ad.style.left = `${actual}%`;
+      track.append(span, gd, ad);
+      li.append(track, el("p", "gap-nums", `${grp.guesser} guessed ${guess}% of ${grp.who} agree. ${actual}% do.`));
+      list.append(li);
+    }
+    s2.append(list);
+  }
+  const gsrc = el("p", "cg-source");
+  gsrc.append(document.createTextNode("Source: "), sourceLink(`${g.source}, “${g.title}” (${g.published}), tables 1 and 2 ↗`, `${g.url}#page=${g.page}`),
+    document.createTextNode(`. Fielded ${g.fielded}: ${g.sample}. ${g.method} The latest full run of this survey; newer research below tests how far it holds.`));
+  s2.append(gsrc);
+
+  s2.append(el("h3", "gap-title", "What newer research says"));
   const ol = el("ol", "misread-list");
   for (const m of cg.misread) {
     const li = el("li", "misread");
-    li.append(el("h3", "misread-finding", m.finding), el("p", "misread-detail", m.detail));
+    li.append(el("h4", "misread-finding", m.finding), el("p", "misread-detail", m.detail));
     const meta = el("p", "cg-source");
-    const link = el("a", null, m.source);
-    link.href = m.url; link.rel = "noopener";
-    meta.append(link, document.createTextNode(` \u00b7 ${m.date} \u00b7 ${m.sample}`));
+    meta.append(document.createTextNode("Source: "), sourceLink(`${m.source} ↗`, m.url), document.createTextNode(` · ${m.date} · ${m.sample}`));
     li.append(meta);
     ol.append(li);
   }
@@ -433,11 +478,21 @@ function sourcesLine(c) {
   return p;
 }
 
-function claimDetails(c) {
+// True when the checked claim restates the line printed just above it, nearly word for word.
+function restates(claim, says) {
+  const words = t => (t || "").toLowerCase().match(/[a-z0-9']+/g) || [];
+  const said = new Set(words(says));
+  const w = words(claim);
+  return w.length > 0 && w.filter(x => said.has(x)).length / w.length >= 0.85;
+}
+
+function claimDetails(c, above) {
   const wrap = el("div", "check");
   const det = el("details", "check-row");
   const sum = el("summary");
-  sum.append(chip(c.verdict), el("span", "check-claim", c.claim));
+  // Don't print the same sentence twice: when the claim is the line above, the row just opens the check.
+  if (above && restates(c.claim, above)) sum.append(chip(c.verdict), el("span", "check-claim is-echo", "What the sources show"));
+  else sum.append(chip(c.verdict), el("span", "check-claim", c.claim));
   det.append(sum);
   const body = el("div", "check-body");
   if (c.steelman) body.append(el("p", "why", `Why this sounds right: ${c.steelman}`));
@@ -528,7 +583,7 @@ function differenceBlock(d, lib, leanOf) {
     col.append(withCrux(el("p", "side-says"), p.says, p.crux));
     col.append(el("p", "side-outlets", listNames(p.outlets, 4)));
     const c = claimOf(lib, p.check);
-    if (c) col.append(claimDetails(c));
+    if (c) col.append(claimDetails(c, p.says));
     else if (p.checkable_claim) col.append(el("p", "side-pending", "Checking this claim."));
     else if (p.no_claim) col.append(el("p", "side-pending", "Framing, not a factual claim."));
     cols.append(col);
@@ -582,6 +637,18 @@ function loadedItem(t, side) {
   top.append(el("span", "loaded-side", side), el("span", "sr-only", "Loaded: "), el("s", "loaded-term", t.term));
   if (t.neutral) top.append(el("span", "loaded-arrow", " \u2192 "), el("span", "sr-only", "plainer: "), el("span", "loaded-neutral", t.neutral));
   li.append(top, el("p", "loaded-why", `${listNames(t.outlets, 3)}${t.why ? ". " + t.why.replace(/\.?$/, ".") : ""}`));
+  // The word in its sentence, as the outlet wrote it, with the term marked.
+  for (const q of t.quotes || []) {
+    const bq = el("blockquote", "loaded-quote");
+    const p = el("p");
+    const at = q.text.toLowerCase().indexOf(t.term.toLowerCase());
+    if (at < 0) p.textContent = `\u201c${q.text}\u201d`;
+    else p.append(document.createTextNode(`\u201c${q.text.slice(0, at)}`), el("mark", null, q.text.slice(at, at + t.term.length)), document.createTextNode(`${q.text.slice(at + t.term.length)}\u201d`));
+    const by = el("p", "loaded-by");
+    by.append(sourceLink(`${q.outlet} \u2197`, q.url));
+    bq.append(p, by);
+    li.append(bq);
+  }
   return li;
 }
 
