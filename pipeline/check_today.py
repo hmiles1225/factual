@@ -37,6 +37,7 @@ from images import image_for, image_for_title  # noqa: E402
 ROOT = Path(__file__).resolve().parent.parent
 LIBRARY_URL = "https://hestonmiles.com/factual/data/library.json"
 ARCHIVE_URL = "https://hestonmiles.com/factual/data/archive/"
+SITE_URL = "https://hestonmiles.com/factual/"
 # In this order: when the day's budget runs out, the sections later in the list wait. The first five are the
 # ones pre-selected for readers.
 TOPIC_QUOTAS = {"politics": 5, "elections": 3, "economy": 3, "immigration": 3, "crime": 3, "world": 3,
@@ -715,6 +716,7 @@ def main():
         print(f"  {topic}: {done} of {quota} on Today ({len(cands)} stories covered by both sides)")
 
     write_archive([s for s in data["stories"] if s.get("on_today")], data.get("feeds", []))
+    write_share_pages([s for s in data["stories"] if s.get("on_today")])
 
     live = {s["sid"] for s in data["stories"]}
     lib["briefs"] = {k: v for k, v in briefs.items() if k in live}
@@ -909,6 +911,43 @@ def _live_json(url):
         if e.code == 404:
             return None
         raise
+
+
+def write_share_pages(stories):
+    """One small page per story on Today, at s/<sid>.html, for link previews: messaging apps and social sites
+    read its title, description and picture without running the site's script. People go straight on to
+    the story. The link carries the day, so it still opens once the story has left Today."""
+    from html import escape
+    day = datetime.now(ZoneInfo("America/New_York")).date().isoformat()
+    out = ROOT / "data/share"
+    out.mkdir(parents=True, exist_ok=True)
+    for st in stories:
+        brief = st.get("brief") or {}
+        shared = [f["fact"] for f in brief.get("agreed", []) if "left" in f.get("sides", []) and "right" in f.get("sides", [])]
+        splits = len(brief.get("differences", []))
+        desc = f"Left and right agree: {shared[0]}" if shared else "What left- and right-leaning outlets agree on, and where they split."
+        if len(desc) > 200:
+            desc = desc[:197].rsplit(" ", 1)[0] + "\u2026"
+        if splits:
+            desc += f" Plus {splits} point{'s' if splits != 1 else ''} where they split."
+        story_url = f"{SITE_URL}story.html?s={st['sid']}&d={day}"
+        image = f"{SITE_URL}{st['image']['src']}" if st.get("image") and st["image"].get("src") else f"{SITE_URL}og-card-v1.png"
+        e = lambda t: escape(t, quote=True)
+        (out / f"{st['sid']}.html").write_text(f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>{e(st['working_title'])} \u00b7 fACTUAL</title>
+<meta name="description" content="{e(desc)}">
+<meta name="robots" content="noindex">
+<link rel="canonical" href="{e(story_url)}">
+<meta property="og:type" content="article"><meta property="og:site_name" content="fACTUAL">
+<meta property="og:title" content="{e(st['working_title'])}"><meta property="og:description" content="{e(desc)}">
+<meta property="og:url" content="{SITE_URL}s/{st['sid']}.html"><meta property="og:image" content="{e(image)}">
+<meta name="twitter:card" content="summary_large_image">
+<meta http-equiv="refresh" content="0; url={e(story_url)}">
+<script>location.replace({json.dumps(story_url)})</script>
+</head><body><p><a href="{e(story_url)}">{e(st['working_title'])}</a></p></body></html>
+""")
+    print(f"  share pages: {len(stories)}")
 
 
 _ARCHIVED = {}

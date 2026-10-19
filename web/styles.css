@@ -195,7 +195,14 @@ figcaption a:hover { text-decoration: underline; }
 /* ---------- Story page ---------- */
 .story-page > * { max-width: 720px; }
 .story-head { padding: 22px 0 0; }
-.back-link { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; margin: -8px 0 4px; padding-right: 8px; font: 600 0.9375rem/1 var(--cond); color: var(--lav); text-decoration: none; }
+.story-tools { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: -8px 0 4px; }
+.share-btn { display: inline-flex; align-items: center; gap: 7px; min-height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: var(--ink-2); font: 600 0.9375rem/1 var(--cond); cursor: pointer; transition: background-color 120ms ease-out, color 120ms ease-out, border-color 120ms ease-out; }
+.share-btn:hover { background: var(--surf); color: var(--ink); }
+.share-btn.is-done { color: var(--lav); border-color: var(--lav); }
+.share-end { display: flex; justify-content: center; margin: 28px 0 0; }
+.share-end .share-btn { min-height: 48px; padding: 0 20px; font-size: 1rem; color: var(--ink); background: var(--surf); }
+.share-end .share-btn:hover { background: var(--surf-2); }
+.back-link { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding-right: 8px; font: 600 0.9375rem/1 var(--cond); color: var(--lav); text-decoration: none; }
 .back-link:hover .back-arrow { transform: translateX(-3px); }
 .back-arrow { display: inline-block; transition: transform 120ms ease-out; }
 .kicker { margin: 0 0 8px; font: 400 0.6875rem/1.2 var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
@@ -437,7 +444,7 @@ details[open] > summary::after { content: "\2212"; }
 @media (max-width: 359px) { .scan-extra { display: none; } }  /* the header fits a 320 px phone */
 
 @media (prefers-reduced-motion: reduce) {
-  .photo-link img, .story, .topic-chip, .to-top, .to-top.is-on, .tile-link, .pick, .back-arrow, .more-tile { transition: none; }
+  .photo-link img, .story, .topic-chip, .to-top, .to-top.is-on, .tile-link, .pick, .back-arrow, .more-tile, .share-btn { transition: none; }
   .photo-link:hover img, .to-top { transform: none; }
 }
 

@@ -867,7 +867,9 @@ function renderStory(data) {
   document.title = `${story.working_title} · fACTUAL`;
   $("story-meta").textContent = `${topicName(story.topic) ? topicName(story.topic) + " \u00b7 " : ""}${data.archiveDay ? `From the archive \u00b7 ${dayName(data.archiveDay)}` : `Updated ${clock(data.scanned_at)}`}`;
   $("story-title").textContent = story.working_title;
-  $("story-meta").before(backLink(story, data));
+  const tools = el("div", "story-tools");
+  tools.append(backLink(story, data), shareButton(story, data, "Share"));
+  $("story-meta").before(tools);
   $("story-sub").append(el("p", "byline", `Headline \u00b7 ${lead(story).source}`));
   if (story.image) $("story-sub").append(figure(story.image, "story-photo"));
 
@@ -977,8 +979,50 @@ function renderStory(data) {
   s4.append(foot);
   body.append(s4);
   linkTiles($("story-sub").querySelector(".metrics-tiles"));
+  const end = el("div", "share-end");
+  end.append(shareButton(story, data, "Share this story"));
+  body.append(end);
   const more = moreStories(story, data);
   if (more) body.append(more);
+}
+
+// The link to share: the story's preview page (s/<sid>.html, written by each scan) so messages and posts
+// show its headline, what both sides agree on and its picture. An older archived story has none: its own link.
+function shareURL(story, data) {
+  const base = new URL("./", location.href).href;
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+  return data.archiveDay && data.archiveDay !== today ? `${base}${storyHref(story, data.archiveDay)}` : `${base}s/${story.sid}.html`;
+}
+
+// The phone's own share sheet where there is one; otherwise copy the link and say so.
+function shareButton(story, data, label) {
+  const b = el("button", "share-btn");
+  b.type = "button";
+  b.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3v12M7.5 7.5 12 3l4.5 4.5M5 11v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const word = el("span", "share-label", label);
+  const said = el("span", "sr-only");
+  said.setAttribute("aria-live", "polite");
+  b.append(word, said);
+  b.addEventListener("click", async () => {
+    const url = shareURL(story, data);
+    if (navigator.share) {
+      try { await navigator.share({ title: story.working_title, url }); } catch (e) { /* closed the sheet */ }
+      return;
+    }
+    let ok = false;
+    try { await navigator.clipboard.writeText(url); ok = true; } catch (e) {
+      const t = el("textarea"); t.value = url; t.setAttribute("readonly", ""); t.style.position = "fixed"; t.style.opacity = "0";
+      document.body.append(t); t.select();
+      try { ok = document.execCommand("copy"); } catch (err) {}
+      t.remove();
+    }
+    word.textContent = ok ? "Link copied" : "Couldn\u2019t copy";
+    said.textContent = ok ? "Link copied" : "Couldn't copy the link";
+    b.classList.toggle("is-done", ok);
+    clearTimeout(b._t);
+    b._t = setTimeout(() => { word.textContent = label; said.textContent = ""; b.classList.remove("is-done"); }, 2200);
+  });
+  return b;
 }
 
 // Back to where the reader came from: the story's section on Today (or the archive). Coming from Today,
@@ -1052,10 +1096,13 @@ async function load() {
   const library = getJSON("data/library.json", true);
   const params = new URLSearchParams(location.search);
   let data;
-  if (page === "story" && params.get("d")) {
+  // A link with a day (from the archive or a shared link) shows the live story while it is still on
+  // Today, and that day's archived copy once it has left.
+  const live = page === "story" && params.get("d") ? await getJSON("data/stories.json", true) : null;
+  if (page === "story" && params.get("d") && !(live && live.stories.some(s => s.sid === params.get("s") && s.on_today))) {
     data = fromArchive(await getJSON(`data/archive/${params.get("d")}.json`), params.get("d"));
   } else {
-    data = await getJSON("data/stories.json");
+    data = live || await getJSON("data/stories.json");
     // A story that has left the live scan is still in the archive: look back up to a week.
     if (page === "story" && !data.stories.some(s => s.sid === params.get("s"))) {
       const index = await getJSON("data/archive/index.json", true);
