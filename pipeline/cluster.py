@@ -56,6 +56,7 @@ POLITICS = [
     "Federal agency, Justice Department, FBI or Pentagon action on policy", "U.S. foreign policy: sanctions, tariffs, military aid, treaties",
     "Government spending, the budget, taxes and the national debt",
     "Republicans and Democrats clash over legislation", "A White House official or cabinet member resigns or is fired",
+    "The vice president holds a town hall or gives a major interview",
 ]
 ELECTIONS = [
     "U.S. election campaign, candidates, voters, polls and midterms",
@@ -65,6 +66,7 @@ ELECTIONS = [
     "Redistricting, gerrymandering and lawsuits over election rules",
     "A poll shows a tight race for governor, Senate or the House",
     "A candidate drops out of the race or ends a campaign after a scandal",
+    "A Senate or House candidate's remarks at a campaign event draw criticism",
 ]
 IMMIGRATION = [
     "Immigration and border policy decided by the U.S. government",
@@ -109,6 +111,8 @@ TECH = [
     "Data privacy, surveillance and cybersecurity breaches",
     "Chips, semiconductors and technology export controls",
     "A tech company or billionaire announces a deal, stake, investment or giveaway",
+    "An OpenAI, Google or Meta employee is accused of spying for a foreign government",
+    "Elon Musk and his companies: Tesla, SpaceX, X and xAI",
 ]
 SCIENCE = [
     "NASA, space missions and rocket launches",
@@ -134,18 +138,27 @@ EDUCATION = [
     "School choice, vouchers and charter schools",
     "What schools teach about race, gender and history; book removals",
 ]
+# Abroad, without a U.S. decision at its center (that is Politics: sanctions, aid, an endorsement).
+WORLD = [
+    "Israel, Gaza and the West Bank: the war, hostages, settlers and ceasefire talks",
+    "Russia and Ukraine: battlefield news, drone strikes and peace talks",
+    "A foreign country's internal politics, protests, riots or election",
+    "China, Taiwan and tensions in Asia",
+    "A foreign separatist movement or referendum in Canada or Europe",
+    "Iran, its nuclear program and conflict in the Middle East",
+]
 TOPICS = {"politics": POLITICS, "elections": ELECTIONS, "economy": ECONOMY, "immigration": IMMIGRATION, "crime": CRIME,
-          "environment": ENVIRONMENT, "health": HEALTH, "tech": TECH, "science": SCIENCE, "education": EDUCATION}
+          "world": WORLD, "environment": ENVIRONMENT, "health": HEALTH, "tech": TECH, "science": SCIENCE, "education": EDUCATION}
 NOT_POLITICS = [
     "An accident, fire or animal attack injures or kills people", "A wildfire, storm, earthquake or accident kills people",
     "Sports: a game, a team, a player, a championship", "Business, company earnings and a product launch",
     "Celebrity, entertainment, movies and music", "Religion: the Pope and the Vatican",
-    "A foreign country's internal politics, protests or election abroad", "Weather and travel",
+    "Weather and travel",
     "A celebrity or athlete on trial; a judge sentences a celebrity",
     "A celebrity's looks, body, diet, weight loss or fitness routine",
-    "A foreign separatist movement or referendum in Canada or Europe", "A war between other countries: battlefield news, drones, front lines",
-    "Israel, the West Bank and Gaza: settlers, arrests and clashes",
     "A football, basketball or baseball player is ejected, suspended or injured", "College football and basketball games and coaches",
+    "A TV news anchor or journalist leaves a network, is suspended or apologizes for a post",
+    "A pro team fires its coach or general manager", "An athlete's or celebrity's marriage, divorce or family life",
 ]
 TOPIC_MARGIN = 0.01
 # Politics moves by the day; energy and environment, science, health and education move by the week. Politics is grouped from
@@ -357,7 +370,7 @@ def main():
                   for f in scan.get("feeds", [])],
         "method": {"model": MODEL, "threshold": THRESHOLD, "window_hours": WINDOW_HOURS, "linkage": "average", "related": RELATED,
                    "topics": {"politics": "U.S. politics and U.S. policy abroad", "elections": "Elections", "economy": "Economy",
-                              "immigration": "Immigration", "crime": "Crime and justice", "environment": "Energy and environment",
+                              "immigration": "Immigration", "crime": "Crime and justice", "world": "World", "environment": "Energy and environment",
                               "health": "Health", "tech": "AI and tech", "science": "Science", "education": "Education"}, "topic_margin": TOPIC_MARGIN},
         "placement": {"source": feeds["placement_source"], "left_below": LEFT_BELOW, "right_above": RIGHT_ABOVE,
                       "measure": "Republican users / (Republican + Democratic users)"},

@@ -15,6 +15,7 @@ const TOPICS = [  // in this order everywhere; the first five are followed until
   { key: "economy", name: "Economy", span: "Today" },
   { key: "immigration", name: "Immigration", span: "Today" },
   { key: "crime", name: "Crime & justice", span: "Today" },
+  { key: "world", name: "World", span: "Today" },
   { key: "environment", name: "Energy & environment", span: "This week" },
   { key: "health", name: "Health", span: "This week" },
   { key: "tech", name: "AI & tech", span: "Today" },

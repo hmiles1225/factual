@@ -30,10 +30,12 @@ Every story shows its coverage the same way, for example "Left 4 of 10 · Center
 
 ## Which stories appear (2026-10-18)
 
-- Today has ten sections (2026-10-19). Politics has 5 stories; Elections, Economy, Immigration, Crime &
-  justice, Energy & environment, Health, AI & tech, Science and Education have 3 each. Most are grouped over
+- Today has eleven sections (2026-10-19). Politics has 5 stories; Elections, Economy, Immigration, Crime &
+  justice, World, Energy & environment, Health, AI & tech, Science and Education have 3 each. Most are grouped over
   the last 48 hours; Energy & environment, Science, Health and Education over a 7-day pool of articles,
   because they move by the week: one outlet covers a story on Monday, another on Wednesday.
+- World is news abroad without a U.S. decision at its center; a U.S. action abroad (sanctions, aid, an
+  endorsement) stays in Politics.
 - Readers choose which sections they follow (first five by default). Every section is still written and
   checked for everyone; the choice only filters what a reader sees.
 - When the day's budget runs out, checks wait in section order, so the default five are checked first.
