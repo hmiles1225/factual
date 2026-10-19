@@ -54,6 +54,7 @@ GEMINI_EXTRA_USD = {"2026-10-19": 0.50}   # one-off, approved by Heston: today's
 ROSTER_VERSION = "2026-10-19"
 GEMINI_FREE_SEARCHES = 150      # Google gives 5,000 free a month across Gemini 3 models; ~150 a day
 SEARCH_USD = 0.014               # then $14 per 1,000 searches (ai.google.dev pricing, 2026-10-18), charged to the Gemini cap
+CHECK_RESERVE_USD = 0.35         # most one fact-check has cost (tokens plus paid searches), with margin
 UNDERCOUNT = 1.7                 # our cost log ran this far under the real bill (2026-10-17)
 RECHECK_AFTER_DAYS = 7
 DECIDED = ("Holds up", "Missing context", "Doesn't hold up")
@@ -372,7 +373,10 @@ def main():
             rec["stories"] = sorted(set(rec.get("stories", [])) | {story_sid})
             return existing
         # Searches past Google's free allowance are paid, and charged to the Gemini cap (charge_gemini).
-        if state["new_this_scan"] >= MAX_NEW_PER_SCAN or spend["new_claims"] >= MAX_NEW_PER_DAY or not gemini_ok():
+        # Start a check only with room for a worst-case one: the cap is checked before a check, but its
+        # paid searches are charged after, and one overran the cap by $0.45 on 2026-10-19.
+        if state["new_this_scan"] >= MAX_NEW_PER_SCAN or spend["new_claims"] >= MAX_NEW_PER_DAY \
+                or spend["gemini_usd"] + CHECK_RESERVE_USD > gemini_cap:
             return existing
         try:
             first = C.check(text, "gemini")
