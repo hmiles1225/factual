@@ -766,7 +766,9 @@ function initSettings() {
   for (const [code, name] of Object.entries(STATES)) { const o = el("option", null, name); o.value = code; sel.append(o); }
   loc.append(lab, sel);
   form.append(loc);
-  const syncLocal = () => { loc.hidden = !LOCAL_ON; const st = localState(); on.checked = !!st; sel.value = st || ""; sel.disabled = !st && !on.checked; };
+  // Ticked with no state yet: the box stays ticked and the list waits for a choice; nothing is saved until then.
+  let choosing = false;
+  const syncLocal = () => { loc.hidden = !LOCAL_ON; const st = localState(); on.checked = !!st || choosing; sel.value = st || ""; sel.disabled = !on.checked; };
   syncLocal();
   document.addEventListener("fx-local", syncLocal);
   document.addEventListener("fx-topics", syncLocal);
@@ -776,8 +778,13 @@ function initSettings() {
     sel.disabled = !on.checked;
     document.dispatchEvent(new CustomEvent("fx-topics"));
   };
-  on.addEventListener("change", () => { sel.disabled = !on.checked; if (on.checked && !sel.value) sel.focus(); saveLocal(); });
-  sel.addEventListener("change", () => { if (sel.value) on.checked = true; saveLocal(); });
+  on.addEventListener("change", () => {
+    sel.disabled = !on.checked;
+    if (on.checked && !sel.value) { choosing = true; sel.focus(); return; }  // wait for the state
+    choosing = false;
+    saveLocal();
+  });
+  sel.addEventListener("change", () => { choosing = false; on.checked = !!sel.value; saveLocal(); });
   const syncTopics = () => { const f = new Set(followedTopics()); fs.querySelectorAll("input").forEach(i => { i.checked = f.has(i.value); }); };
   syncTopics();
   document.addEventListener("fx-topics", syncTopics);
