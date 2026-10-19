@@ -315,6 +315,18 @@ function photoFor(story) {
   return null;
 }
 
+// The first sentence of a text. A period after a title or an initial ("Rep.", "U.S.") doesn't end one.
+const ABBREV = /\b(?:Rep|Reps|Sen|Sens|Gov|Lt|Dr|Mr|Mrs|Ms|St|Jr|Sr|Gen|Col|Sgt|Capt|Adm|Rev|Prof|No|vs|Inc|Co|Corp|Mt|Ft|Jan|Feb|Mar|Apr|Aug|Sep|Sept|Oct|Nov|Dec|[A-Z])\.$/;
+function firstSentence(text) {
+  const re = /[.!?][\u201d"]?\s+(?=[A-Z\u201c"])/g;
+  let m;
+  while ((m = re.exec(text))) {
+    const end = m.index + m[0].trimEnd().length;
+    if (!ABBREV.test(text.slice(0, m.index + 1))) return text.slice(0, end);
+  }
+  return text;
+}
+
 function storyCard(story, i, data, isLead) {
   const li = el("li", isLead ? "story story-lead" : "story");
   // The first story in each section shows its photo, when it has one, and never one already shown higher up.
@@ -330,7 +342,11 @@ function storyCard(story, i, data, isLead) {
   h.append(a);
   main.append(h);
   // The first story in each section carries its summary; the rest are headline, time and counts only.
-  if (isLead || i === 0) main.append(...storyProse((story.brief && story.brief.agreed) || [], isLead ? 2 : 1, "gist"));
+  // One sentence: the first thing outlets on both sides report.
+  if (isLead || i === 0) {
+    const first = ((story.brief && story.brief.agreed) || []).find(acrossSides);
+    if (first) main.append(el("p", "gist", firstSentence(first.fact)));
+  }
   li.append(main);
   return li;
 }
