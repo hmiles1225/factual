@@ -463,6 +463,14 @@ function storyProse(agreed, max, cls) {
   return out;
 }
 
+function loadedItem(t) {
+  const d = el("div", "loaded-item");
+  d.append(el("p", "loaded-term", `\u201c${t.term}\u201d`), el("p", "side-outlets", listNames(t.outlets, 4)));
+  if (t.why) d.append(el("p", "loaded-why", t.why.replace(/\.?$/, ".")));
+  if (t.neutral) d.append(el("p", "loaded-neutral", `Plainer: ${t.neutral}`));
+  return d;
+}
+
 function renderStory(data) {
   const sid = new URLSearchParams(location.search).get("s");
   const story = data.stories.find(s => s.sid === sid);
@@ -506,6 +514,36 @@ function renderStory(data) {
     for (const d of diffs) s3.append(differenceBlock(d, data.library, leanOf));
     body.append(s3);
     s3.querySelectorAll(".spectrum").forEach(f => f.draw && f.draw());
+  }
+
+  // Loaded language: the outlets' own charged words, side by side, each verified in their text.
+  const loaded = (brief && brief.loaded) || [];
+  if (brief && brief.loaded_v) {
+    const sl = el("section", "block");
+    sl.append(el("h2", "block-title", "Loaded language"));
+    sl.append(el("p", "block-note lead-note", "Charged or slanted words the outlets chose themselves, not words they quoted. Each was found in that outlet's own headline, summary or opening."));
+    const groups = [["left", "Left-leaning outlets"], ["right", "Right-leaning outlets"]];
+    const group = t => { const p = t.sides.filter(x => x !== "unplaced"); return p.length && p.every(x => x === "left") ? "left" : p.length && p.every(x => x === "right") ? "right" : "mixed"; };
+    const mixed = loaded.filter(t => group(t) === "mixed");
+    const cols = el("div", "sides");
+    for (const [k, name] of groups) {
+      const col = el("div", "side");
+      const head = el("p", "side-head");
+      head.append(el("span", "side-tag", name), document.createTextNode(" wrote"));
+      col.append(head);
+      const mine = loaded.filter(t => group(t) === k);
+      if (!mine.length) col.append(el("p", "side-pending", "None found in this story's coverage."));
+      for (const t of mine) col.append(loadedItem(t));
+      cols.append(col);
+    }
+    sl.append(cols);
+    if (mixed.length) {
+      const extra = el("div", "loaded-mixed");
+      extra.append(el("p", "sub-title", "Used across outlets"));
+      for (const t of mixed) extra.append(loadedItem(t));
+      sl.append(extra);
+    }
+    body.append(sl);
   }
 
   // 3. Who covered it: every outlet we read, placed by its audience; filled if it covered this story.

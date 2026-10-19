@@ -150,6 +150,29 @@ Articles:
 SUPPORT_SCHEMA = _item({"established": {"type": "string", "enum": ["all", "part", "none"]},
                         "missing": {"type": "string", "description": "Only the part of the claim the evidence does not establish, as a short phrase starting with 'that' (e.g. 'that other work was paused'). Empty if all is established."}},
                        ["established", "missing"])
+LOADED_VERSION = "1"
+LOADED_SCHEMA = _item({"terms": {"type": "array", "items": _item({
+    "term": {"type": "string", "description": "Copied exactly as the outlet wrote it."},
+    "articles": _ints,
+    "why": {"type": "string", "description": "Why it is loaded, in at most 12 words."},
+    "neutral": {"type": "string", "description": "A plainer, neutral way to say it."}},
+    ["term", "articles", "why", "neutral"])}}, ["terms"])
+LOADED_PROMPT = """Below is the coverage of one news story: each numbered line is an outlet, its audience lean, its
+headline, its summary, and the opening of the article when we could read it.
+
+List words or short phrases the OUTLETS THEMSELVES use that are inflammatory or clearly slanted: emotionally
+charged labels, insults, scare words, loaded characterizations, partisan labels (for example "regime",
+"radical", "slammed", "meltdown", "far-right", "leftist", "illegal aliens", "extremist"). Rules:
+- Only the outlet's own words. Skip anything inside quotation marks or attributed to a speaker: quoting
+  someone is not the outlet's language.
+- Copy each term exactly as written, at most six words.
+- Hold left-leaning and right-leaning outlets to the same standard. Up to 4 terms per side; none is fine.
+- Ordinary, accurate words are not loaded ("arrested", "said", "Republican").
+For each term give every article number that uses it, why it is loaded, and a neutral alternative.
+
+Coverage:
+{coverage}"""
+
 CLAIM_SCHEMA = _item({"claim": {"type": "string", "description": "One checkable factual claim, or empty."}}, ["claim"])
 CLAIM_PROMPT = """One side of a news story's coverage is summarized below. Write the single most important factual
 claim this account makes, as one plain statement that can be checked against primary sources (court
@@ -431,13 +454,7 @@ def main():
                                                       or cached.get("roster") != ROSTER_VERSION))
         brief = cached["brief"] if cached else None
         if stale and gemini_ok():
-            with ThreadPoolExecutor(max_workers=8) as pool:
-                excerpts = list(pool.map(excerpt, [a["url"] for a in arts]))
-            lines = []
-            for i, (a, ex) in enumerate(zip(arts, excerpts)):
-                summ = (summaries.get(a["url"]) or "")[:300]
-                lines.append(f"{i + 1}. {a['source']} ({side_of.get(a['source'], 'unplaced')}): {a['title']}"
-                             + (f" | {summ}" if summ else "") + (f" | Opening: {ex}" if ex else ""))
+            lines, excerpts = coverage_lines(arts, side_of, summaries)
             try:
                 prior = [c["claim"] for c in claims.values() if story["sid"] in c.get("stories", []) and c.get("verdict") in DECIDED]
                 raw, usage = gemini_json(BRIEF_PROMPT.replace("{prior}", "\n".join(f"- {t}" for t in prior[:12]) or "(none)")
@@ -451,6 +468,16 @@ def main():
                 print(f"  brief failed for {story['sid']}: {e}")
         if not brief:
             return False
+        # Loaded language: once per summary, a separate small pass over the same coverage, verified in code.
+        if brief.get("loaded_v") != LOADED_VERSION and gemini_ok():
+            try:
+                llines, _ = coverage_lines(arts, side_of, summaries)
+                out, usage = gemini_json(LOADED_PROMPT.replace("{coverage}", "\n".join(llines)), LOADED_SCHEMA)
+                charge_gemini(usage)
+                brief["loaded"] = verify_loaded(out, arts, llines, side_of)
+                brief["loaded_v"] = LOADED_VERSION
+            except Exception as e:
+                print(f"  loaded-language pass failed: {e}")
         # Every side's account gets the same chance of a check: if the brief left an account without a
         # claim, ask for the one factual claim it makes (or confirm it makes none). Once per account.
         for d in brief["differences"]:
@@ -583,6 +610,43 @@ def mentions(url, claim, already, limit=4):
             if len(out) >= limit:
                 break
     return out
+
+
+_QUOTED = re.compile(r"[\u201c\"][^\u201d\"]{1,300}[\u201d\"]|\u2018[^\u2019]{1,300}\u2019")
+
+
+def verify_loaded(raw, arts, lines, side_of):
+    """Keep a term only where it appears, outside quotation marks, in the cited outlet's own line (headline,
+    summary or opening). Outlets and sides come from those verified lines, never from the model."""
+    n, out, seen = len(arts), [], set()
+    for t in raw.get("terms", [])[:10]:
+        term = (t.get("term") or "").strip().strip('"\u201c\u201d')
+        if not term or len(term) > 60 or term.casefold() in seen:
+            continue
+        found = []
+        for i in t.get("articles", []):
+            if isinstance(i, int) and 1 <= i <= n:
+                own = _QUOTED.sub(" ", lines[i - 1].split(": ", 1)[-1])
+                if term.casefold() in own.casefold():
+                    found.append(arts[i - 1]["source"])
+        if found:
+            seen.add(term.casefold())
+            outlets = sorted(set(found))
+            out.append({"term": term, "outlets": outlets, "sides": sorted({side_of.get(o, "unplaced") for o in outlets}),
+                        "why": (t.get("why") or "").strip(), "neutral": (t.get("neutral") or "").strip()})
+    return out
+
+
+def coverage_lines(arts, side_of, summaries):
+    """The numbered coverage lines the models read: outlet, lean, headline, summary, and the article's opening."""
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        excerpts = list(pool.map(excerpt, [a["url"] for a in arts]))
+    lines = []
+    for i, (a, ex) in enumerate(zip(arts, excerpts)):
+        summ = (summaries.get(a["url"]) or "")[:300]
+        lines.append(f"{i + 1}. {a['source']} ({side_of.get(a['source'], 'unplaced')}): {a['title']}"
+                     + (f" | {summ}" if summ else "") + (f" | Opening: {ex}" if ex else ""))
+    return lines, excerpts
 
 
 def pick_articles(arts, side_of, n):
