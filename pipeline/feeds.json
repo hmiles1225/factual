@@ -10,7 +10,8 @@
    },
    "sections": [
     "https://feeds.npr.org/1128/rss.xml",
-    "https://feeds.npr.org/1007/rss.xml"
+    "https://feeds.npr.org/1007/rss.xml",
+    "https://feeds.npr.org/1017/rss.xml"
    ]
   },
   {
@@ -59,7 +60,10 @@
    "pew": {
     "rep": 4,
     "dem": 6
-   }
+   },
+   "sections": [
+    "https://thehill.com/business/feed/"
+   ]
   },
   {
    "source": "New York Times",
@@ -71,7 +75,8 @@
    "sections": [
     "https://rss.nytimes.com/services/xml/rss/nyt/Health.xml",
     "https://rss.nytimes.com/services/xml/rss/nyt/Science.xml",
-    "https://rss.nytimes.com/services/xml/rss/nyt/Climate.xml"
+    "https://rss.nytimes.com/services/xml/rss/nyt/Climate.xml",
+    "https://rss.nytimes.com/services/xml/rss/nyt/Economy.xml"
    ]
   },
   {
@@ -82,7 +87,8 @@
     "dem": 8
    },
    "sections": [
-    "https://nypost.com/health/feed/"
+    "https://nypost.com/health/feed/",
+    "https://nypost.com/business/feed/"
    ]
   },
   {
@@ -102,7 +108,8 @@
     "dem": 39
    },
    "sections": [
-    "https://www.cbsnews.com/latest/rss/health"
+    "https://www.cbsnews.com/latest/rss/health",
+    "https://www.cbsnews.com/latest/rss/moneywatch"
    ]
   },
   {
@@ -114,7 +121,8 @@
     "note": "Pew prints Democrats as '<1'; 0.5 is used."
    },
    "sections": [
-    "https://www.breitbart.com/tech/feed/"
+    "https://www.breitbart.com/tech/feed/",
+    "https://www.breitbart.com/economy/feed/"
    ]
   },
   {
@@ -142,7 +150,8 @@
     "dem": 46
    },
    "sections": [
-    "https://feeds.abcnews.com/abcnews/healthheadlines"
+    "https://feeds.abcnews.com/abcnews/healthheadlines",
+    "https://feeds.abcnews.com/abcnews/moneyheadlines"
    ]
   },
   {
@@ -152,7 +161,11 @@
    "pew": {
     "rep": 12,
     "dem": 16
-   }
+   },
+   "sections": [
+    "https://feeds.content.dowjones.io/public/rss/RSSMarketsMain",
+    "https://feeds.content.dowjones.io/public/rss/socialeconomyfeed"
+   ]
   },
   {
    "source": "PBS NewsHour",
@@ -192,7 +205,8 @@
    },
    "sections": [
     "https://www.washingtonexaminer.com/policy/healthcare/feed/",
-    "https://www.washingtonexaminer.com/policy/energy-and-environment/feed/"
+    "https://www.washingtonexaminer.com/policy/energy-and-environment/feed/",
+    "https://www.washingtonexaminer.com/policy/economy/feed/"
    ]
   },
   {
@@ -262,7 +276,8 @@
    },
    "sections": [
     "https://www.dailymail.co.uk/health/index.rss",
-    "https://www.dailymail.co.uk/sciencetech/index.rss"
+    "https://www.dailymail.co.uk/sciencetech/index.rss",
+    "https://www.dailymail.co.uk/money/index.rss"
    ]
   },
   {
@@ -277,7 +292,8 @@
    "sections": [
     "https://feed.theepochtimes.com/health/feed",
     "https://feed.theepochtimes.com/science/feed",
-    "https://feed.theepochtimes.com/us/environment/feed"
+    "https://feed.theepochtimes.com/us/environment/feed",
+    "https://feed.theepochtimes.com/business/feed"
    ]
   },
   {
@@ -322,7 +338,10 @@
    "pew": {
     "rep": 24,
     "dem": 47
-   }
+   },
+   "sections": [
+    "https://feeds.nbcnews.com/nbcnews/public/business"
+   ]
   },
   {
    "source": "Axios",
@@ -398,6 +417,11 @@
   {
    "date": "2026-10-19",
    "change": "Added four left-leaning outlets to match the right side at 15: NBC News (Pew 2025: 24% Rep, 47% Dem), Axios (Lean Left), HuffPost (Left), TIME (Lean Left), the last three from AllSides chart v12. Checked and not added: Washington Post (feeds return server errors), USA Today (402), AP and Yahoo News (403), opinion magazines (The Atlantic, The New Yorker, The Nation, Jacobin). Working but not added: The Daily Beast, Semafor, CNBC, Insider.",
+   "by": "Heston's call"
+  },
+  {
+   "date": "2026-10-20",
+   "change": "Economy section: added economy and business section feeds, checked live. Left: NYT Economy, CBS MoneyWatch, ABC Money, NBC Business, NPR Economy. Center: WSJ Markets and Economy, New York Post Business, The Hill Business. Right: Breitbart Economy, Epoch Times Business, Daily Mail Money, Washington Examiner Economy. No working feed: CNN Business, Daily Caller, Just the News.",
    "by": "Heston's call"
   }
  ],

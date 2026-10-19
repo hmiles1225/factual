@@ -58,6 +58,15 @@ POLITICS = [
     "Republicans and Democrats clash over legislation", "A White House official or cabinet member resigns or is fired",
     "The president holds a campaign rally for midterm candidates", "Congressional or Senate candidates debate before the election",
 ]
+ECONOMY = [
+    "Inflation, consumer prices and the cost of living",
+    "The monthly jobs report: unemployment, hiring and wages",
+    "The Federal Reserve raises or cuts interest rates",
+    "Tariffs and trade policy raise prices for businesses and shoppers",
+    "Gas prices, housing costs and mortgage rates",
+    "Recession fears, economic growth and the stock market",
+    "Taxes, wages and the federal budget's effect on households",
+]
 ENVIRONMENT = [
     "Climate change policy: emissions rules, the Paris agreement, carbon pollution",
     "The EPA changes environmental rules on air, water or chemical pollution",
@@ -83,7 +92,7 @@ HEALTH = [
     "Disease outbreaks: measles, flu, COVID and the public health response",
     "Fluoride, food dyes, nutrition and chronic disease policy",
 ]
-TOPICS = {"politics": POLITICS, "environment": ENVIRONMENT, "science": SCIENCE, "health": HEALTH}
+TOPICS = {"politics": POLITICS, "economy": ECONOMY, "environment": ENVIRONMENT, "science": SCIENCE, "health": HEALTH}
 NOT_POLITICS = [
     "A shooting, crime or police investigation in a city", "A wildfire, storm, earthquake or accident kills people",
     "Sports: a game, a team, a player, a championship", "Business, company earnings, a product launch, technology",
@@ -91,6 +100,7 @@ NOT_POLITICS = [
     "A foreign country's internal politics, protests or election abroad", "Weather and travel",
     "A celebrity, athlete or murderer on trial; a judge sentences a defendant",
     "A celebrity's looks, body, diet, weight loss or fitness routine",
+    "A tech company or billionaire announces a business deal, stake, investment or giveaway",
     "A foreign separatist movement or referendum in Canada or Europe", "A war between other countries: battlefield news, drones, front lines",
 ]
 TOPIC_MARGIN = 0.01
@@ -302,7 +312,7 @@ def main():
                    "allsides": allsides.get(f["source"])}
                   for f in scan.get("feeds", [])],
         "method": {"model": MODEL, "threshold": THRESHOLD, "window_hours": WINDOW_HOURS, "linkage": "average", "related": RELATED,
-                   "topics": {"politics": "U.S. politics and U.S. policy abroad", "environment": "Environment and climate",
+                   "topics": {"politics": "U.S. politics and U.S. policy abroad", "economy": "Economy", "environment": "Environment and climate",
                               "science": "Science", "health": "Health"}, "topic_margin": TOPIC_MARGIN},
         "placement": {"source": feeds["placement_source"], "left_below": LEFT_BELOW, "right_above": RIGHT_ABOVE,
                       "measure": "Republican users / (Republican + Democratic users)"},

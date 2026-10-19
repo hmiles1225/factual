@@ -11,6 +11,7 @@ const WORDS = ["no", "one", "two", "three", "four", "five", "six", "seven", "eig
 // Today's sections. Politics moves by the day; the others are grouped over the week.
 const TOPICS = [
   { key: "politics", name: "Politics", span: "Today" },
+  { key: "economy", name: "Economy", span: "Today" },
   { key: "environment", name: "Environment", span: "This week" },
   { key: "science", name: "Science", span: "This week" },
   { key: "health", name: "Health", span: "This week" },
