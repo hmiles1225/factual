@@ -216,7 +216,6 @@ details[open] > summary::after { content: "\2212"; }
 .facts .story-text { font-size: 1.125rem; line-height: 1.5; }
 .lede { margin: 0; font: 400 1.3125rem/1.45 var(--serif); letter-spacing: -0.005em; color: var(--ink); }
 .lede + .lede { margin-top: 14px; }
-.fact-tag { font: 400 0.75em/1 var(--mono); color: var(--ink-2); }
 .lede.muted { font-size: 1.125rem; color: var(--ink-2); }
 .sub-title { margin: 28px 0 12px; font: 600 0.75rem/1.2 var(--sans); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); }
 .fact-sides { margin: 4px 0 0; font: 400 0.75rem/1.45 var(--mono); color: var(--ink-3); }

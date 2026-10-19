@@ -135,17 +135,20 @@ Articles:
 
 SUPPORT_SCHEMA = _item({"established": {"type": "string", "enum": ["all", "part", "none"]}, "missing": {"type": "string"}},
                        ["established", "missing"])
-SUPPORT_PROMPT = """Below is a claim and some quotes, each copied word for word from its source page.
-Using ONLY these quotes, not anything you know, decide whether they establish every part of the claim
-exactly as it is stated. Pay attention to strong words: a quote saying someone left or was asked to
-reconsider does not establish that they were fired; a total does not establish a record.
+SUPPORT_VERSION = "2"   # 2: quotes are judged inside their passage on the source page, not alone
+SUPPORT_PROMPT = """Below is a claim and the evidence for it. Each item is a quote copied word for word from its
+source page, shown with the page's address and the passage around the quote on that page, which our
+code read itself. Using ONLY this evidence, not anything you know, decide whether it establishes every
+part of the claim exactly as it is stated. The address and passage can establish what a quote is about
+(which court, case, place, person or date). Pay attention to strong words: a quote saying someone left
+or was asked to reconsider does not establish that they were fired; a total does not establish a record.
 
-Answer "all" only if every part of the claim, as worded, is stated in the quotes. Answer "part" if some
-of it is and some is not, and say what is missing. Answer "none" if the quotes do not support it.
+Answer "all" only if every part of the claim, as worded, is established. Answer "part" if some of it is
+and some is not, and say what is missing. Answer "none" if the evidence does not support it.
 
 Claim: {claim}
 
-Quotes:
+Evidence:
 {quotes}"""
 
 
@@ -287,10 +290,26 @@ def main():
         return None
 
     def support_ok(record):
-        """Holds up must follow from the verified quotes alone."""
+        """Holds up must follow from the verified quotes, read in their passage on the source page."""
+        # Version 1 judged quotes alone and cut true claims whose quotes didn't repeat the names (a court
+        # order's excerpt doesn't name the judge). Re-judge those, starting again from the checker's verdict.
+        if record.get("support") == "partial" and record.get("support_v") != SUPPORT_VERSION and record.get("model_verdict") == C.HU \
+                and not record.get("second_opinion"):
+            record["verdict"] = C.HU
+            record.pop("support", None)
+            if (record.get("note") or "").startswith("the sources confirm part"):
+                record["note"] = None
         if record["verdict"] != C.HU or "support" in record or spend["gemini_usd"] >= gemini_cap + 0.10:
             return
-        quotes = "\n".join(f"- \"{e['quote']}\" ({e['publisher']})" for e in record["evidence"] if e.get("role") in ("supports", "context"))
+        items = []
+        for e in record["evidence"]:
+            if e.get("role") not in ("supports", "context"):
+                continue
+            ctx = passage(e["url"], e["quote"])
+            items.append(f"- Quote: \"{e['quote']}\"\n  Source: {e['publisher']}, {e['url']}"
+                         + (f"\n  Passage on the page: \"{ctx}\"" if ctx else ""))
+        charge_pipe()
+        quotes = "\n".join(items)
         if quotes:
             try:
                 out, usage = gemini_json(SUPPORT_PROMPT.replace("{claim}", record["claim"]).replace("{quotes}", quotes), SUPPORT_SCHEMA)
@@ -302,6 +321,7 @@ def main():
         else:
             ok, missing = False, "no verified quote supports it"
         record["support"] = "all" if ok else "partial"
+        record["support_v"] = SUPPORT_VERSION
         if not ok:
             record["verdict"] = C.UN
             record["note"] = f"the sources confirm part of this claim, not all of it as stated: {missing}".rstrip(": ")
@@ -404,8 +424,9 @@ def main():
                     print(f"  image lookup failed for {subj['name']}: {e}")
             if images.get(ikey):
                 story["image"] = images[ikey]
-        print(f"  {story['sid']} [{story['topic']}]: {len(brief['agreed'])} agreed, {len(brief['differences'])} differences")
-        return bool(brief["agreed"])
+        shared = [f for f in brief["agreed"] if "left" in f["sides"] and "right" in f["sides"]]
+        print(f"  {story['sid']} [{story['topic']}]: {len(shared)} common ground of {len(brief['agreed'])} agreed, {len(brief['differences'])} differences")
+        return bool(shared)  # Today shows only what both sides report; no common ground, no slot
 
 
     # Each topic: walk its ranking (stories covered by both left- and right-leaning outlets only) until
@@ -435,6 +456,20 @@ def main():
           f"gemini ${spend['gemini_usd']:.2f}/{gemini_cap:.2f}, searches {spend['gemini_searches']} ({GEMINI_FREE_SEARCHES} free), "
           f"thinking tokens {THOUGHTS['tokens']} over {THOUGHTS['calls']} calls")
     return 0
+
+
+def passage(url, quote, width=400):
+    """The text around a verified quote on its own page, read by our code (never published)."""
+    text, _ = C.fetch_page(url)
+    if not text:
+        text, _ = C.fetch_via_anthropic(url)
+    if not text:
+        return None
+    q = C.norm(quote)
+    i = text.find(q[:80])
+    if i < 0:
+        return None
+    return text[max(0, i - width): i + len(q) + width]
 
 
 def pick_articles(arts, side_of, n):

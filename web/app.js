@@ -158,15 +158,16 @@ function spectrum(points, legend, ariaLabel) {
 }
 
 // Name a group of outlets by where their audiences sit, from Pew data, never by hand.
+const sideOfLean = v => v < 0.4 ? "left" : v > 0.6 ? "right" : "center";
+const sidesIn = (outlets, leanOf) => new Set(outlets.map(o => leanOf[o]).filter(v => v != null).map(sideOfLean));
 function sideName(outlets, leanOf) {
-  const vals = outlets.map(o => leanOf[o]).filter(v => v != null);
-  if (!vals.length) return "Outlets";
-  const left = vals.filter(v => v < 0.4).length, right = vals.filter(v => v > 0.6).length;
-  if (left === vals.length) return "Left-leaning outlets";
-  if (right === vals.length) return "Right-leaning outlets";
-  if (left && right) return "Outlets on both sides";
-  const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
-  return avg < 0.4 ? "Mostly left-leaning outlets" : avg > 0.6 ? "Mostly right-leaning outlets" : "Center and mixed outlets";
+  // Names exactly what is in the group, the same way for both sides. No averages, no "mostly".
+  const has = sidesIn(outlets, leanOf);
+  if (!has.size) return "Outlets Pew did not survey";
+  if (has.has("left") && has.has("right")) return "Outlets on both sides";
+  const words = { left: "Left-leaning", center: "Center", right: "Right-leaning" };
+  const list = ["left", "center", "right"].filter(k => has.has(k));
+  return list.length === 1 ? `${words[list[0]]} outlets` : `${words[list[0]]} and ${words[list[1]].toLowerCase()} outlets`;
 }
 
 // "By the numbers": figures the checker found, each verified in code to appear in its quote.
@@ -211,7 +212,7 @@ function storyCard(story, i, data, isLead) {
   main.append(h);
 
   const agreed = (story.brief && story.brief.agreed) || [];
-  if (agreed.length) main.append(...storyProse(agreed, isLead ? 4 : 3, "gist"));
+  main.append(...storyProse(agreed, isLead ? 4 : 3, "gist"));
   li.append(main);
 
   const rows = decided(story, data.library).slice(0, 2);
@@ -240,7 +241,7 @@ function renderToday(data) {
   $("scanline").textContent = `Updated ${clock(data.scanned_at)}`;
 
   // Only stories with a written summary, chosen by the scan for Today (covered by both sides). Never a bare headline.
-  const shown = s => s.related_to === null && s.on_today && s.brief && s.brief.agreed && s.brief.agreed.length;
+  const shown = s => s.related_to === null && s.on_today && s.brief && (s.brief.agreed || []).some(acrossSides);
   let total = 0;
   const nav = $("topic-nav");
   for (const t of TOPICS) {
@@ -349,11 +350,13 @@ const meanLean = (outlets, leanOf) => { const v = outlets.map(o => leanOf[o]).fi
 
 // Does a disagreement follow the left-right line? Read from where each side's outlets sit, never by hand.
 function splitLine(pos, leanOf) {
-  const [a, b] = pos.map(p => meanLean(p.outlets, leanOf));
-  if (a == null || b == null) return null;
+  const [a, b] = pos.map(p => sidesIn(p.outlets, leanOf));
+  if (!a.size || !b.size) return null;
   const shared = pos[0].outlets.filter(o => pos[1].outlets.includes(o));
   const both = shared.length ? ` ${listNames(shared, 3)} reported both.` : "";
-  if (Math.min(a, b) < 0.45 && Math.max(a, b) > 0.55) return `This one splits along left and right.${both}`;
+  const only = (s, k, not) => s.has(k) && !s.has(not);
+  if ((only(a, "left", "right") && only(b, "right", "left")) || (only(a, "right", "left") && only(b, "left", "right")))
+    return `This one splits along left and right.${both}`;
   const n = pos.map(p => sideName(p.outlets, leanOf));
   const same = n[0] === n[1] && /^(Left|Right)-leaning/.test(n[0]) ? n[0].toLowerCase() : "outlets with similar audiences";
   return `Not a left-right split: both accounts come from ${same}.${both}`;
@@ -399,34 +402,16 @@ function differenceBlock(d, lib, leanOf) {
 
 // A fact is common ground when outlets on both the left and the right report it.
 const acrossSides = f => (f.sides || []).includes("left") && (f.sides || []).includes("right");
-function sidesLabel(sides) {
-  const s = (sides || []).filter(x => x !== "unplaced");
-  if (!s.length) return "Reported by outlets Pew did not survey";
-  const words = { left: "left-leaning", center: "center", right: "right-leaning" };
-  const list = ["left", "center", "right"].filter(x => s.includes(x)).map(x => words[x]);
-  return `Reported by ${list.join(" and ")} outlets${s.length === 1 ? " only" : ""}`;
-}
-
-// Short attribution for a fact only one side reported, read inline: "(right-leaning outlets)".
-function sideTag(sides) {
-  const s = (sides || []).filter(x => x !== "unplaced");
-  if (!s.length) return "outlets Pew did not survey";
-  const words = { left: "left-leaning", center: "center", right: "right-leaning" };
-  return `${["left", "center", "right"].filter(x => s.includes(x)).map(x => words[x]).join(" and ")} outlets`;
-}
-
-// The story as prose: facts both sides report first, then facts one side reported, each tagged inline
-// with that side. Nothing is presented as shared that wasn't.
+// The story as prose, from facts outlets on both the left and the right report. Nothing else.
 function storyProse(agreed, max, cls) {
-  const facts = [...agreed].sort((a, b) => acrossSides(b) - acrossSides(a)).slice(0, max);
+  const facts = agreed.filter(acrossSides).slice(0, max);
   const out = [];
   let p = el("p", cls);
   facts.forEach((f, i) => {
     if (i && i % 4 === 0 && max > 4) { out.push(p); p = el("p", cls); }
     p.append(document.createTextNode((p.childNodes.length ? " " : "") + f.fact));
-    if (!acrossSides(f)) p.append(el("span", "fact-tag", ` (${sideTag(f.sides)})`));
   });
-  out.push(p);
+  if (facts.length) out.push(p);
   return out;
 }
 
@@ -453,15 +438,13 @@ function renderStory(data) {
   const leanOf = Object.fromEntries((data.feeds || []).filter(f => f.lean != null).map(f => [f.source, f.lean]));
   PEW = Object.fromEntries((data.feeds || []).filter(f => f.pew).map(f => [f.source, f.pew]));
   // 1. The story: every fact several outlets confirm, both-sides facts first, one-side facts tagged.
-  if (agreed.length) {
+  // 1. The story: only facts outlets on both the left and the right report.
+  if (agreed.some(acrossSides)) {
     const s1 = el("section", "block story-panel");
     s1.append(el("h2", "block-title", "The story"));
     s1.append(...storyProse(agreed, 12, "lede"));
-    const tagged = agreed.some(f => !acrossSides(f)), plain = agreed.some(acrossSides);
-    s1.append(el("p", "block-note", plain && tagged
-      ? "Sentences without a tag were reported by outlets on both the left and the right. Tagged sentences were reported only by the outlets named. No outlet we read contradicted any of them."
-      : plain ? "Every sentence was reported by outlets on both the left and the right, and no outlet we read contradicted any of them."
-      : "Each sentence names the outlets that reported it. No outlet we read contradicted any of them."));
+    const by = [...new Set(agreed.filter(acrossSides).flatMap(f => f.reported_by))];
+    s1.append(el("p", "block-note", `Every sentence here was reported by outlets on both the left and the right (${listNames(by, 6)}), and no outlet we read contradicted any of it.`));
     body.append(s1);
   }
 
@@ -488,7 +471,7 @@ function renderStory(data) {
     sc.append(fig);
     const unplaced = story.sources.filter(o => leanOf[o] == null);
     const who = sideName(story.sources, leanOf);
-    if (/^(Left|Right)-leaning/.test(who)) fig.before(el("p", "diff-split", `Only ${who.toLowerCase()} covered this story.`));
+    if (/^(Left|Right)-leaning outlets$/.test(who)) fig.before(el("p", "diff-split", `Only ${who.toLowerCase()} covered this story.`));
     sc.append(el("p", "block-note", `Each dot is an outlet we read. Toward the left, Democrats are more likely than Republicans to get news there; toward the right, Republicans are. Center outlets are used about equally (Pew Research Center, 2025).${unplaced.length ? ` Also covered by ${listNames(unplaced, 4)}, which Pew did not survey.` : ""}`));
     body.append(sc);
     fig.draw();
