@@ -396,7 +396,7 @@ function drawToday() {
     if (list.length) {
       const ol = el("ol", "stories");
       ol.setAttribute("aria-label", `${t.name} stories`);
-      list.forEach((s, i) => ol.append(storyCard(s, i, data, t.key === "politics" && i === 0)));
+      list.forEach((s, i) => ol.append(storyCard(s, i, data, i === 0)));  // every section opens with a full-width lead
       sec.append(ol);
     } else {
       sec.append(el("p", "topic-empty", `Nothing yet that both sides are covering.`));
