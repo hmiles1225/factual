@@ -132,7 +132,9 @@ function spectrum(points, legend, ariaLabel) {
     }
     const ay = Math.max(axisY, 12 + rows.length * step + r);
     const H = ay + 22;
-    const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, width: W, height: H, class: "chart-svg", role: "group", "aria-label": ariaLabel });
+    // The picture is for sighted pointer users; every fact in it is also in text (the outlet list, the
+    // outlets line), so the SVG is hidden from assistive tech and its dots are not tab stops.
+    const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, width: W, height: H, class: "chart-svg", "aria-hidden": "true" });
     svg.append(svgEl("line", { x1: padX, x2: W - padX, y1: ay + 0.5, y2: ay + 0.5, class: "chart-base" }));
     for (const [v, t, anchor] of [[0, "Left", "start"], [0.5, "Center", "middle"], [1, "Right", "end"]]) {
       svg.append(svgEl("line", { x1: x(v), x2: x(v), y1: ay - 3, y2: ay + 4, class: "chart-base" }));
@@ -143,7 +145,7 @@ function spectrum(points, legend, ariaLabel) {
     for (const p of all) {
       const cy = ay - 12 - p.row * step;
       const line2 = p.lean != null ? leanPhrase(p.lean, p.name) : `Rated ${p.rating} by AllSides (Pew did not survey it)`;
-      const g = svgEl("g", { class: "dotg", tabindex: 0, role: "img", "aria-label": `${p.name}: ${p.note ? p.note + ". " : ""}${line2}` });
+      const g = svgEl("g", { class: "dotg" });
       g.append(svgEl("circle", { cx: p.px, cy, r: 12, class: "hit" }));
       g.append(p.lean == null
         ? svgEl("rect", { x: p.px - r + 0.5, y: cy - r + 0.5, width: 2 * r - 1, height: 2 * r - 1, rx: 2, class: `dot ${p.style}` })
@@ -155,13 +157,19 @@ function spectrum(points, legend, ariaLabel) {
         tip.style.left = `${Math.max(0, Math.min(W - tw, p.px - tw / 2))}px`;
         tip.style.top = `${cy - 12}px`;
       };
-      const hide = () => tip.classList.remove("on");
-      g.addEventListener("pointerenter", show); g.addEventListener("focus", show);
-      g.addEventListener("pointerleave", hide); g.addEventListener("blur", hide);
+      // WCAG 1.4.13: the tooltip stays while the pointer moves onto it, and Escape dismisses it.
+      const hide = () => { clearTimeout(tip._t); tip._t = setTimeout(() => { if (!tip.matches(":hover")) tip.classList.remove("on"); }, 150); };
+      g.addEventListener("pointerenter", () => { clearTimeout(tip._t); if (!tip._dismissed) show(); });
+      g.addEventListener("pointerleave", hide);
       svg.append(g);
     }
+    tip.onpointerleave = () => tip.classList.remove("on");
     wrap.replaceChildren(svg, tip);
   };
+  // Escape closes it and keeps it closed until the pointer leaves the chart, so the dot under the pointer
+  // doesn't reopen it at once.
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && tip.classList.contains("on")) { tip.classList.remove("on"); tip._dismissed = true; } });
+  wrap.addEventListener("pointerleave", () => { tip._dismissed = false; });
   let t;
   window.addEventListener("resize", () => { clearTimeout(t); t = setTimeout(fig.draw, 120); });
   return fig;
@@ -464,6 +472,28 @@ function storyProse(agreed, max, cls) {
   return out;
 }
 
+// The chart in words: every outlet we read, by side, whether it covered the story, and where it is placed.
+function outletList(feeds, covered) {
+  const det = el("details", "outlet-list");
+  det.append(el("summary", null, `List of outlets (${covered.size} of ${feeds.length} covered this story)`));
+  const grid = el("div", "outlet-cols");
+  for (const [k, name] of [["left", "Left-leaning"], ["center", "Center"], ["right", "Right-leaning"]]) {
+    const col = el("div");
+    col.append(el("h3", "sub-title", name));
+    const ul = el("ul", "outlet-ul");
+    for (const f of feeds.filter(f => SIDE[f.source] === k).sort((a, b) => covered.has(b.source) - covered.has(a.source) || a.source.localeCompare(b.source))) {
+      const li = el("li", covered.has(f.source) ? "covered" : null);
+      li.append(el("span", "outlet-name", `${covered.has(f.source) ? "\u25cf " : "\u25cb "}${f.source}`),
+        el("span", "outlet-why", `${covered.has(f.source) ? "Covered this story. " : "Did not cover it. "}${f.lean != null ? (t => t.charAt(0).toUpperCase() + t.slice(1))(leanPhrase(f.lean, f.source)) : `Rated ${ALLSIDES[f.source]} by AllSides`}.`));
+      ul.append(li);
+    }
+    col.append(ul);
+    grid.append(col);
+  }
+  det.append(grid);
+  return det;
+}
+
 function loadedItem(t) {
   const d = el("div", "loaded-item");
   d.append(el("p", "loaded-term", `\u201c${t.term}\u201d`), el("p", "side-outlets", listNames(t.outlets, 4)));
@@ -567,6 +597,7 @@ function renderStory(data) {
     const who = sideName(story.sources, leanOf);
     if (/^(Left|Right)-leaning outlets$/.test(who)) fig.before(el("p", "diff-split", `Only ${who.toLowerCase()} covered this story.`));
     sc.append(el("p", "block-note", `Each dot is an outlet we read. Toward the left, Democrats are more likely than Republicans to get news there; toward the right, Republicans are. Center outlets are used about equally (Pew Research Center, 2025). Squares are outlets Pew did not survey, placed at their AllSides rating (Left, Lean Left, Center, Lean Right, Right).${unplaced.length ? ` Also covered by ${listNames(unplaced, 4)}, which neither rates.` : ""}`));
+    sc.append(outletList(placed, covered));
     body.append(sc);
     fig.draw();
   }
