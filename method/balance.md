@@ -50,3 +50,8 @@ not a number, so these outlets count fully toward their side but are not drawn o
 chart; the page names them under it. Ratings AllSides marks as low confidence are not used. Within a
 side every outlet counts once, and the three sides count equally, so adding outlets to one side spreads
 that side's weight rather than adding to it.
+
+## Verdict names on the site
+
+The checker's verdict `Holds up` is shown to readers as **Confirmed**. The checker's instructions
+(method/verdicts.md) keep the name it was tested with, so the display change cannot change its answers.

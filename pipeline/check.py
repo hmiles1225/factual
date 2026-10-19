@@ -400,12 +400,18 @@ def _walk(node, fn):
             _walk(v, fn)
 
 
+def search_budget():
+    """Optional cap on searches per claim (FACTUAL_MAX_SEARCHES), under test; production sets none."""
+    n = os.environ.get("FACTUAL_MAX_SEARCHES")
+    return f"\n\nSearch budget: use at most {int(n)} web searches in total for this claim. Choose each one carefully." if n else ""
+
+
 def check_gemini(claim, model=GEMINI_MODEL):
     key = os.environ["GEMINI_API_KEY"]
     system = system_prompt()
     body = {
         "model": model,
-        "input": system + "\n\n" + user_prompt(claim),
+        "input": system + "\n\n" + user_prompt(claim) + search_budget(),
         "tools": [{"type": "google_search"}, {"type": "url_context"}],
         "response_format": {"type": "text", "mime_type": "application/json", "schema": SCHEMA},
     }

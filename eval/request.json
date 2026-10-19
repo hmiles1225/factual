@@ -1,1 +1,8 @@
-{"checkers": "claude-second", "reverify": [["v1", "v5"], ["v3", "v3"]], "second_from": "v5", "claude_variant": "v3", "only": "", "reps": 1, "note": "Heston added $15 (2026-10-18). Re-verify saved answers with the PDF-tolerant match (page fetches only), then Opus second opinions on any new Doesn't hold up. run.py budget cap $5."}
+{
+ "checkers": "gemini",
+ "gemini_variant": "v6",
+ "max_searches": 6,
+ "only": "p01L,p01R,p02L,p02R,p03L,p03R,p08L,p08R,p09L,p09R,n03,p12L,p12R,p13L,p13R,p07L,p07R,p17L,p17R,v01",
+ "reps": 1,
+ "note": "Heston approved a ~$2 test (2026-10-19): Gemini checker capped at 6 searches per claim on 20 claims (10 L/R pairs-ish, every verdict type), compared with v1 (no cap). Budget stop $3."
+}
