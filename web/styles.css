@@ -199,9 +199,18 @@ figcaption a:hover { text-decoration: underline; }
 .share-btn { display: inline-flex; align-items: center; gap: 7px; min-height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: var(--ink-2); font: 600 0.9375rem/1 var(--cond); cursor: pointer; transition: background-color 120ms ease-out, color 120ms ease-out, border-color 120ms ease-out; }
 .share-btn:hover { background: var(--surf); color: var(--ink); }
 .share-btn.is-done { color: var(--lav); border-color: var(--lav); }
-.share-end { display: flex; justify-content: center; margin: 28px 0 0; }
-.share-end .share-btn { min-height: 48px; padding: 0 20px; font-size: 1rem; color: var(--ink); background: var(--surf); }
-.share-end .share-btn:hover { background: var(--surf-2); }
+/* In the header: icon only, like the gear. "Link copied" still shows beside it, and is read out. */
+.share-top { width: 44px; justify-content: center; padding: 0; border: 0; position: relative; color: var(--ink-2); }
+.share-top:hover { background: var(--surf); color: var(--ink); }
+.share-top.is-done { border: 0; }
+.share-top .share-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.share-top.is-done .share-label { position: absolute; right: calc(100% + 4px); top: 50%; transform: translateY(-50%); width: auto; height: auto; overflow: visible; clip: auto; padding: 4px 8px; border-radius: 6px; background: var(--surf-2); color: var(--lav); font-size: 0.8125rem; }
+.mast-right { gap: 4px; }
+/* End of the story: a quiet action in the back link's voice, aligned with the text. */
+.share-end { margin: 24px 0 0; }
+.share-end .share-btn { padding: 0 8px 0 0; border: 0; background: none; color: var(--lav); font-size: 0.9375rem; }
+.share-end .share-btn:hover { background: none; color: var(--ink); }
+.share-end .share-btn.is-done { color: var(--lav); }
 .back-link { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding-right: 8px; font: 600 0.9375rem/1 var(--cond); color: var(--lav); text-decoration: none; }
 .back-link:hover .back-arrow { transform: translateX(-3px); }
 .back-arrow { display: inline-block; transition: transform 120ms ease-out; }

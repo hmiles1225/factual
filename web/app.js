@@ -868,8 +868,13 @@ function renderStory(data) {
   $("story-meta").textContent = `${topicName(story.topic) ? topicName(story.topic) + " \u00b7 " : ""}${data.archiveDay ? `From the archive \u00b7 ${dayName(data.archiveDay)}` : `Updated ${clock(data.scanned_at)}`}`;
   $("story-title").textContent = story.working_title;
   const tools = el("div", "story-tools");
-  tools.append(backLink(story, data), shareButton(story, data, "Share"));
+  tools.append(backLink(story, data));
   $("story-meta").before(tools);
+  // Share sits top right, beside Settings: an icon the size of the gear.
+  const top = shareButton(story, data, "Share");
+  top.classList.add("share-top");
+  top.setAttribute("aria-label", "Share this story");
+  document.querySelector(".mast-right").prepend(top);
   $("story-sub").append(el("p", "byline", `Headline \u00b7 ${lead(story).source}`));
   if (story.image) $("story-sub").append(figure(story.image, "story-photo"));
 
