@@ -760,14 +760,18 @@ function claimDetails(c, above) {
   const det = el("details", "check-row");
   const sum = el("summary");
   // Don't print the same sentence twice: when the claim is the line above, the row just opens the check.
-  if (above && restates(c.claim, above)) sum.append(chip(c.verdict), el("span", "check-claim is-echo", "What the sources show"));
-  else sum.append(chip(c.verdict), el("span", "check-claim", c.claim));
+  sum.append(chip(c.verdict));
+  if (!(above && restates(c.claim, above))) sum.append(el("span", "check-claim", c.claim));
+  // The verdict chip is a label; this says the row opens.
+  const why = el("span", "check-why", "See why");
+  why.insertAdjacentHTML("beforeend", '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>');
+  sum.append(why);
   det.append(sum);
   const body = el("div", "check-body");
   if (c.steelman) body.append(el("p", "why", `Why this sounds right: ${c.steelman}`));
   if (c.figures && c.figures.length) body.append(statTiles(c.figures));
   if (c.finding) body.append(el("p", "finding", c.finding));
-  if (c.note) body.append(el("p", "check-note", c.note));
+  if (c.note) body.append(el("p", "check-note", c.note.charAt(0).toUpperCase() + c.note.slice(1)));
   if (c.evidence && c.evidence.length) {
     const ul = el("ul", "evidence");
     for (const e of c.evidence) {

@@ -268,16 +268,22 @@ figcaption a:hover { text-decoration: underline; }
 
 /* Checks */
 .check-row { border-top: 1px solid var(--line); }
-.check-row > summary { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: baseline; padding: 10px 0 4px; min-height: 44px; }
-.check-row > summary::after { align-self: center; }
+.check-row > summary { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: baseline; margin: 6px -8px 0; padding: 8px; min-height: 44px; box-sizing: border-box;
+  border-radius: 8px; cursor: pointer; transition: background-color 120ms ease-out; }
+.check-row > summary:hover { background: var(--surf-2); }
+.check-row > summary:active { background: var(--line); }
+.check-row > summary::after, .check-row[open] > summary::after { content: none; }
+.check-row > summary .chip { align-self: center; }
+.check-why { grid-column: 3; align-self: center; display: inline-flex; align-items: center; gap: 2px; font: 600 0.875rem/1 var(--cond); color: var(--lav); white-space: nowrap; }
+.check-why svg { transition: transform 150ms ease-out; }
+.check-row[open] .check-why svg { transform: rotate(90deg); }
 .check-claim { font: 400 0.875rem/1.4 var(--sans); color: var(--ink); overflow-wrap: anywhere; }
-.check-claim.is-echo { font: 500 0.8125rem/1.4 var(--cond); color: var(--ink-2); }
 .diff > .check-row { margin-top: 10px; }
 /* Inside a half-width side panel there is no room beside the chip: the chip and the open marker share the
    first row, the claim takes the full width below (a long chip had squeezed it to one letter a line). */
 .side .check-row > summary { grid-template-columns: minmax(0, 1fr) auto; row-gap: 6px; }
 .side .check-row > summary .chip { grid-row: 1; grid-column: 1; justify-self: start; }
-.side .check-row > summary::after { grid-row: 1; grid-column: 2; }
+.side .check-row > summary .check-why { grid-row: 1; grid-column: 2; }
 .side .check-row > summary .check-claim { grid-row: 2; grid-column: 1 / -1; }
 .check-body { padding: 4px 0 10px; }
 .why { margin: 0 0 8px; font-size: 0.875rem; line-height: 1.5; color: var(--ink-2); }
@@ -471,7 +477,7 @@ details[open] > summary::after { content: "\2212"; }
 @media (max-width: 359px) { .scan-extra { display: none; } }  /* the header fits a 320 px phone */
 
 @media (prefers-reduced-motion: reduce) {
-  .photo-link img, .story, .strip-link, .to-top, .to-top.is-on, .tile-link, .pick, .back-arrow, .more-tile, .share-btn, .poll-opt { transition: none; }
+  .photo-link img, .story, .strip-link, .to-top, .to-top.is-on, .tile-link, .pick, .back-arrow, .more-tile, .share-btn, .poll-opt, .check-row > summary, .check-why svg { transition: none; }
   .photo-link:hover img, .to-top { transform: none; }
 }
 
