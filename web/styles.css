@@ -143,12 +143,10 @@ html.app .tab-bar { display: flex; }
 .metrics-tiles li { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 10px; background: var(--surf); border-radius: 8px; }
 .metrics-tiles .m-n { font-size: 1.25rem; }
 .metrics-tiles .m-l { font-size: 0.75rem; }
-/* A tile with a section to go to is a link: the whole tile, with a small down arrow. */
+/* A tile with a section to go to is a link: the whole tile. */
 .metrics-tiles li.is-link { padding: 0; background: none; }
 .tile-link { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; width: 100%; box-sizing: border-box; padding: 10px; background: var(--surf); border-radius: 8px; color: inherit; text-decoration: none; transition: background-color 120ms ease-out; }
-.tile-link::after { content: "\2193"; position: absolute; top: 9px; right: 9px; font: 500 0.75rem/1 var(--sans); color: var(--ink-3); transition: transform 120ms ease-out, color 120ms ease-out; }
 .tile-link:hover { background: var(--surf-2); }
-.tile-link:hover::after { color: var(--lav); transform: translateY(2px); }
 .block[id] { scroll-margin-top: 16px; }
 @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
 
@@ -338,7 +336,7 @@ details[open] > summary::after { content: "\2212"; }
 /* Perception gap: a guess (ring) and the real figure (dot) on one 0 to 100 track. Numbers are printed under it. */
 .gap-heads { display: grid; gap: 8px; margin: 0 0 14px; }
 @media (min-width: 640px) { .gap-heads { grid-template-columns: 1fr 1fr; } }
-.gap-head { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; background: var(--surf); border-radius: 10px; }
+.gap-head { display: flex; align-items: flex-start; gap: 6px; padding: 12px 14px; background: var(--surf); border-radius: 10px; }
 .gap-head-n { margin-top: -0.07em; font: 700 2.25rem/1 var(--cond); font-variant-numeric: tabular-nums; color: var(--lav); }  /* cap top level with the label's first line */
 .gap-head-l { font: 500 0.875rem/1.35 var(--cond); color: var(--ink-2); }
 .gap-key { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 0 0 4px; font: 500 0.8125rem/1.3 var(--cond); color: var(--ink-2); }
@@ -411,8 +409,6 @@ details[open] > summary::after { content: "\2212"; }
 @media (max-width: 359px) { .scan-extra { display: none; } }  /* the header fits a 320 px phone */
 
 @media (prefers-reduced-motion: reduce) {
-  .photo-link img, .story, .topic-chip, .to-top, .to-top.is-on, .tile-link, .tile-link::after { transition: none; }
-  .to-top { transform: none; }
-  .tile-link:hover::after { transform: none; }
-  .photo-link:hover img { transform: none; }
+  .photo-link img, .story, .topic-chip, .to-top, .to-top.is-on, .tile-link { transition: none; }
+  .photo-link:hover img, .to-top { transform: none; }
 }
