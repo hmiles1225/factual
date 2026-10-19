@@ -132,21 +132,20 @@ function spectrum(points, legend, ariaLabel) {
   const wrap = el("div", "spectrum-wrap");
   const tip = el("div", "chart-tip");
   tip.setAttribute("aria-hidden", "true");
-  // Tap (or click) a dot and its outlet stays in this panel under the chart until another dot is picked or
-  // the same one is tapped again. Hover still previews with a mouse. Touch never had hover: the old
-  // tooltip lasted only as long as a finger was held down.
-  const pickBox = el("div", "spec-pick");
-  pickBox.setAttribute("aria-live", "polite");
-  const hint = () => pickBox.replaceChildren(el("span", "spec-hint", "Tap or click a dot to see its outlet."));
-  hint();
-  fig._picked = null;
+  // Touch has no hover, so the tooltip used to last only while a finger was held down. A tap now opens it
+  // and rings the dot; it closes after TIP_MS, on a tap anywhere else, or when another dot is tapped.
+  // Touching the tooltip itself restarts the time. A mouse keeps the hover behaviour.
+  const TIP_MS = 3000;
+  const closeTip = () => { clearTimeout(tip._t); tip.classList.remove("on"); wrap.querySelectorAll(".is-picked").forEach(n => n.classList.remove("is-picked")); };
+  const holdTip = () => { clearTimeout(tip._t); tip._t = setTimeout(closeTip, TIP_MS); };
+  tip.addEventListener("pointerup", e => { if (e.pointerType !== "mouse") holdTip(); });
+  document.addEventListener("pointerdown", e => { if (tip.classList.contains("on") && !wrap.contains(e.target)) closeTip(); });
   fig.append(wrap);
   if (legend && legend.length) {
     const lg = el("div", "spectrum-legend");
     for (const [style, text] of legend) { const k = el("span", "key"); k.append(el("i", `dot ${style}`), el("span", null, text)); lg.append(k); }
     fig.append(lg);
   }
-  fig.append(pickBox);
   fig.draw = () => {
     const W = Math.max(200, Math.round(wrap.clientWidth)), padX = 14, axisY = 34, r = 6, step = 2 * r + 3;
     const x = v => padX + v * (W - 2 * padX);
@@ -174,7 +173,7 @@ function spectrum(points, legend, ariaLabel) {
     for (const p of all) {
       const cy = ay - 12 - p.row * step;
       const line2 = p.lean != null ? leanPhrase(p.lean, p.name) : `Rated ${p.rating} by AllSides (Pew did not survey it)`;
-      const g = svgEl("g", { class: fig._picked === p.name ? "dotg is-picked" : "dotg" });
+      const g = svgEl("g", { class: "dotg" });
       g.append(svgEl("circle", { cx: p.px, cy, r: 12, class: "hit" }));
       g.append(svgEl("circle", { cx: p.px, cy, r: r + 3.5, class: "ring" }));
       g.append(p.lean == null
@@ -190,19 +189,13 @@ function spectrum(points, legend, ariaLabel) {
       // WCAG 1.4.13: the tooltip stays while the pointer moves onto it, and Escape dismisses it.
       const hide = () => { clearTimeout(tip._t); tip._t = setTimeout(() => { if (!tip.matches(":hover")) tip.classList.remove("on"); }, 150); };
       g.addEventListener("pointerenter", e => { if (e.pointerType !== "mouse") return; clearTimeout(tip._t); if (!tip._dismissed) show(); });
-      g.addEventListener("pointerleave", hide);
-      g.addEventListener("click", () => {
-        tip.classList.remove("on");
-        svg.querySelectorAll(".is-picked").forEach(n => n.classList.remove("is-picked"));
-        if (fig._picked === p.name) { fig._picked = null; hint(); return; }
-        fig._picked = p.name;
+      g.addEventListener("pointerleave", e => { if (e.pointerType === "mouse") hide(); });
+      g.addEventListener("pointerup", e => {
+        if (e.pointerType === "mouse") return;
+        closeTip();
+        show();
         g.classList.add("is-picked");
-        const head = el("p", "spec-name");
-        head.append(el("strong", null, p.name));
-        if (p.note) head.append(document.createTextNode(` \u00b7 ${p.note}`));
-        const body = [head, el("p", "spec-line", line2)];
-        if (p.style === "fill" && ARTICLE[p.name]) { const a = sourceLink("Read their story \u2197", ARTICLE[p.name]); body.push(el("p", "spec-link")); body[2].append(a); }
-        pickBox.replaceChildren(...body);
+        holdTip();
       });
       svg.append(g);
     }
