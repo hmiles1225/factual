@@ -279,7 +279,7 @@ function linkTiles(ul) {
   }
 }
 
-// When a story broke: its first article. Shown on every card, since everything after the lead is in this order.
+// When a story broke: its first article. Shown on every card, since Today is in this order.
 const brokeAt = s => Math.min(...s.articles.map(a => Date.parse(a.published) || Infinity));
 function brokeAgo(s) {
   const t = brokeAt(s);
@@ -352,7 +352,8 @@ function drawToday() {
   let total = 0;
   for (const t of TOPICS.filter(t => follow.has(t.key))) {
     const ranked = data.stories.filter(s => shownToday(s) && s.topic === t.key);
-    const list = ranked.slice(0, 1).concat(ranked.slice(1).sort((a, b) => brokeAt(b) - brokeAt(a)));
+    // Newest first, all of it (Heston): a ranked lead jumped around as later scans found more outlets.
+    const list = ranked.sort((a, b) => brokeAt(b) - brokeAt(a));
     total += list.length;
     const sec = el("section", "topic-section");
     sec.id = t.key;
