@@ -430,6 +430,7 @@ function differenceBlock(d, lib, leanOf) {
     const c = claimOf(lib, p.check);
     if (c) col.append(claimDetails(c));
     else if (p.checkable_claim) col.append(el("p", "side-pending", "Checking this claim against primary sources."));
+    else if (p.no_claim) col.append(el("p", "side-pending", "Nothing to fact-check here: this account is about emphasis or framing, not a factual claim."));
     cols.append(col);
   });
   art.append(cols);

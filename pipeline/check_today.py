@@ -100,8 +100,9 @@ Write:
   right-leaning outlets tell it differently (the lean of each outlet is shown in the coverage list): in
   what happened, in a disputed fact, in context left out, or in emphasis. Name the point neutrally, then
   give each position in neutral words with the article numbers that take it, and copy into crux the
-  few words of that position that are the actual difference (they will be shown in bold). For each position, if it
-  rests on a checkable factual claim about the world, write that claim as one statement in its
+  few words of that position that are the actual difference (they will be shown in bold). For each position,
+  left and right alike, if it states any fact about the world (what happened, what someone did or said, a
+  number), write that claim as one statement in its
   checkable_claim, attributed to whoever made it but never to the outlet (write "A federal judge
   approved the warrant", not "The Daily Wire reports a federal judge approved the warrant"), so each
   side's facts can be checked the same way; otherwise leave it empty.
@@ -138,6 +139,17 @@ Articles:
 SUPPORT_SCHEMA = _item({"established": {"type": "string", "enum": ["all", "part", "none"]},
                         "missing": {"type": "string", "description": "Only the part of the claim the evidence does not establish, as a short phrase starting with 'that' (e.g. 'that other work was paused'). Empty if all is established."}},
                        ["established", "missing"])
+CLAIM_SCHEMA = _item({"claim": {"type": "string", "description": "One checkable factual claim, or empty."}}, ["claim"])
+CLAIM_PROMPT = """One side of a news story's coverage is summarized below. Write the single most important factual
+claim this account makes, as one plain statement that can be checked against primary sources (court
+records, official statements, government data, documents). Attribute it to whoever made it ("Police said
+Oliver was charged with ...", "Trump said ..."), but never to a news outlet. Use only what the account
+says; add nothing. If the account makes no factual claim, only emphasis, framing or opinion, return an
+empty claim.
+
+The point the coverage differs on: {point}
+This side's account: {says}"""
+
 SUPPORT_VERSION = "4"   # 2: quotes judged in their page passage; 3: plus the page's sentences naming the claim's terms, editor's standard
 SUPPORT_PROMPT = """Below is a claim and the evidence for it. Each item is a quote copied word for word from its
 source page, shown with the page's address and the passage around the quote on that page, which our
@@ -421,6 +433,21 @@ def main():
                 print(f"  brief failed for {story['sid']}: {e}")
         if not brief:
             return False
+        # Every side's account gets the same chance of a check: if the brief left an account without a
+        # claim, ask for the one factual claim it makes (or confirm it makes none). Once per account.
+        for d in brief["differences"]:
+            for pos in d["positions"]:
+                if not pos.get("checkable_claim") and not pos.get("claim_tried") and gemini_ok():
+                    try:
+                        out, usage = gemini_json(CLAIM_PROMPT.replace("{point}", d["point"]).replace("{says}", pos["says"]), CLAIM_SCHEMA, "low")
+                        charge_gemini(usage)
+                        pos["checkable_claim"] = (out.get("claim") or "").strip()
+                        pos["no_claim"] = not pos["checkable_claim"]
+                        pos["claim_tried"] = True
+                    except Exception as e:
+                        print(f"  claim extraction failed: {e}")
+            # an account with no check yet goes first, so the per-scan cap never starves one side
+            d["positions"].sort(key=lambda q: bool(q.get("check")))
         # Factual differences are checked against primary sources (cached in the library).
         for d in brief["differences"]:
             if d.get("checkable_claim") and not d.get("check"):  # briefs written before per-side claims
