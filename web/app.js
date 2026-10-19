@@ -326,6 +326,15 @@ function renderToday(data) {
   TODAY = data;
   drawToday();
   document.addEventListener("fx-topics", drawToday);
+  // Coming back from a story: Today is drawn after the browser would restore the scroll, so keep the
+  // position ourselves (this tab only) and put it back once the stories are on the page.
+  try { history.scrollRestoration = "manual"; } catch (e) {}
+  const nav = (performance.getEntriesByType("navigation")[0] || {}).type;
+  let y = null;
+  try { y = sessionStorage.getItem("fx-today-y"); } catch (e) {}
+  if (nav === "back_forward" && y && !location.hash) window.scrollTo({ top: +y, behavior: "instant" });
+  else if (location.hash) { const target = document.getElementById(decodeURIComponent(location.hash.slice(1))); if (target) target.scrollIntoView({ behavior: "instant" }); }
+  window.addEventListener("pagehide", () => { try { sessionStorage.setItem("fx-today-y", String(Math.round(window.scrollY))); } catch (e) {} });
 }
 
 let TODAY = null;
@@ -857,6 +866,7 @@ function renderStory(data) {
   document.title = `${story.working_title} · fACTUAL`;
   $("story-meta").textContent = `${topicName(story.topic) ? topicName(story.topic) + " \u00b7 " : ""}${data.archiveDay ? `From the archive \u00b7 ${dayName(data.archiveDay)}` : `Updated ${clock(data.scanned_at)}`}`;
   $("story-title").textContent = story.working_title;
+  $("story-meta").before(backLink(story, data));
   $("story-sub").append(el("p", "byline", `Headline \u00b7 ${lead(story).source}`));
   if (story.image) $("story-sub").append(figure(story.image, "story-photo"));
 
@@ -966,6 +976,56 @@ function renderStory(data) {
   s4.append(foot);
   body.append(s4);
   linkTiles($("story-sub").querySelector(".metrics-tiles"));
+  const more = moreStories(story, data);
+  if (more) body.append(more);
+}
+
+// Back to where the reader came from: the story's section on Today (or the archive). Coming from Today,
+// it is the browser's back, so the reader lands where they were in the list.
+function backLink(story, data) {
+  const a = el("a", "back-link");
+  a.append(el("span", "back-arrow", "\u2190"), document.createTextNode(data.archiveDay ? " Archive" : " Today"));
+  a.querySelector(".back-arrow").setAttribute("aria-hidden", "true");
+  a.href = data.archiveDay ? "archive.html" : `./#${story.topic}`;
+  a.addEventListener("click", e => {
+    let from = null;
+    try { from = document.referrer && new URL(document.referrer); } catch (err) {}
+    const today = from && from.origin === location.origin && /\/(index\.html)?$/.test(from.pathname);
+    if (today && !data.archiveDay && history.length > 1) { e.preventDefault(); history.back(); }
+  });
+  return a;
+}
+
+// Three more stories: the rest of this section first, then the lead of each other section the reader follows.
+function moreStories(story, data) {
+  const pool = data.stories.filter(s => s.sid !== story.sid && s.related_to === null && s.brief
+    && (data.archiveDay || s.on_today) && (s.brief.agreed || []).some(acrossSides));
+  const byTopic = k => pool.filter(s => s.topic === k);
+  const picks = byTopic(story.topic).sort((a, b) => brokeAt(b) - brokeAt(a)).slice(0, 2);
+  for (const k of followedTopics()) {
+    if (picks.length >= 3) break;
+    if (k === story.topic) continue;
+    const top = byTopic(k)[0];
+    if (top) picks.push(top);
+  }
+  for (const s of pool) { if (picks.length >= 3) break; if (!picks.includes(s)) picks.push(s); }
+  if (!picks.length) return null;
+  const sec = el("section", "block more");
+  sec.setAttribute("aria-labelledby", "more-title");
+  const h = el("h2", "block-title", "More stories");
+  h.id = "more-title";
+  const ul = el("ul", "more-list");
+  for (const s of picks.slice(0, 3)) {
+    const li = el("li");
+    const a = el("a", "more-tile");
+    a.href = storyHref(s, data.archiveDay);
+    const when = data.archiveDay ? null : brokeAgo(s);
+    a.append(el("p", "more-kicker", [topicName(s.topic), when].filter(Boolean).join(" \u00b7 ")), el("p", "more-title", s.working_title), metricRow(s, "metrics"));
+    li.append(a);
+    ul.append(li);
+  }
+  sec.append(h, ul);
+  return sec;
 }
 
 function fail() {

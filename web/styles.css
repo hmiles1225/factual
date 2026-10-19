@@ -195,6 +195,9 @@ figcaption a:hover { text-decoration: underline; }
 /* ---------- Story page ---------- */
 .story-page > * { max-width: 720px; }
 .story-head { padding: 22px 0 0; }
+.back-link { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; margin: -8px 0 4px; padding-right: 8px; font: 600 0.9375rem/1 var(--cond); color: var(--lav); text-decoration: none; }
+.back-link:hover .back-arrow { transform: translateX(-3px); }
+.back-arrow { display: inline-block; transition: transform 120ms ease-out; }
 .kicker { margin: 0 0 8px; font: 400 0.6875rem/1.2 var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
 .story-title { margin: 0; font: 700 clamp(1.875rem, 6vw, 2.75rem)/1.06 var(--cond); }
 .byline { margin: 8px 0 0; font: 400 0.6875rem/1.4 var(--mono); letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-3); }
@@ -434,6 +437,16 @@ details[open] > summary::after { content: "\2212"; }
 @media (max-width: 359px) { .scan-extra { display: none; } }  /* the header fits a 320 px phone */
 
 @media (prefers-reduced-motion: reduce) {
-  .photo-link img, .story, .topic-chip, .to-top, .to-top.is-on, .tile-link, .pick { transition: none; }
+  .photo-link img, .story, .topic-chip, .to-top, .to-top.is-on, .tile-link, .pick, .back-arrow, .more-tile { transition: none; }
   .photo-link:hover img, .to-top { transform: none; }
 }
+
+/* More stories: three text tiles at the end of a story. Text only: the photos' licences ask for a credit line. */
+.more-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+@media (min-width: 760px) { .more-list { grid-template-columns: repeat(3, 1fr); } }
+.more-list li { display: flex; }
+.more-tile { display: flex; flex-direction: column; gap: 6px; width: 100%; padding: 14px; background: var(--surf); border-radius: 10px; color: inherit; text-decoration: none; transition: background-color 120ms ease-out; }
+.more-tile:hover { background: var(--surf-2); }
+.more-kicker { margin: 0; font: 400 0.6875rem/1.2 var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
+.more-title { margin: 0; font: 700 1.125rem/1.2 var(--cond); color: var(--ink); }
+.more-tile .metrics { margin-top: auto; }
