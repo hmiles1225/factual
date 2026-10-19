@@ -189,7 +189,7 @@ For each term give every article number that uses it, why it is loaded, and a ne
 Coverage:
 {coverage}"""
 
-AD_VERSION = "1"
+AD_VERSION = "2"   # 2: the claims driving the race, not only ads (Heston, 2026-10-19)
 AD_SCHEMA = _item({"claims": {"type": "array", "items": _item({
     "speaker": {"type": "string", "description": "Who made the claim: the campaign, candidate, party or group, by name."},
     "target": {"type": "string", "description": "Who the claim is about, by name. Empty if no one."},
@@ -199,13 +199,14 @@ AD_SCHEMA = _item({"claims": {"type": "array", "items": _item({
 AD_PROMPT = """Below is this week's coverage of one Texas election race: each numbered line is an outlet, its audience
 lean, its headline, its summary, and the opening of the article when we could read it.
 
-List up to 3 factual claims that the coverage reports a CAMPAIGN making: in a political ad, or as an attack on
-an opponent by a candidate, campaign, party or political group. Rules:
+List up to 3 factual claims driving this race that the coverage reports someone making: a candidate, campaign,
+party, official or political group, in an ad, an attack, a speech or a post, about an opponent, the race, or
+voting itself (who can vote, how ballots are counted, fraud). Rules:
 - Only claims someone else is reported to have made. Never the outlet's own reporting.
-- Only claims of fact that can be checked (a vote, a record, a number, something someone did or said), not
-  opinions or slogans.
-- Prefer ads and attacks, and give each side's claims the same chance: if both sides' campaigns made checkable
-  claims, include both.
+- Only claims of fact that can be checked (a vote, a record, a number, an event, something someone did or
+  said), not opinions or slogans.
+- Prefer the claims most disputed or most repeated, and give each side the same chance: if both sides made
+  checkable claims, include both.
 - assertion is the claim itself in plain words, so it can be checked on its own.
 For each, give every article number that reports it. None is fine.
 

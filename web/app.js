@@ -420,7 +420,6 @@ function drawToday() {
     const head = el("div", "topic-head");
     head.append(el("h2", "topic-name", t.name), el("p", "topic-span", `${t.span} \u00b7 ${list.length}`));
     sec.append(head);
-    if (t.key === "texas") { const co = calledOut(list, data.library); if (co) sec.append(co); }
     if (list.length) {
       const ol = el("ol", "stories");
       ol.setAttribute("aria-label", `${t.name} stories`);
@@ -474,36 +473,6 @@ function spyStrip() {
   window.addEventListener("scroll", later, { passive: true });
   window.addEventListener("resize", later);
   nav.addEventListener("scroll", () => { nav.classList.toggle("more-right", nav.scrollLeft + nav.clientWidth < nav.scrollWidth - 4); nav.classList.toggle("more-left", nav.scrollLeft > 4); }, { passive: true });
-}
-
-// Called out: every claim in the Texas races found False, whoever made it, with where to see why.
-function calledOut(stories, lib) {
-  const rows = [];
-  for (const s of stories) {
-    const b = s.brief || {};
-    for (const d of b.differences || []) for (const p of d.positions || []) {
-      const c = claimOf(lib, p.check);
-      if (c && c.verdict === "Doesn't hold up") rows.push({ c, who: listNames(p.outlets, 3), s });
-    }
-    for (const a of b.ad_claims || []) {
-      const c = claimOf(lib, a.check);
-      if (c && c.verdict === "Doesn't hold up") rows.push({ c, who: `${a.speaker}${a.kind === "ad" ? " ad" : ""}`, s });
-    }
-  }
-  const box = el("div", "called-out");
-  box.append(el("h3", "called-title", "Called out \u00b7 false claims in the Texas races"));
-  if (!rows.length) { box.append(el("p", "called-none", "No claim in the Texas races has been found false this week.")); return box; }
-  const ul = el("ul", "called-list");
-  for (const r of rows) {
-    const li = el("li");
-    const a = el("a", "called-link");
-    a.href = storyHref(r.s);
-    a.append(chip(r.c.verdict), el("span", "called-claim", r.c.claim), el("span", "called-who", r.who));
-    li.append(a);
-    ul.append(li);
-  }
-  box.append(ul);
-  return box;
 }
 
 // First visit: choose what to follow, the first five already chosen. Not a modal: Today shows underneath.
@@ -1144,12 +1113,12 @@ function renderStory(data) {
     body.append(s3);
   }
 
-  // Ad watch (Texas Election): what campaigns claim about opponents, as reported, each checked.
+  // Texas Election: the claims driving the race (ads, attacks, speeches, posts, claims about voting), each checked.
   const ads = (brief && brief.ad_claims) || [];
   if (ads.length) {
     const sa = el("section", "block");
     sa.id = "ads";
-    sa.append(el("h2", "block-title", "Ad watch \u00b7 campaign claims, checked"));
+    sa.append(el("h2", "block-title", "Claims in the race \u00b7 checked"));
     const ul = el("ul", "ad-list");
     for (const a of ads) {
       const li = el("li", "ad-item");
