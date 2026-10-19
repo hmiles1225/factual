@@ -189,6 +189,28 @@ For each term give every article number that uses it, why it is loaded, and a ne
 Coverage:
 {coverage}"""
 
+AD_VERSION = "1"
+AD_SCHEMA = _item({"claims": {"type": "array", "items": _item({
+    "speaker": {"type": "string", "description": "Who made the claim: the campaign, candidate, party or group, by name."},
+    "target": {"type": "string", "description": "Who the claim is about, by name. Empty if no one."},
+    "kind": {"type": "string", "enum": ["ad", "statement"]},
+    "assertion": {"type": "string", "description": "The factual claim itself, as one checkable statement, without 'the ad says'."},
+    "articles": _ints}, ["speaker", "target", "kind", "assertion", "articles"])}}, ["claims"])
+AD_PROMPT = """Below is this week's coverage of one Texas election race: each numbered line is an outlet, its audience
+lean, its headline, its summary, and the opening of the article when we could read it.
+
+List up to 3 factual claims that the coverage reports a CAMPAIGN making: in a political ad, or as an attack on
+an opponent by a candidate, campaign, party or political group. Rules:
+- Only claims someone else is reported to have made. Never the outlet's own reporting.
+- Only claims of fact that can be checked (a vote, a record, a number, something someone did or said), not
+  opinions or slogans.
+- Prefer ads and attacks, and give each side's claims the same chance: if both sides' campaigns made checkable
+  claims, include both.
+- assertion is the claim itself in plain words, so it can be checked on its own.
+For each, give every article number that reports it. None is fine.
+
+Coverage:
+{coverage}"""
 LEFT_OUT_VERSION = "1"
 LEFT_OUT_SCHEMA = _item({"left_out": {"type": "string"}}, ["left_out"])
 LEFT_OUT_PROMPT = """A fact-checker found this claim true as stated, but missing context that changes the picture.
@@ -724,8 +746,32 @@ def main():
                     pos["checkable_claim"] = deattribute(pos["checkable_claim"], pos["outlets"])
                 if pos.get("checkable_claim") and not pos.get("check"):
                     pos["check"] = check_claim(pos["checkable_claim"], story["sid"], pos["outlets"])
+        # Ad watch (Texas Election only): claims campaigns make about opponents, in ads or attacks, as the
+        # coverage reports them; each is checked like any other claim. Kept in code only where the article it
+        # came from names the speaker.
+        if story.get("region") == "tx" and brief.get("ad_v") != AD_VERSION and gemini_ok():
+            try:
+                alines, _ = coverage_lines(arts, side_of, summaries)
+                out, usage = gemini_json(AD_PROMPT.replace("{coverage}", "\n".join(alines)), AD_SCHEMA)
+                charge_gemini(usage)
+                ads = []
+                for c in out.get("claims", [])[:3]:
+                    speaker, assertion = (c.get("speaker") or "").strip(), (c.get("assertion") or "").strip()
+                    found = [arts[i - 1]["source"] for i in c.get("articles", []) if isinstance(i, int) and 1 <= i <= len(arts)
+                             and speaker and speaker.split()[-1].casefold() in alines[i - 1].casefold()]
+                    if speaker and assertion and found:
+                        ads.append({"speaker": speaker, "target": (c.get("target") or "").strip(), "kind": c.get("kind", "statement"),
+                                    "assertion": assertion, "outlets": sorted(set(found)), "check": None})
+                brief["ad_claims"], brief["ad_v"] = ads, AD_VERSION
+                print(f"  ad watch: {len(ads)} claims")
+            except Exception as e:
+                print(f"  ad watch failed: {e}")
+        for a in brief.get("ad_claims", []):
+            if not a.get("check"):
+                a["check"] = check_claim(a["assertion"], story["sid"], a["outlets"])
         story["brief"] = brief
-        story["checks"] = [k for d in brief["differences"] for k in [d.get("check")] + [p.get("check") for p in d["positions"]] if k]
+        story["checks"] = [k for d in brief["differences"] for k in [d.get("check")] + [p.get("check") for p in d["positions"]] if k] \
+            + [a["check"] for a in brief.get("ad_claims", []) if a.get("check")]
         # A picture approved for this summary is kept: stable from scan to scan, and no lookup or check repeats
         # (so pictures don't drop when the day's budget is spent). A new summary or rule version re-picks.
         if brief.get("image_v") != IMAGES_VERSION or not brief.get("image"):
