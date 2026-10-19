@@ -58,7 +58,14 @@ a:hover { text-decoration-thickness: 2px; }
 code { font: 400 0.8125rem var(--mono); }
 
 /* ---------- Frame ---------- */
-.masthead { border-bottom: 1px solid var(--line); }
+/* The header is pinned on every page. On a phone it slides away while scrolling down and returns on any
+   scroll up, so header, section strip and tab bar don't take a fifth of the screen together. */
+:root { --mast-h: 61px; }
+.masthead { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); transition: transform 200ms ease-out; }
+@media (max-width: 719px) {
+  html.mast-away .masthead { transform: translateY(-100%); }
+  html.mast-away .topic-nav { top: 0; }
+}
 .masthead-inner, .page { max-width: 1120px; margin: 0 auto; padding: 0 var(--gutter); }
 .masthead-inner { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 60px; }
 .wordmark { font: 700 1.375rem/1 var(--cond); letter-spacing: -0.01em; text-decoration: none; }
@@ -129,7 +136,7 @@ html.app .tab-bar { display: flex; }
 .intro { padding: 0; }
 /* The section strip: one line, pinned while reading, sideways on a phone. The underline marks the section
    in view. A soft edge says there is more to swipe to. */
-.topic-nav { position: sticky; top: 0; z-index: 4; display: flex; align-items: stretch; gap: 22px; margin: 0 calc(-1 * var(--gutter)); padding: 0 var(--gutter);
+.topic-nav { position: sticky; top: var(--mast-h); z-index: 4; transition: top 200ms ease-out; display: flex; align-items: stretch; gap: 22px; margin: 0 calc(-1 * var(--gutter)); padding: 0 var(--gutter);
   background: var(--bg); border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; }
 .topic-nav::-webkit-scrollbar { display: none; }
 .topic-nav.more-right { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent); }
@@ -149,7 +156,8 @@ html.app .tab-bar { display: flex; }
 @media (min-width: 720px) {
   .topic-nav { margin: 0; padding: 0; box-shadow: 0 0 0 100vmax var(--bg); clip-path: inset(0 -100vmax); }
 }
-.topic-section { margin-top: 32px; scroll-margin-top: 60px; }  /* clear of the pinned strip */
+.topic-section { margin-top: 32px; scroll-margin-top: calc(var(--mast-h) + 60px); }  /* clear of the pinned header and strip */
+@media (max-width: 719px) { .topic-section { scroll-margin-top: 60px; } }  /* a strip jump hides the header first */
 .topic-section:first-child { margin-top: 16px; }
 .topic-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding-bottom: 10px; margin-bottom: 14px; border-bottom: 1px solid var(--line); }
 .topic-name { margin: 0; font: 700 1.375rem/1.1 var(--cond); }
@@ -185,7 +193,7 @@ html.app .tab-bar { display: flex; }
 .metrics-tiles li.is-link { padding: 0; background: none; }
 .tile-link { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; width: 100%; box-sizing: border-box; padding: 10px; background: var(--surf); border-radius: 8px; color: inherit; text-decoration: none; transition: background-color 120ms ease-out; }
 .tile-link:hover { background: var(--surf-2); }
-.block[id] { scroll-margin-top: 16px; }
+.block[id] { scroll-margin-top: calc(var(--mast-h) + 16px); }
 @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
 
 /* Back to top: bottom right, clear of the tab bar where there is one. */
@@ -479,7 +487,7 @@ details[open] > summary::after { content: "\2212"; }
 @media (max-width: 359px) { .scan-extra { display: none; } }  /* the header fits a 320 px phone */
 
 @media (prefers-reduced-motion: reduce) {
-  .photo-link img, .story, .strip-link, .to-top, .to-top.is-on, .tile-link, .pick, .back-arrow, .more-tile, .share-btn, .poll-opt, .check-row > summary, .check-why svg { transition: none; }
+  .photo-link img, .story, .strip-link, .to-top, .to-top.is-on, .tile-link, .pick, .back-arrow, .more-tile, .share-btn, .poll-opt, .check-row > summary, .check-why svg, .masthead, .topic-nav { transition: none; }
   .photo-link:hover img, .to-top { transform: none; }
 }
 

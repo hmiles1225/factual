@@ -587,6 +587,30 @@ function renderCommon(cg) {
   box.append(s2, el("p", "disclosure", `Figures read from each primary source on ${new Date(cg.checked + "T12:00:00").toLocaleDateString([], { month: "long", day: "numeric", year: "numeric" })}.`));
 }
 
+/* ---------- Pinned header: on a phone it steps aside while reading down, and returns on any scroll up ---------- */
+function initHeader() {
+  const phone = matchMedia("(max-width: 719px)");
+  let last = window.scrollY, queued = false, holdUntil = 0;
+  const root = document.documentElement;
+  // On a phone, a section picked in the strip lands right under the strip: the header steps aside first.
+  document.addEventListener("click", e => {
+    if (phone.matches && e.target.closest(".strip-link")) { root.classList.add("mast-away"); holdUntil = Date.now() + 1000; }
+  });
+  const update = () => {
+    queued = false;
+    const y = window.scrollY;
+    if (Date.now() < holdUntil) { last = y; return; }  // a jump from the section strip: stay as set
+    const open = document.querySelector(".settings[open]");
+    if (!phone.matches || open || y < 120) root.classList.remove("mast-away");
+    else if (y > last + 6) root.classList.add("mast-away");
+    else if (y < last - 6) root.classList.remove("mast-away");
+    last = y;
+  };
+  window.addEventListener("scroll", () => { if (!queued) { queued = true; requestAnimationFrame(update); } }, { passive: true });
+  // Keyboard focus in the header brings it back.
+  document.querySelector(".masthead")?.addEventListener("focusin", () => root.classList.remove("mast-away"));
+}
+
 /* ---------- Back to top: appears once the reader is a screen and a half down ---------- */
 function initToTop() {
   const main = document.getElementById("main");
@@ -1269,6 +1293,7 @@ const fromArchive = (arch, day) => ({ stories: Object.values(arch.stories || {})
 async function load() {
   const page = document.body.dataset.page;
   initSettings();
+  initHeader();
   initToTop();
   // Share sits top right on every page: a story shares itself (renderStory adds that one); any other
   // page shares its own address, without query or fragment.
