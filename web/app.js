@@ -522,6 +522,10 @@ function renderStory(data) {
     const sl = el("section", "block");
     sl.append(el("h2", "block-title", "Loaded language"));
     sl.append(el("p", "block-note lead-note", "Charged or slanted words the outlets chose themselves, not words they quoted. Each was found in that outlet's own headline, summary or opening."));
+    if (!loaded.length) {
+      sl.append(el("p", "topic-empty", "None found. Neither side's coverage of this story used charged or slanted words of its own."));
+      body.append(sl);
+    } else {
     const groups = [["left", "Left-leaning outlets"], ["right", "Right-leaning outlets"]];
     const group = t => { const p = t.sides.filter(x => x !== "unplaced"); return p.length && p.every(x => x === "left") ? "left" : p.length && p.every(x => x === "right") ? "right" : "mixed"; };
     const mixed = loaded.filter(t => group(t) === "mixed");
@@ -544,6 +548,7 @@ function renderStory(data) {
       sl.append(extra);
     }
     body.append(sl);
+    }
   }
 
   // 3. Who covered it: every outlet we read, placed by its audience; filled if it covered this story.

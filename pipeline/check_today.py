@@ -154,7 +154,7 @@ Articles:
 SUPPORT_SCHEMA = _item({"established": {"type": "string", "enum": ["all", "part", "none"]},
                         "missing": {"type": "string", "description": "Only the part of the claim the evidence does not establish, as a short phrase starting with 'that' (e.g. 'that other work was paused'). Empty if all is established."}},
                        ["established", "missing"])
-LOADED_VERSION = "1"
+LOADED_VERSION = "2"
 LOADED_SCHEMA = _item({"terms": {"type": "array", "items": _item({
     "term": {"type": "string", "description": "Copied exactly as the outlet wrote it."},
     "articles": _ints,
@@ -628,7 +628,8 @@ def verify_loaded(raw, arts, lines, side_of):
     n, out, seen = len(arts), [], set()
     for t in raw.get("terms", [])[:10]:
         term = (t.get("term") or "").strip().strip('"\u201c\u201d')
-        if not term or len(term) > 60 or term.casefold() in seen:
+        key = re.sub(r"(es|s)$", "", term.casefold())  # "Leftist" and "Leftists" are one term
+        if not term or len(term) > 60 or key in seen:
             continue
         found = []
         for i in t.get("articles", []):
@@ -637,7 +638,7 @@ def verify_loaded(raw, arts, lines, side_of):
                 if term.casefold() in own.casefold():
                     found.append(arts[i - 1]["source"])
         if found:
-            seen.add(term.casefold())
+            seen.add(key)
             outlets = sorted(set(found))
             out.append({"term": term, "outlets": outlets, "sides": sorted({side_of.get(o, "unplaced") for o in outlets}),
                         "why": (t.get("why") or "").strip(), "neutral": (t.get("neutral") or "").strip()})
