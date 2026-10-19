@@ -38,7 +38,7 @@ $poll = (string) ($in['poll'] ?? '');
 $n = (int) ($in['n'] ?? 0);
 if (!preg_match('/^[a-f0-9]{6,16}-[a-f0-9]{8}$/', $poll) || $n < 2 || $n > 6) reply(['error' => 'bad request'], 400);
 
-$dir = __DIR__ . '/data';
+$dir = __DIR__ . '/store';
 if (!is_dir($dir)) mkdir($dir, 0700, true);
 $db = new PDO('sqlite:' . $dir . '/polls.sqlite');
 $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
