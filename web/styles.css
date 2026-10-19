@@ -64,10 +64,11 @@ code { font: 400 0.8125rem var(--mono); }
 .wordmark { font: 700 1.375rem/1 var(--cond); letter-spacing: -0.01em; text-decoration: none; }
 .wordmark .f { color: var(--lav); }
 .mast-right { display: flex; align-items: center; gap: 10px; }
-.site-nav { border-top: 1px solid var(--line); }
-.site-nav-inner { max-width: 1120px; margin: 0 auto; padding: 0 var(--gutter); display: flex; gap: 20px; overflow-x: auto; scrollbar-width: none; }
+/* The site's pages sit in the header row, after the wordmark (phones use the bottom tab bar instead). */
+.masthead-inner > .site-nav { align-self: stretch; display: flex; margin-left: 32px; margin-right: auto; }
+.site-nav-inner { display: flex; gap: 24px; }
 .site-nav-inner::-webkit-scrollbar { display: none; }
-.site-nav a { display: inline-flex; align-items: center; min-height: 44px; white-space: nowrap; font: 600 0.9375rem/1 var(--cond); color: var(--ink-2); text-decoration: none; border-bottom: 2px solid transparent; }
+.site-nav a { display: inline-flex; align-items: center; min-height: 44px; padding-top: 2px; white-space: nowrap; font: 600 0.9375rem/1 var(--cond); color: var(--ink-2); text-decoration: none; border-bottom: 2px solid transparent; }
 .site-nav a:hover { color: var(--ink); }
 .site-nav a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--lav); }
 
@@ -75,12 +76,12 @@ code { font: 400 0.8125rem var(--mono); }
    Focused items scroll clear of it (WCAG 2.4.11). */
 .tab-bar { display: none; position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; padding: 6px max(6px, env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left));
   background: var(--surf); border-top: 1px solid var(--line); }
-html.app .site-nav { display: none; }
+html.app .masthead-inner > .site-nav { display: none; }
 html.app { scroll-padding-bottom: calc(84px + env(safe-area-inset-bottom)); }
 html.app body { padding-bottom: calc(66px + env(safe-area-inset-bottom)); }
 html.app .tab-bar { display: flex; }
 @media (max-width: 719px) {
-  .site-nav { display: none; }
+  .masthead-inner > .site-nav { display: none; }
   html { scroll-padding-bottom: calc(84px + env(safe-area-inset-bottom)); }
   body { padding-bottom: calc(66px + env(safe-area-inset-bottom)); }
   .tab-bar { display: flex; }
@@ -143,6 +144,11 @@ html.app .tab-bar { display: flex; }
 .strip-edit { flex: none; display: inline-flex; align-items: center; gap: 6px; margin-left: auto; padding: 0 2px; border: 0; background: none; white-space: nowrap;
   font: 600 0.875rem/1 var(--cond); color: var(--ink-3); cursor: pointer; }
 .strip-edit:hover { color: var(--ink); }
+/* Desktop: the strip's line spans the content column like the section heads; its background still runs
+   edge to edge so stories never show at its sides while it is pinned. */
+@media (min-width: 720px) {
+  .topic-nav { margin: 0; padding: 0; box-shadow: 0 0 0 100vmax var(--bg); clip-path: inset(0 -100vmax); }
+}
 .topic-section { margin-top: 32px; scroll-margin-top: 60px; }  /* clear of the pinned strip */
 .topic-section:first-child { margin-top: 16px; }
 .topic-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding-bottom: 10px; margin-bottom: 14px; border-bottom: 1px solid var(--line); }
@@ -205,7 +211,7 @@ figcaption a:hover { text-decoration: underline; }
 .story-photo img { aspect-ratio: 16 / 9; }
 
 /* ---------- Story page ---------- */
-.story-page > * { max-width: 720px; }
+.story-page > * { max-width: 760px; margin-left: auto; margin-right: auto; }  /* one centred reading column */
 .story-head { padding: 22px 0 0; }
 .story-tools { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: -8px 0 4px; }
 .share-btn { display: inline-flex; align-items: center; gap: 7px; min-height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: var(--ink-2); font: 600 0.9375rem/1 var(--cond); cursor: pointer; transition: background-color 120ms ease-out, color 120ms ease-out, border-color 120ms ease-out; }
@@ -464,9 +470,9 @@ details[open] > summary::after { content: "\2212"; }
 @media (min-width: 960px) {
   .stories { grid-template-columns: 1fr 1fr; gap: 14px; }
   .story-lead { grid-column: 1 / -1; padding: 22px; }
-  .story-lead:has(.lead-photo) { display: grid; grid-template-columns: 6fr 5fr; column-gap: 28px; align-items: start; }
-  .story-lead .lead-photo { grid-column: 2; grid-row: 1; }
-  .story-lead .story-main { grid-column: 1; grid-row: 1; }
+  .story-lead:has(.lead-photo) { display: grid; grid-template-columns: 5fr 6fr; column-gap: 28px; align-items: start; }
+  .story-lead .lead-photo { grid-column: 1; grid-row: 1; }  /* picture left, words right (Heston) */
+  .story-lead .story-main { grid-column: 2; grid-row: 1; }
   .about-cols { grid-template-columns: 3fr 2fr; }
 }
 

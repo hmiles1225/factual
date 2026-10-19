@@ -1094,6 +1094,9 @@ function shareURL(story, data) {
 
 // The phone's own share sheet where there is one; otherwise copy the link and say so.
 function shareButton(story, data, label) {
+  return makeShare(() => story.working_title, () => shareURL(story, data), label);
+}
+function makeShare(titleOf, urlOf, label) {
   const b = el("button", "share-btn");
   b.type = "button";
   b.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3v12M7.5 7.5 12 3l4.5 4.5M5 11v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -1102,9 +1105,9 @@ function shareButton(story, data, label) {
   said.setAttribute("aria-live", "polite");
   b.append(word, said);
   b.addEventListener("click", async () => {
-    const url = shareURL(story, data);
+    const url = urlOf();
     if (navigator.share) {
-      try { await navigator.share({ title: story.working_title, url }); } catch (e) { /* closed the sheet */ }
+      try { await navigator.share({ title: titleOf(), url }); } catch (e) { /* closed the sheet */ }
       return;
     }
     let ok = false;
@@ -1267,6 +1270,15 @@ async function load() {
   const page = document.body.dataset.page;
   initSettings();
   initToTop();
+  // Share sits top right on every page: a story shares itself (renderStory adds that one); any other
+  // page shares its own address, without query or fragment.
+  if (page !== "story") {
+    const b = makeShare(() => document.title, () => location.origin + location.pathname.replace(/index\.html$/, ""), "Share");
+    b.classList.add("share-top");
+    b.setAttribute("aria-label", "Share this page");
+    const right = document.querySelector(".mast-right");
+    if (right) right.insertBefore(b, right.querySelector(".settings"));
+  }
   if (page === "archive") return renderArchive(await getJSON("data/archive/index.json", true));
   if (page === "common") return renderCommon(await getJSON("common-ground.json"));
   if (page === "how") return renderHow(await getJSON("data/stories.json", true));
