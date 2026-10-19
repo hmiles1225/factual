@@ -155,7 +155,7 @@ SUPPORT_SCHEMA = _item({"established": {"type": "string", "enum": ["all", "part"
                         "missing": {"type": "string", "description": "Only the part of the claim the evidence does not establish, as a short phrase starting with 'that' (e.g. 'that other work was paused'). Empty if all is established."}},
                        ["established", "missing"])
 LOADED_VERSION = "2"
-IMAGES_VERSION = "2"   # 2: Wikidata aliases and transliteration variants; headline-person fallback
+IMAGES_VERSION = "3"   # 2: aliases, transliterations, headline-person fallback; 3: no maps, flags, seals or logos
 LOADED_SCHEMA = _item({"terms": {"type": "array", "items": _item({
     "term": {"type": "string", "description": "Copied exactly as the outlet wrote it."},
     "articles": _ints,
@@ -311,7 +311,8 @@ def main():
     briefs = lib.setdefault("briefs", {})
     images = lib.setdefault("images", {})
     if lib.get("images_v") != IMAGES_VERSION:  # the matcher improved: retry names that found no image before
-        images = lib["images"] = {k: v for k, v in images.items() if v}
+        # retry misses, and re-judge saved place and organization pictures (a map is not a photo)
+        images = lib["images"] = {k: v for k, v in images.items() if v and k.startswith("person:")}
         lib["images_v"] = IMAGES_VERSION
     lib.pop("extractions", None)  # replaced by briefs
 
@@ -560,6 +561,23 @@ def main():
                 if re.search(rf"\b{re.escape(full)}\b", title) or (len(last) >= 5 and re.search(rf"\b{re.escape(last)}\b", title)):
                     story["image"] = rec
                     break
+        if not story.get("image"):
+            # Still none: look up the people the headline and the shared facts name, in order, under the same
+            # strict rules (exact name or alias, living person, a clearly famous one if several share the name).
+            # Every lookup, hit or miss, is cached, so a name is asked about once.
+            # Facts first: they are in sentence case, so capitalized runs are names; headlines are in title case.
+            text = " ".join([f["fact"] for f in brief["agreed"] if "left" in f["sides"] and "right" in f["sides"]][:3] + [story["working_title"]])
+            for name in person_names(text)[:6]:
+                ikey = f"person:{name.casefold()}"
+                if ikey not in images:
+                    try:
+                        images[ikey] = image_for(name, "person")
+                    except Exception as e:
+                        print(f"  image lookup failed for {name}: {e}")
+                        continue
+                if images.get(ikey):
+                    story["image"] = images[ikey]
+                    break
         shared = [f for f in brief["agreed"] if "left" in f["sides"] and "right" in f["sides"]]
         print(f"  {story['sid']} [{story['topic']}]: {len(shared)} common ground of {len(brief['agreed'])} agreed, {len(brief['differences'])} differences")
         return bool(shared)  # Today shows only what both sides report; no common ground, no slot
@@ -671,6 +689,25 @@ def coverage_lines(arts, side_of, summaries):
         lines.append(f"{i + 1}. {a['source']} ({side_of.get(a['source'], 'unplaced')}): {a['title']}"
                      + (f" | {summ}" if summ else "") + (f" | Opening: {ex}" if ex else ""))
     return lines, excerpts
+
+
+_TITLES = re.compile(r"^(?:(?:Former|Vice|Deputy|Acting|Ex-|U\.S\.|US|White House|Press|Prime|President|Secretary|Minister|Senator|Sen\.|Rep\.|"
+                     r"Representative|Gov\.|Governor|Lt\.|Judge|Justice|Mayor|Attorney|General|Speaker|Leader|Chief|Democratic|Republican|"
+                     r"Candidate|Ambassador|Director|Commissioner|Chairman|Chair|Pope|King|Queen)\s+)+")
+
+
+def person_names(text):
+    """Candidate full names in a headline or sentence: runs of two or three capitalized words, with leading
+    titles removed ("President Donald Trump" -> "Donald Trump"). Lookups decide which are really people."""
+    out = []
+    for run in re.findall(r"(?:[A-Z][a-zA-Z'\u2019.-]+\s+){1,5}[A-Z][a-zA-Z'\u2019-]+", text):
+        run = _TITLES.sub("", run.strip())
+        words = run.split()
+        if 2 <= len(words) <= 3 and run not in out:
+            out.append(run)
+        elif len(words) > 3 and " ".join(words[-2:]) not in out:
+            out.append(" ".join(words[-2:]))
+    return out
 
 
 def pick_articles(arts, side_of, n):

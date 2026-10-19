@@ -21,6 +21,9 @@ import check as C
 
 ROOT = Path(__file__).resolve().parent.parent
 UA = {"User-Agent": "fACTUAL-scan/0.1 (+https://hestonmiles.com/factual/)"}
+# A place's or organization's Wikidata picture is often a map, flag, seal or logo: not a news photo.
+NOT_A_PHOTO = re.compile(r"\b(map|maps|locator|location|orthographic|flag|flags|coat[ _]of[ _]arms|seal|emblem|logo|logotype|"
+                         r"wordmark|insignia|diagram|chart|globe|satellite)\b", re.I)
 ALLOWED = re.compile(r"^(public domain|pd\b|cc0|cc by(-sa)? \d(\.\d)?)", re.I)
 
 
@@ -75,6 +78,7 @@ def image_for(name, kind):
     _, qid, ent = cands[0]
     claims = ent.get("claims", {})
     files = [c["mainsnak"]["datavalue"]["value"] for c in claims.get("P18", []) if "datavalue" in c["mainsnak"]]
+    files = [f for f in files if not NOT_A_PHOTO.search(f.replace("_", " "))]
     if not files:
         return None
     page = next(iter(_get("https://commons.wikimedia.org/w/api.php?" + urllib.parse.urlencode(

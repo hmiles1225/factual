@@ -305,6 +305,8 @@ figcaption { margin-top: 8px; font: 400 0.6875rem/1.45 var(--mono); color: var(-
 figcaption a { text-decoration: none; }
 figcaption a:hover { text-decoration: underline; }
 .lead-photo img { aspect-ratio: 16 / 9; }
+.card-photo { margin: -4px 0 16px; }
+.card-photo img { aspect-ratio: 21 / 9; border-radius: 12px; }
 .story-photo { margin-top: 24px; }
 .story-photo img { aspect-ratio: 3 / 2; }
 

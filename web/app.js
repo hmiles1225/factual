@@ -220,7 +220,9 @@ function figure(img, cls) {
 
 function storyCard(story, i, data, isLead) {
   const li = el("li", isLead ? "story story-lead" : "story");
-  if (isLead && story.image) li.append(figure(story.image, "lead-photo"));
+  // The first story in each section shows its photo, when it has one: large for the lead, a band for the others.
+  if (story.image && isLead) li.append(figure(story.image, "lead-photo"));
+  else if (story.image && i === 0) li.append(figure(story.image, "card-photo"));
   const main = el("div", "story-main");
   main.append(el("p", "story-num", String(i + 1).padStart(2, "0")));
   const h = el("h2", "headline");
