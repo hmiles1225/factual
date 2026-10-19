@@ -236,6 +236,36 @@
     "as_of": "2026-09",
     "url": "https://www.allsides.com/news-source/washington-free-beacon-media-bias"
    }
+  },
+  {
+   "source": "The Dispatch",
+   "url": "https://thedispatch.com/feed/",
+   "allsides": {
+    "rating": "Lean Right",
+    "confidence": "Medium",
+    "as_of": "2026-09",
+    "url": "https://www.allsides.com/news-source/dispatch-media-bias"
+   }
+  },
+  {
+   "source": "Daily Mail",
+   "url": "https://www.dailymail.co.uk/ushome/index.rss",
+   "allsides": {
+    "rating": "Lean Right",
+    "as_of": "2025-09",
+    "note": "Moved from Right to Lean Right in a September 2025 editorial review; reviewers named sensationalism as its defining bias.",
+    "url": "https://www.allsides.com/media-bias"
+   }
+  },
+  {
+   "source": "The Epoch Times",
+   "url": "https://feed.theepochtimes.com/us/feed",
+   "allsides": {
+    "rating": "Lean Right",
+    "as_of": "2025-11",
+    "note": "Two 2025 editorial reviews placed it on the border of Center and Lean Right; rated Lean Right.",
+    "url": "https://www.allsides.com/media-bias"
+   }
   }
  ],
  "placement_source": {
@@ -258,6 +288,11 @@
   {
    "date": "2026-10-19",
    "change": "Added a second placement source, AllSides, for outlets Pew did not survey. Placed Washington Examiner (Lean Right) and Vox (Left); added Washington Times, National Review, Daily Caller and Washington Free Beacon (all right-leaning by AllSides). Right side goes from 3 to 8 outlets, left from 10 to 11.",
+   "by": "Heston's call"
+  },
+  {
+   "date": "2026-10-19",
+   "change": "Added three right-leaning outlets placed by AllSides (current pages, not low confidence): The Dispatch (Lean Right), Daily Mail US (Lean Right), The Epoch Times (Lean Right, borderline Center). Considered and not added: The Free Press (rating disputed), The Daily Signal (AllSides low confidence), Townhall, Reason and The Federalist (no current AllSides rating found). Right side: 11 outlets listed.",
    "by": "Heston's call"
   }
  ],
