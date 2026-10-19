@@ -454,7 +454,7 @@ function renderStory(data) {
   PEW = Object.fromEntries((data.feeds || []).filter(f => f.pew).map(f => [f.source, f.pew]));
   // 1. The story: every fact several outlets confirm, both-sides facts first, one-side facts tagged.
   if (agreed.length) {
-    const s1 = el("section", "block");
+    const s1 = el("section", "block story-panel");
     s1.append(el("h2", "block-title", "The story"));
     s1.append(...storyProse(agreed, 12, "lede"));
     const tagged = agreed.some(f => !acrossSides(f)), plain = agreed.some(acrossSides);
