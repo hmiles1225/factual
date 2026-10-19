@@ -203,16 +203,6 @@
    "_note": "Google News sitemap, listed in Forbes' robots.txt."
   },
   {
-   "source": "Washington Times",
-   "url": "https://www.washingtontimes.com/rss/headlines/news/",
-   "allsides": {
-    "rating": "Lean Right",
-    "confidence": "Medium",
-    "as_of": "2026-10",
-    "url": "https://www.allsides.com/news-source/washington-times-media-bias"
-   }
-  },
-  {
    "source": "National Review",
    "url": "https://www.nationalreview.com/feed/",
    "allsides": {
@@ -311,6 +301,11 @@
   {
    "date": "2026-10-19",
    "change": "Added right-leaning health, science and environment section feeds (checked live): Daily Mail Health and Science & Tech; The Epoch Times Health, Science, Environment; Washington Examiner Healthcare and Energy & Environment. Left-leaning outlets had most of the topic sections, so the new topics were thin on the right. Checked and not available: Fox Science (stale since 2026-09-27), Daily Caller, Daily Wire and National Review health or energy feeds."
+  },
+  {
+   "date": "2026-10-19",
+   "change": "Removed Washington Times: its Cloudflare protection refuses data-center traffic, so every scan from GitHub's servers got HTTP 403 (it answers home connections, and its robots.txt does not forbid us). We do not route around blocks. It never counted toward the right side, since only working outlets count; removing it stops the site listing it as unreachable on every scan.",
+   "by": "Heston's call"
   }
  ],
  "_note_allsides": "Outlets Pew did not survey are placed from AllSides Media Bias Ratings (allsides.com), read from each outlet's AllSides page on 2026-10-19: Left and Lean Left are left-leaning, Center is center, Lean Right and Right are right-leaning. AllSides is a category, not a number, so these outlets count fully toward their side but are not drawn on the Pew audience chart. Ratings AllSides itself marks as low confidence are not used (TheBlaze). Reason and The Federalist have no current AllSides page we could verify, so they stay Unplaced."
