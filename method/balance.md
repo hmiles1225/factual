@@ -59,6 +59,7 @@ that side's weight rather than adding to it.
 
 ## Verdict names on the site
 
-The checker's verdict `Holds up` is shown to readers as **Confirmed**, and `Doesn't hold up` as **False**
-(Heston, 2026-10-19). The checker's instructions
+The checker's verdict `Holds up` is shown to readers as **Confirmed**, `Doesn't hold up` as **False**, and
+`Missing context` as **Misleading** (Heston, 2026-10-19); each Misleading claim carries a "True, but left out:"
+line saying what is missing. The checker's instructions
 (method/verdicts.md) keep the name it was tested with, so the display change cannot change its answers.

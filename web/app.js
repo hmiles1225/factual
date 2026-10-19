@@ -65,7 +65,7 @@ const DECIDED = ["Holds up", "Missing context", "Doesn't hold up"];
 // Verdicts: always a glyph and a word, never color alone (Figma Foundations 5:119).
 const VERDICT = {
   "Holds up": { cls: "hold", glyph: "✓", label: "Confirmed" },   // stored as "Holds up"; readers see Confirmed
-  "Missing context": { cls: "ctx", glyph: "◐" },
+  "Missing context": { cls: "ctx", glyph: "◐", label: "Misleading" },   // stored as "Missing context"; readers see Misleading
   "Doesn't hold up": { cls: "no", glyph: "✕", label: "False" },   // stored as "Doesn't hold up"; readers see False
   "Unproven": { cls: "unk", glyph: "?" },
 };
