@@ -84,7 +84,9 @@ jobs:
           # The rename runs after curl has changed into the file's folder, so it uses the bare name.
           put() {  # put <local file> <remote path>
             name=$(basename "$2")
+            # Hostinger's FTP occasionally stalls (run 81 timed out, curl exit 28): retry each file.
             curl --fail --silent --show-error --ssl-reqd --ftp-create-dirs \
+              --connect-timeout 30 --max-time 180 --retry 4 --retry-delay 5 --retry-all-errors \
               --connect-to "hstgr.io:21:$FTP_HOST:21" \
               --user "$FTP_USER:$FTP_PASSWORD" \
               -T "$1" "ftp://hstgr.io/$2.tmp" \
