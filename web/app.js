@@ -708,6 +708,13 @@ function initSettings() {
   try { current = localStorage.getItem("fx-theme") || "auto"; } catch (e) {}
   const box = form.querySelector(`input[value="${current}"]`);
   if (box) box.checked = true;
+  // A close button, top right, kept in view while the panel scrolls on a phone.
+  const x = el("button", "settings-close");
+  x.type = "button";
+  x.setAttribute("aria-label", "Close settings");
+  x.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+  x.addEventListener("click", () => { const d = form.closest(".settings"); d.open = false; d.querySelector("summary").focus(); });
+  form.prepend(x);
   // Topics: which sections Today shows. At least one stays on.
   const fs = el("fieldset", "settings-topics");
   fs.append(el("legend", null, "Topics"));
