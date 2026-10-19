@@ -263,23 +263,17 @@ function figure(img, cls, href) {
 }
 
 // The numbers that lead every story: outlets, facts both sides report, splits, loaded words.
-let LIB = null;  // the claims library, set once loaded, so counts can include checks
-// Claims in a story that are true as stated but leave out something that changes the picture.
-const contextCount = story => (story.checks || []).filter(k => LIB && LIB.claims && (LIB.claims[k] || {}).verdict === "Missing context").length;
 function metrics(story) {
   const b = story.brief || {};
   const n = (b.differences || []).length;
-  const out = [[story.sources.length, "outlets"], [(b.agreed || []).filter(acrossSides).length, "agreed"],
+  return [[story.sources.length, "outlets"], [(b.agreed || []).filter(acrossSides).length, "agreed"],
     [n, n === 1 ? "split" : "splits"], [(b.loaded || []).length, "loaded"]];
-  const ctx = contextCount(story);
-  if (ctx) out.push([ctx, "missing context"]);  // only when there is some: it is a flag, not a score
-  return out;
 }
 function metricRow(story, cls) {
   const ul = el("ul", cls);
   const tiles = cls.includes("tiles");
   for (const [n, l] of metrics(story)) {
-    const li = el("li", l === "agreed" ? "is-agreed" : l === "missing context" ? "is-ctx" : null);
+    const li = el("li", l === "agreed" ? "is-agreed" : null);
     li.append(el("span", "m-n", String(n)), document.createTextNode(" "), el("span", "m-l", l === "loaded" && !tiles ? (n === 1 ? "loaded word" : "loaded words") : l));
     ul.append(li);
   }
@@ -287,7 +281,7 @@ function metricRow(story, cls) {
 }
 
 // Each number at the top of a story jumps to its section, when that section is on the page.
-const TILE_TARGET = { outlets: "outlets", agreed: "agreed", split: "splits", splits: "splits", loaded: "loaded", "missing context": "ctx" };
+const TILE_TARGET = { outlets: "outlets", agreed: "agreed", split: "splits", splits: "splits", loaded: "loaded" };
 function linkTiles(ul) {
   if (!ul) return;
   for (const li of ul.children) {
@@ -1071,8 +1065,6 @@ function renderStory(data) {
   foot.append(m);
   s4.append(foot);
   body.append(s4);
-  const firstCtx = body.querySelector(".check.is-ctx");
-  if (firstCtx) firstCtx.id = "ctx";
   linkTiles($("story-sub").querySelector(".metrics-tiles"));
   const end = el("div", "share-end");
   end.append(shareButton(story, data, "Share this story"));
@@ -1287,7 +1279,6 @@ async function load() {
     }
   }
   data.library = await library;
-  LIB = data.library;
   (page === "story" ? renderStory : renderToday)(data);
 }
 

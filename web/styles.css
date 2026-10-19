@@ -168,14 +168,10 @@ html.app .tab-bar { display: flex; }
 .m-n { font: 700 0.8125rem/1 var(--mono); color: var(--ink); }
 .m-l { font: 500 0.8125rem/1 var(--cond); color: var(--ink-3); }
 .metrics .is-agreed .m-n { color: var(--lav); }
-.metrics-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(54px, 1fr)); gap: 8px; margin: 16px 0 0; }
-/* Missing context: the same dashed edge as its verdict chip, on the count and around the "left out" line. */
-.metrics .is-ctx::before { content: "\25D0"; margin-right: 1px; color: var(--ink-2); font-size: 0.8125rem; }
-.metrics-tiles .is-ctx::before { content: none; }
-.metrics-tiles li.is-ctx:not(.is-link), .metrics-tiles .is-ctx .tile-link { outline: 1.5px dashed var(--ink-3); outline-offset: -1.5px; }
-.left-out { margin: 8px 0 0; padding: 8px 10px; border: 1.5px dashed var(--ink-3); border-radius: 8px; font: 400 0.875rem/1.45 var(--sans); color: var(--ink); }
-.left-out-k { font-weight: 600; }
-.check.is-ctx { scroll-margin-top: 16px; }
+.metrics-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 16px 0 0; }
+/* Missing context: what the claim leaves out, one plain line under it. */
+.left-out { margin: 6px 0 0; font: 400 0.875rem/1.45 var(--sans); color: var(--ink-2); }
+.left-out-k { font-weight: 600; color: var(--ink); }
 .metrics-tiles li { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 10px; background: var(--surf); border-radius: 8px; }
 .metrics-tiles .m-n { font-size: 1.25rem; }
 .metrics-tiles .m-l { font-size: 0.75rem; }
