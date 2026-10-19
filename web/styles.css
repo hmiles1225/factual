@@ -270,7 +270,7 @@ figcaption a:hover { text-decoration: underline; }
 .loaded-item { padding: 10px 0; border-top: 1px solid var(--line); }
 .loaded-item:first-child { border-top: 0; padding-top: 2px; }
 .loaded-line { margin: 0; font: 500 1rem/1.4 var(--sans); }
-.loaded-side { display: inline-block; min-width: 26px; margin-right: 8px; padding: 0 5px; border: 1px solid var(--line); border-radius: 4px; text-align: center; font: 700 0.6875rem/1.6 var(--mono); color: var(--ink-2); }
+.loaded-tag { display: inline-block; margin-right: 8px; vertical-align: 0.1em; }  /* the split panels' side tag, inline */
 .loaded-term { color: var(--ink); text-decoration-thickness: 1.5px; }
 .loaded-arrow { color: var(--ink-3); }
 .loaded-neutral { color: var(--lav); }

@@ -813,18 +813,21 @@ function outletList(feeds, covered) {
 function loadedItem(t, side) {
   const li = el("li", "loaded-item");
   const top = el("p", "loaded-line");
-  top.append(el("span", "loaded-side", side), el("span", "sr-only", "Loaded: "), el("s", "loaded-term", t.term));
+  top.append(el("span", "side-tag loaded-tag", side), el("span", "sr-only", " loaded word: "), el("s", "loaded-term", t.term));
   if (t.neutral) top.append(el("span", "loaded-arrow", " \u2192 "), el("span", "sr-only", "plainer: "), el("span", "loaded-neutral", t.neutral));
   li.append(top, el("p", "loaded-why", `${listNames(t.outlets, 3)}${t.why ? ". " + t.why.replace(/\.?$/, ".") : ""}`));
   // The word in its sentence, as the outlet wrote it, with the term marked.
-  for (const q of t.quotes || []) {
+  // Outlets that ran the same sentence (often a shared wire headline) share one quote.
+  const same = new Map();
+  for (const q of t.quotes || []) { const k = q.text.trim().toLowerCase(); if (same.has(k)) same.get(k).by.push(q); else same.set(k, { ...q, by: [q] }); }
+  for (const q of same.values()) {
     const bq = el("blockquote", "loaded-quote");
     const p = el("p");
     const at = q.text.toLowerCase().indexOf(t.term.toLowerCase());
     if (at < 0) p.textContent = `\u201c${q.text}\u201d`;
     else p.append(document.createTextNode(`\u201c${q.text.slice(0, at)}`), el("mark", null, q.text.slice(at, at + t.term.length)), document.createTextNode(`${q.text.slice(at + t.term.length)}\u201d`));
     const by = el("p", "loaded-by");
-    by.append(sourceLink(`${q.outlet} \u2197`, q.url));
+    q.by.forEach((o, i) => { if (i) by.append(document.createTextNode(" \u00b7 ")); by.append(sourceLink(`${o.outlet} \u2197`, o.url)); });
     bq.append(p, by);
     li.append(bq);
   }
@@ -895,7 +898,7 @@ function renderStory(data) {
     if (!loaded.length) sl.append(el("p", "topic-empty", "None found on either side."));
     else {
       const ul = el("ul", "loaded-list");
-      for (const k of ["Left", "Right", "Both"]) for (const t of by(k)) ul.append(loadedItem(t, k[0] === "B" ? "L+R" : k[0]));
+      for (const k of ["Left", "Right", "Both"]) for (const t of by(k)) ul.append(loadedItem(t, k === "Both" ? "Left + right" : k));
       sl.append(ul);
     }
     body.append(sl);
