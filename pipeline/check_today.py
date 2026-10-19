@@ -32,7 +32,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import check as C  # noqa: E402
-from images import image_for  # noqa: E402
+from images import image_for, image_for_title  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 LIBRARY_URL = "https://hestonmiles.com/factual/data/library.json"
@@ -155,7 +155,7 @@ SUPPORT_SCHEMA = _item({"established": {"type": "string", "enum": ["all", "part"
                         "missing": {"type": "string", "description": "Only the part of the claim the evidence does not establish, as a short phrase starting with 'that' (e.g. 'that other work was paused'). Empty if all is established."}},
                        ["established", "missing"])
 LOADED_VERSION = "2"
-IMAGES_VERSION = "3"   # 2: aliases, transliterations, headline-person fallback; 3: no maps, flags, seals or logos
+IMAGES_VERSION = "4"   # 2: aliases, transliterations, headline fallback; 3: no maps, flags, logos; 4: article pictures, nothing graphic
 LOADED_SCHEMA = _item({"terms": {"type": "array", "items": _item({
     "term": {"type": "string", "description": "Copied exactly as the outlet wrote it."},
     "articles": _ints,
@@ -177,6 +177,15 @@ For each term give every article number that uses it, why it is loaded, and a ne
 
 Coverage:
 {coverage}"""
+
+IMAGE_TITLES_SCHEMA = _item({"titles": {"type": "array", "items": {"type": "string"}}}, ["titles"])
+IMAGE_TITLES_PROMPT = """Suggest up to 3 exact English Wikipedia article titles whose main picture would illustrate this news
+story for a general reader, best first. Prefer the specific thing the story is about: a virus or other
+cause of disease, a building, an institution, a product, a vehicle, a landmark at the place, a named event.
+Avoid articles whose main picture would likely show sick, injured or dead people, violence or weapons in
+use, or anything graphic. Avoid maps and flags. Use titles exactly as they appear on Wikipedia.
+
+Story: {story}"""
 
 CLAIM_SCHEMA = _item({"claim": {"type": "string", "description": "One checkable factual claim, or empty."}}, ["claim"])
 CLAIM_PROMPT = """One side of a news story's coverage is summarized below. Write the single most important factual
@@ -549,6 +558,30 @@ def main():
                     print(f"  image lookup failed for {subj['name']}: {e}")
             if images.get(ikey):
                 story["image"] = images[ikey]
+        if not story.get("image") and brief.get("img_v") != IMAGES_VERSION and gemini_ok():
+            # No person to show: ask once which Wikipedia articles' main pictures would illustrate the story
+            # (for an Ebola story, "Ebola virus": the virus, not a patient). Each title must exist, and its
+            # picture passes the same rules: freely licensed, not a map, flag or logo, nothing graphic.
+            brief["img_v"] = IMAGES_VERSION
+            facts = " ".join(f["fact"] for f in brief["agreed"] if "left" in f["sides"] and "right" in f["sides"])
+            try:
+                out, usage = gemini_json(IMAGE_TITLES_PROMPT.replace("{story}", f"{story['working_title']}. {facts}"[:1500]), IMAGE_TITLES_SCHEMA, "low")
+                charge_gemini(usage)
+                brief["image_titles"] = [t.strip() for t in out.get("titles", [])[:3] if t.strip()]
+            except Exception as e:
+                print(f"  image title suggestion failed: {e}")
+        if not story.get("image"):
+            for title in brief.get("image_titles", []):
+                ikey = f"title:{title.casefold()}"
+                if ikey not in images:
+                    try:
+                        images[ikey] = image_for_title(title)
+                    except Exception as e:
+                        print(f"  image lookup failed for {title}: {e}")
+                        continue
+                if images.get(ikey):
+                    story["image"] = images[ikey]
+                    break
         if not story.get("image"):
             # The subject has no usable photo (a golf course, say): use a person named in the headline, but only
             # one already matched and verified, by full name or a surname of five letters or more, as a whole word.

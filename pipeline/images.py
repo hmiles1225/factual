@@ -24,6 +24,10 @@ UA = {"User-Agent": "fACTUAL-scan/0.1 (+https://hestonmiles.com/factual/)"}
 # A place's or organization's Wikidata picture is often a map, flag, seal or logo: not a news photo.
 NOT_A_PHOTO = re.compile(r"\b(map|maps|locator|location|orthographic|flag|flags|coat[ _]of[ _]arms|seal|emblem|logo|logotype|"
                          r"wordmark|insignia|diagram|chart|globe|satellite)\b", re.I)
+# Nothing graphic: judged on the file name and on the file's own Commons description and categories.
+GRAPHIC = re.compile(r"\b(patients?|victims?|corpses?|cadavers?|dead bod(y|ies)|bodies|wounded|injur(y|ies|ed)|blood(y|ied)?|bleeding|"
+                     r"autops(y|ies)|lesions?|rash|gore|graphic|casualt(y|ies)|funerals?|burials?|massacre|executions?|killed|"
+                     r"died|dying|deceased|sick|case #?\d)\b", re.I)  # not "wound": "tightly wound" describes a virus filament
 ALLOWED = re.compile(r"^(public domain|pd\b|cc0|cc by(-sa)? \d(\.\d)?)", re.I)
 
 
@@ -76,37 +80,64 @@ def image_for(name, kind):
         if top < 20 or top < 5 * max(nxt, 1):
             return None
     _, qid, ent = cands[0]
-    claims = ent.get("claims", {})
-    files = [c["mainsnak"]["datavalue"]["value"] for c in claims.get("P18", []) if "datavalue" in c["mainsnak"]]
-    files = [f for f in files if not NOT_A_PHOTO.search(f.replace("_", " "))]
-    if not files:
+    return _record(qid, ent, name, "Photo" if kind == "person" else "Image")
+
+
+def image_for_title(title):
+    """The main picture of an exact English Wikipedia article (resolved to its Wikidata entity), for a story
+    with no person to show: "Ebola virus", "Africa CDC". A person's article still has to be a living person."""
+    title = (title or "").strip()
+    if not title:
         return None
-    page = next(iter(_get("https://commons.wikimedia.org/w/api.php?" + urllib.parse.urlencode(
-        {"action": "query", "titles": "File:" + files[0], "prop": "imageinfo", "iiprop": "url|extmetadata|mime",
-         "iiurlwidth": 1200, "format": "json"}))["query"]["pages"].values()))
-    info = (page.get("imageinfo") or [None])[0]
-    if not info or info.get("mime") not in ("image/jpeg", "image/png", "image/webp"):
+    ents = _get("https://www.wikidata.org/w/api.php?" + urllib.parse.urlencode(
+        {"action": "wbgetentities", "sites": "enwiki", "titles": title, "props": "claims|sitelinks", "normalize": 1,
+         "format": "json"})).get("entities", {})
+    qid, ent = next(((q, e) for q, e in ents.items() if q.startswith("Q") and "missing" not in e), (None, None))
+    if not qid:
         return None
-    md = info.get("extmetadata", {})
-    license_ = _plain(md.get("LicenseShortName", {}).get("value"))
-    if not ALLOWED.match(license_):
-        return None
-    artist = _plain(md.get("Artist", {}).get("value")) or "Unknown author"
-    artist = re.sub(r"^(.+?)(?:\s+\1)+$", r"\1", artist)  # "Unknown author Unknown author" -> once
-    url = info.get("thumburl") or info.get("url")
-    ext = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}[info["mime"]]
-    fname = hashlib.sha1(url.encode()).hexdigest()[:12] + "." + ext
-    out = ROOT / "data/images" / fname
-    out.parent.mkdir(parents=True, exist_ok=True)
-    with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=30, context=C.SSL_CTX) as r:
-        data = r.read(8_000_000)
-    out.write_bytes(data)
-    label = name
-    return {
-        "src": f"data/images/{fname}", "alt": label, "subject": label, "wikidata": qid,
-        "artist": artist[:120], "license": license_, "source": info.get("descriptionurl"),
-        "caption": f"{label}. Photo: {artist[:80]} · {license_} · Wikimedia Commons",
-    }
+    val = lambda p: [c["mainsnak"].get("datavalue", {}).get("value") for c in ent.get("claims", {}).get(p, [])]
+    if any(isinstance(v, dict) and v.get("id") == "Q5" for v in val("P31")) and val("P570"):
+        return None  # a historical person is never today's picture
+    label = (ent.get("sitelinks", {}).get("enwiki") or {}).get("title", title)
+    return _record(qid, ent, label, "Image")
+
+
+def _record(qid, ent, label, word):
+    """The first P18 file that is a real picture (not a map, flag, seal or logo), not graphic, freely
+    licensed, and a JPEG, PNG or WebP. Downloaded to data/images so readers only contact our domain."""
+    files = [c["mainsnak"]["datavalue"]["value"] for c in ent.get("claims", {}).get("P18", []) if "datavalue" in c["mainsnak"]]
+    for f in files:
+        if NOT_A_PHOTO.search(f.replace("_", " ")) or GRAPHIC.search(f.replace("_", " ")):
+            continue
+        page = next(iter(_get("https://commons.wikimedia.org/w/api.php?" + urllib.parse.urlencode(
+            {"action": "query", "titles": "File:" + f, "prop": "imageinfo", "iiprop": "url|extmetadata|mime",
+             "iiurlwidth": 1200, "format": "json"}))["query"]["pages"].values()))
+        info = (page.get("imageinfo") or [None])[0]
+        if not info or info.get("mime") not in ("image/jpeg", "image/png", "image/webp"):
+            continue
+        md = info.get("extmetadata", {})
+        about = _plain(md.get("ImageDescription", {}).get("value")) + " " + _plain(md.get("Categories", {}).get("value"))
+        if GRAPHIC.search(about) or NOT_A_PHOTO.search(_plain(md.get("Categories", {}).get("value"))):
+            continue  # the file's own description or categories say it is graphic, or a map or logo
+        license_ = _plain(md.get("LicenseShortName", {}).get("value"))
+        if not ALLOWED.match(license_):
+            continue
+        artist = _plain(md.get("Artist", {}).get("value")) or "Unknown author"
+        artist = re.sub(r"^(.+?)(?:\s+\1)+$", r"\1", artist)  # "Unknown author Unknown author" -> once
+        url = info.get("thumburl") or info.get("url")
+        ext = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}[info["mime"]]
+        fname = hashlib.sha1(url.encode()).hexdigest()[:12] + "." + ext
+        out = ROOT / "data/images" / fname
+        out.parent.mkdir(parents=True, exist_ok=True)
+        with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=30, context=C.SSL_CTX) as r:
+            data = r.read(8_000_000)
+        out.write_bytes(data)
+        return {
+            "src": f"data/images/{fname}", "alt": label, "subject": label, "wikidata": qid,
+            "artist": artist[:120], "license": license_, "source": info.get("descriptionurl"),
+            "caption": f"{label}. {word}: {artist[:80]} · {license_} · Wikimedia Commons",
+        }
+    return None
 
 
 if __name__ == "__main__":
