@@ -98,14 +98,15 @@ function leanPhrase(v, name) {
   const x = r >= 10 ? Math.round(r) : Math.round(r * 10) / 10;
   return v >= 0.5 ? `Republicans ${x}\u00d7 as likely as Democrats to get news here` : `Democrats ${x}\u00d7 as likely as Republicans to get news here`;
 }
-// AllSides gives a category, not a measurement, so those outlets get their own row at fixed positions.
+// AllSides gives a category, not a measurement: those outlets sit at their rating's position, drawn as
+// squares so they are never mistaken for Pew's measured dots.
 const RATING_POS = { "Left": 0.1, "Lean Left": 0.3, "Center": 0.5, "Lean Right": 0.7, "Right": 0.9 };
 let ALLSIDES = {};  // outlet -> AllSides rating, for outlets Pew did not survey
 
 function spectrum(points, legend, ariaLabel) {
   // points: [{name, lean | rating, style: "fill" | "hollow" | "ghost", note}]
-  // Top row: outlets placed by Pew's audience data (lean). Bottom row: outlets Pew did not survey,
-  // placed by their AllSides rating. Both share the Left / Center / Right axis.
+  // Round dots: placed by Pew's audience data (lean). Squares: outlets Pew did not survey, at their
+  // AllSides rating. One row, one Left / Center / Right axis.
   const fig = el("figure", "spectrum");
   const wrap = el("div", "spectrum-wrap");
   const tip = el("div", "chart-tip");
@@ -119,32 +120,17 @@ function spectrum(points, legend, ariaLabel) {
   fig.draw = () => {
     const W = Math.max(200, Math.round(wrap.clientWidth)), padX = 14, axisY = 34, r = 6, step = 2 * r + 3;
     const x = v => padX + v * (W - 2 * padX);
-    const stack = (list, posOf) => {  // dots never hide each other: each row keeps them a step apart
-      const rows = [], out = [];
-      for (const p of [...list].sort((a, b) => posOf(a) - posOf(b))) {
-        const px = x(posOf(p));
-        let row = rows.findIndex(last => px - last >= step);
-        if (row < 0) { rows.push(px); row = rows.length - 1; } else rows[row] = px;
-        out.push({ ...p, px, row });
-      }
-      return out;
-    };
-    const pew = stack(points.filter(p => p.lean != null), p => p.lean);
-    // Rated outlets share their rating's position, so lay each rating's outlets side by side, centered on
-    // it, up to four a row.
-    const rated = [];
-    for (const [rating, pos] of Object.entries(RATING_POS)) {
-      const group = points.filter(p => p.lean == null && p.rating === rating).sort((a, b) => a.name.localeCompare(b.name));
-      group.forEach((p, i) => {
-        const row = Math.floor(i / 4), inRow = Math.min(4, group.length - row * 4), col = i % 4;
-        rated.push({ ...p, px: x(pos) + (col - (inRow - 1) / 2) * step, row });
-      });
+    const posOf = p => p.lean ?? RATING_POS[p.rating];
+    // Dots never hide each other: each row keeps them a step apart, stacking upward.
+    const rows = [], all = [];
+    for (const p of points.filter(q => posOf(q) != null).sort((a, b) => posOf(a) - posOf(b))) {
+      const px = x(posOf(p));
+      let row = rows.findIndex(last => px - last >= step);
+      if (row < 0) { rows.push(px); row = rows.length - 1; } else rows[row] = px;
+      all.push({ ...p, px, row });
     }
-    const upRows = pew.length ? Math.max(...pew.map(p => p.row)) + 1 : 0;
-    const ay = Math.max(axisY, 12 + upRows * step + r);
-    const lane2 = ay + 54;
-    const downRows = rated.length ? Math.max(...rated.map(p => p.row)) + 1 : 0;
-    const H = rated.length ? lane2 + (downRows - 1) * step + r + 6 : ay + 22;
+    const ay = Math.max(axisY, 12 + rows.length * step + r);
+    const H = ay + 22;
     const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, width: W, height: H, class: "chart-svg", role: "group", "aria-label": ariaLabel });
     svg.append(svgEl("line", { x1: padX, x2: W - padX, y1: ay + 0.5, y2: ay + 0.5, class: "chart-base" }));
     for (const [v, t, anchor] of [[0, "Left", "start"], [0.5, "Center", "middle"], [1, "Right", "end"]]) {
@@ -153,16 +139,14 @@ function spectrum(points, legend, ariaLabel) {
       lab.textContent = t;
       svg.append(lab);
     }
-    if (rated.length) {
-      svg.append(svgEl("line", { x1: padX, x2: W - padX, y1: lane2 - 26.5, y2: lane2 - 26.5, class: "chart-base chart-lane-rule" }));
-      const lab = svgEl("text", { x: padX, y: lane2 - 13, class: "chart-lane" });
-      lab.textContent = "Rated by AllSides";
-      svg.append(lab);
-    }
-    const dot = (p, cy, line2) => {
+    for (const p of all) {
+      const cy = ay - 12 - p.row * step;
+      const line2 = p.lean != null ? leanPhrase(p.lean, p.name) : `Rated ${p.rating} by AllSides (Pew did not survey it)`;
       const g = svgEl("g", { class: "dotg", tabindex: 0, role: "img", "aria-label": `${p.name}: ${p.note ? p.note + ". " : ""}${line2}` });
       g.append(svgEl("circle", { cx: p.px, cy, r: 12, class: "hit" }));
-      g.append(svgEl("circle", { cx: p.px, cy, r, class: `dot ${p.style}` }));
+      g.append(p.lean == null
+        ? svgEl("rect", { x: p.px - r + 0.5, y: cy - r + 0.5, width: 2 * r - 1, height: 2 * r - 1, rx: 2, class: `dot ${p.style}` })
+        : svgEl("circle", { cx: p.px, cy, r, class: `dot ${p.style}` }));
       const show = () => {
         tip.replaceChildren(el("strong", null, p.note ? `${p.name} \u00b7 ${p.note}` : p.name), el("span", null, line2));
         tip.classList.add("on");
@@ -174,9 +158,7 @@ function spectrum(points, legend, ariaLabel) {
       g.addEventListener("pointerenter", show); g.addEventListener("focus", show);
       g.addEventListener("pointerleave", hide); g.addEventListener("blur", hide);
       svg.append(g);
-    };
-    for (const p of pew) dot(p, ay - 12 - p.row * step, leanPhrase(p.lean, p.name));
-    for (const p of rated) dot(p, lane2 + p.row * step, `Rated ${p.rating} by AllSides`);
+    }
     wrap.replaceChildren(svg, tip);
   };
   let t;
@@ -534,13 +516,13 @@ function renderStory(data) {
     const covered = new Set(story.sources);
     const fig = spectrum(placed.map(f => ({ name: f.source, lean: f.lean, rating: ALLSIDES[f.source], style: covered.has(f.source) ? "fill" : "ghost",
       note: covered.has(f.source) ? "covered this" : "did not cover this" })),
-      [["fill", "Covered this story"], ["ghost", "Did not"]],
+      [["fill", "Covered this story"], ["ghost", "Did not"], ["sq", "Square: placed by AllSides rating"]],
       `Outlets that covered this story, placed by audience: ${story.sources.join(", ")}`);
     sc.append(fig);
     const unplaced = story.sources.filter(o => leanOf[o] == null && !ALLSIDES[o]);
     const who = sideName(story.sources, leanOf);
     if (/^(Left|Right)-leaning outlets$/.test(who)) fig.before(el("p", "diff-split", `Only ${who.toLowerCase()} covered this story.`));
-    sc.append(el("p", "block-note", `Each dot is an outlet we read. Toward the left, Democrats are more likely than Republicans to get news there; toward the right, Republicans are. Center outlets are used about equally (Pew Research Center, 2025). The lower row is outlets Pew did not survey, placed by their AllSides rating.${unplaced.length ? ` Also covered by ${listNames(unplaced, 4)}, which neither rates.` : ""}`));
+    sc.append(el("p", "block-note", `Each dot is an outlet we read. Toward the left, Democrats are more likely than Republicans to get news there; toward the right, Republicans are. Center outlets are used about equally (Pew Research Center, 2025). Squares are outlets Pew did not survey, placed at their AllSides rating (Left, Lean Left, Center, Lean Right, Right).${unplaced.length ? ` Also covered by ${listNames(unplaced, 4)}, which neither rates.` : ""}`));
     body.append(sc);
     fig.draw();
   }
