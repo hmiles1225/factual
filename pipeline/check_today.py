@@ -135,13 +135,16 @@ Articles:
 
 SUPPORT_SCHEMA = _item({"established": {"type": "string", "enum": ["all", "part", "none"]}, "missing": {"type": "string"}},
                        ["established", "missing"])
-SUPPORT_VERSION = "2"   # 2: quotes are judged inside their passage on the source page, not alone
+SUPPORT_VERSION = "3"   # 2: quotes judged in their page passage; 3: plus the page's sentences naming the claim's terms, editor's standard
 SUPPORT_PROMPT = """Below is a claim and the evidence for it. Each item is a quote copied word for word from its
 source page, shown with the page's address and the passage around the quote on that page, which our
-code read itself. Using ONLY this evidence, not anything you know, decide whether it establishes every
-part of the claim exactly as it is stated. The address and passage can establish what a quote is about
-(which court, case, place, person or date). Pay attention to strong words: a quote saying someone left
-or was asked to reconsider does not establish that they were fired; a total does not establish a record.
+code read itself, and other sentences from the same page that mention names or numbers in the claim.
+Using ONLY this evidence, not anything you know, decide whether it establishes every part of the claim.
+The address, passage and other sentences can establish what a quote is about (which court, case, place,
+person or date). Judge as a careful editor would: ordinary paraphrase and plain implication count (2,700
+events are thousands of events; events that took place were planned). Words that change the meaning do
+not: a quote saying someone left or was asked to reconsider does not establish that they were fired; a
+total does not establish a record; an endorsement does not establish when it was withheld.
 
 Answer "all" only if every part of the claim, as worded, is established. Answer "part" if some of it is
 and some is not, and say what is missing. Answer "none" if the evidence does not support it.
@@ -306,8 +309,10 @@ def main():
             if e.get("role") not in ("supports", "context"):
                 continue
             ctx = passage(e["url"], e["quote"])
+            more = mentions(e["url"], record["claim"], ctx or e["quote"])
             items.append(f"- Quote: \"{e['quote']}\"\n  Source: {e['publisher']}, {e['url']}"
-                         + (f"\n  Passage on the page: \"{ctx}\"" if ctx else ""))
+                         + (f"\n  Passage on the page: \"{ctx}\"" if ctx else "")
+                         + "".join(f"\n  Elsewhere on the page: \"{m}\"" for m in more))
         charge_pipe()
         quotes = "\n".join(items)
         if quotes:
@@ -470,6 +475,31 @@ def passage(url, quote, width=400):
     if i < 0:
         return None
     return text[max(0, i - width): i + len(q) + width]
+
+
+_STOP = {"the", "a", "an", "and", "of", "in", "on", "at", "to", "for", "is", "was", "were", "by", "with", "that", "this", "as", "from"}
+
+
+def mentions(url, claim, already, limit=4):
+    """Sentences on the evidence page that name the claim's proper nouns or numbers and are not already
+    shown, so a quote can be tied to the place, case or person the claim names. Our own read of the page."""
+    text, _ = C.fetch_page(url)
+    if not text:
+        text, _ = C.fetch_via_anthropic(url)
+    if not text:
+        return []
+    names = re.findall(r"(?:[A-Z][\w'.-]+(?:\s+(?:[A-Z][\w'.-]+|of|the))*)", claim)
+    terms = {C.norm(t).strip(".,;:'\"") for t in names}
+    terms = {t for t in terms if t not in _STOP and len(t) > 3} | set(C.numbers_in(claim))
+    seen, out = C.norm(already), []
+    for sent in re.split(r"(?<=[.!?])\s+", text):
+        if len(sent) > 400 or sent in seen:
+            continue
+        if any(t in sent for t in terms):
+            out.append(sent.strip())
+            if len(out) >= limit:
+                break
+    return out
 
 
 def pick_articles(arts, side_of, n):
