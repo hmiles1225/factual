@@ -315,6 +315,43 @@
     "source": "AllSides Media Bias Chart, Version 12 (2026)",
     "url": "https://www.allsides.com/media-bias/media-bias-chart"
    }
+  },
+  {
+   "source": "NBC News",
+   "url": "https://feeds.nbcnews.com/nbcnews/public/news",
+   "pew": {
+    "rep": 24,
+    "dem": 47
+   }
+  },
+  {
+   "source": "Axios",
+   "url": "https://api.axios.com/feed/",
+   "allsides": {
+    "rating": "Lean Left",
+    "source": "AllSides Media Bias Chart, Version 12 (2026)",
+    "url": "https://www.allsides.com/media-bias/media-bias-chart",
+    "note": "Pew's 2025 report mentions Axios, but its percentages are not in the report text we can verify, so it is placed by AllSides."
+   }
+  },
+  {
+   "source": "HuffPost",
+   "url": "https://www.huffpost.com/section/politics/feed",
+   "allsides": {
+    "rating": "Left",
+    "source": "AllSides Media Bias Chart, Version 12 (2026)",
+    "url": "https://www.allsides.com/media-bias/media-bias-chart",
+    "note": "Pew's 2025 report mentions HuffPost, but its percentages are not in the report text we can verify, so it is placed by AllSides."
+   }
+  },
+  {
+   "source": "TIME",
+   "url": "https://time.com/feed/",
+   "allsides": {
+    "rating": "Lean Left",
+    "source": "AllSides Media Bias Chart, Version 12 (2026)",
+    "url": "https://www.allsides.com/media-bias/media-bias-chart"
+   }
   }
  ],
  "placement_source": {
@@ -356,6 +393,11 @@
   {
    "date": "2026-10-19",
    "change": "Checked the right-leaning outlets on AllSides Media Bias Chart v12 (2026). Placed Reason (Center) and The Federalist (Right) from the chart. Added Just the News (Lean Right), The Free Press (Lean Right), OAN (Right), IJR (Right). Left out: The American Spectator and The American Conservative (opinion magazines; no left opinion magazines are read either), ZeroHedge (mostly reposts and commentary), and The Post Millennial, CBN, Fox Business, Upward News (no working feed).",
+   "by": "Heston's call"
+  },
+  {
+   "date": "2026-10-19",
+   "change": "Added four left-leaning outlets to match the right side at 15: NBC News (Pew 2025: 24% Rep, 47% Dem), Axios (Lean Left), HuffPost (Left), TIME (Lean Left), the last three from AllSides chart v12. Checked and not added: Washington Post (feeds return server errors), USA Today (402), AP and Yahoo News (403), opinion magazines (The Atlantic, The New Yorker, The Nation, Jacobin). Working but not added: The Daily Beast, Semafor, CNBC, Insider.",
    "by": "Heston's call"
   }
  ],
