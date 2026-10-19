@@ -609,6 +609,16 @@ function initToTop() {
 }
 
 /* ---------- Settings: theme, remembered on this device only ---------- */
+// The browser's own bar takes the page colour of the theme in use, and follows the device when on Auto.
+function barColour() {
+  const m = document.querySelector('meta[name="theme-color"]');
+  if (!m) return;
+  const t = document.documentElement.dataset.theme || "dark";
+  const light = t === "light" || (t === "auto" && matchMedia("(prefers-color-scheme: light)").matches);
+  m.content = light ? "#F5F6F8" : "#0F1113";
+}
+if (window.matchMedia) matchMedia("(prefers-color-scheme: light)").addEventListener("change", barColour);
+
 function openSettings(focus) {
   const d = document.querySelector(".settings");
   if (!d) return;
@@ -620,8 +630,8 @@ function openSettings(focus) {
 function initSettings() {
   const form = document.querySelector(".settings-panel");
   if (!form) return;
-  let current = "dark";
-  try { current = localStorage.getItem("fx-theme") || "dark"; } catch (e) {}
+  let current = "auto";  // match the device until the reader chooses
+  try { current = localStorage.getItem("fx-theme") || "auto"; } catch (e) {}
   const box = form.querySelector(`input[value="${current}"]`);
   if (box) box.checked = true;
   // Topics: which sections Today shows. At least one stays on.
@@ -648,6 +658,7 @@ function initSettings() {
     const v = e.target.value;
     if (v === "dark") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = v;
     try { localStorage.setItem("fx-theme", v); } catch (err) {}
+    barColour();
   });
   const close = (refocus) => { const d = document.querySelector(".settings[open]"); if (d) { d.open = false; if (refocus) d.querySelector("summary").focus(); } };
   document.addEventListener("keydown", e => { if (e.key === "Escape") close(true); });
