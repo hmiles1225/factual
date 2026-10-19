@@ -44,11 +44,12 @@ EXCERPT_CHARS = 900              # opening of each article read for the brief; n
 REBRIEF_HOURS = 6                # a story is re-summarized when a new side joins, else at most this often
 MAX_NEW_PER_SCAN = 5
 MAX_NEW_PER_DAY = 30
-# Proof of concept, no audience yet: keep it cheap (Heston's call, 2026-10-19). At most $1.60/day, ~$48/month.
-ANTHROPIC_DAILY_USD = 0.60       # just above one Opus second opinion (~$0.51), so Doesn't hold up can still publish
-GEMINI_DAILY_USD = 1.00
+# "Decent" fact-check coverage for the proof of concept (Heston's call, 2026-10-19): about 16 to 20 checks a
+# day, nearly every politics account. At most $3.10/day, ~$93/month.
+ANTHROPIC_DAILY_USD = 1.10       # two Opus second opinions (~$0.51 each) a day
+GEMINI_DAILY_USD = 2.00          # summaries, checks, and searches past Google's free allowance
 # One-off raises, approved by Heston for a specific date only. Expires by itself.
-GEMINI_EXTRA_USD = {"2026-10-19": 1.50}   # one-off, approved by Heston: re-summarize Today with the new right-leaning outlets
+GEMINI_EXTRA_USD = {"2026-10-19": 0.50}   # one-off, approved by Heston: today's total stays at the $2.50 he approved
 # Bump when the outlet list changes: a story whose outlets changed since its summary is re-summarized once.
 ROSTER_VERSION = "2026-10-19"
 GEMINI_FREE_SEARCHES = 150      # Google gives 5,000 free a month across Gemini 3 models; ~150 a day
@@ -364,9 +365,8 @@ def main():
         if rec and fresh and not rec.get("pending_second") and not forced:
             rec["stories"] = sorted(set(rec.get("stories", [])) | {story_sid})
             return existing
-        # No paid searches: new checks stop once Google's free daily search allowance is used.
-        if state["new_this_scan"] >= MAX_NEW_PER_SCAN or spend["new_claims"] >= MAX_NEW_PER_DAY or not gemini_ok() \
-                or spend["gemini_searches"] >= GEMINI_FREE_SEARCHES:
+        # Searches past Google's free allowance are paid, and charged to the Gemini cap (charge_gemini).
+        if state["new_this_scan"] >= MAX_NEW_PER_SCAN or spend["new_claims"] >= MAX_NEW_PER_DAY or not gemini_ok():
             return existing
         try:
             first = C.check(text, "gemini")
