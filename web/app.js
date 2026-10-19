@@ -131,13 +131,22 @@ function spectrum(points, legend, ariaLabel) {
   const fig = el("figure", "spectrum");
   const wrap = el("div", "spectrum-wrap");
   const tip = el("div", "chart-tip");
-  tip.setAttribute("role", "status");
+  tip.setAttribute("aria-hidden", "true");
+  // Tap (or click) a dot and its outlet stays in this panel under the chart until another dot is picked or
+  // the same one is tapped again. Hover still previews with a mouse. Touch never had hover: the old
+  // tooltip lasted only as long as a finger was held down.
+  const pickBox = el("div", "spec-pick");
+  pickBox.setAttribute("aria-live", "polite");
+  const hint = () => pickBox.replaceChildren(el("span", "spec-hint", "Tap or click a dot to see its outlet."));
+  hint();
+  fig._picked = null;
   fig.append(wrap);
   if (legend && legend.length) {
     const lg = el("div", "spectrum-legend");
     for (const [style, text] of legend) { const k = el("span", "key"); k.append(el("i", `dot ${style}`), el("span", null, text)); lg.append(k); }
     fig.append(lg);
   }
+  fig.append(pickBox);
   fig.draw = () => {
     const W = Math.max(200, Math.round(wrap.clientWidth)), padX = 14, axisY = 34, r = 6, step = 2 * r + 3;
     const x = v => padX + v * (W - 2 * padX);
@@ -165,8 +174,9 @@ function spectrum(points, legend, ariaLabel) {
     for (const p of all) {
       const cy = ay - 12 - p.row * step;
       const line2 = p.lean != null ? leanPhrase(p.lean, p.name) : `Rated ${p.rating} by AllSides (Pew did not survey it)`;
-      const g = svgEl("g", { class: "dotg" });
+      const g = svgEl("g", { class: fig._picked === p.name ? "dotg is-picked" : "dotg" });
       g.append(svgEl("circle", { cx: p.px, cy, r: 12, class: "hit" }));
+      g.append(svgEl("circle", { cx: p.px, cy, r: r + 3.5, class: "ring" }));
       g.append(p.lean == null
         ? svgEl("rect", { x: p.px - r + 0.5, y: cy - r + 0.5, width: 2 * r - 1, height: 2 * r - 1, rx: 2, class: `dot ${p.style}` })
         : svgEl("circle", { cx: p.px, cy, r, class: `dot ${p.style}` }));
@@ -179,8 +189,21 @@ function spectrum(points, legend, ariaLabel) {
       };
       // WCAG 1.4.13: the tooltip stays while the pointer moves onto it, and Escape dismisses it.
       const hide = () => { clearTimeout(tip._t); tip._t = setTimeout(() => { if (!tip.matches(":hover")) tip.classList.remove("on"); }, 150); };
-      g.addEventListener("pointerenter", () => { clearTimeout(tip._t); if (!tip._dismissed) show(); });
+      g.addEventListener("pointerenter", e => { if (e.pointerType !== "mouse") return; clearTimeout(tip._t); if (!tip._dismissed) show(); });
       g.addEventListener("pointerleave", hide);
+      g.addEventListener("click", () => {
+        tip.classList.remove("on");
+        svg.querySelectorAll(".is-picked").forEach(n => n.classList.remove("is-picked"));
+        if (fig._picked === p.name) { fig._picked = null; hint(); return; }
+        fig._picked = p.name;
+        g.classList.add("is-picked");
+        const head = el("p", "spec-name");
+        head.append(el("strong", null, p.name));
+        if (p.note) head.append(document.createTextNode(` \u00b7 ${p.note}`));
+        const body = [head, el("p", "spec-line", line2)];
+        if (p.style === "fill" && ARTICLE[p.name]) { const a = sourceLink("Read their story \u2197", ARTICLE[p.name]); body.push(el("p", "spec-link")); body[2].append(a); }
+        pickBox.replaceChildren(...body);
+      });
       svg.append(g);
     }
     tip.onpointerleave = () => tip.classList.remove("on");
@@ -313,7 +336,8 @@ function storyCard(story, i, data, isLead) {
   a.href = storyHref(story);
   h.append(a);
   main.append(h);
-  main.append(...storyProse((story.brief && story.brief.agreed) || [], isLead ? 2 : 1, "gist"));
+  // The first story in each section carries its summary; the rest are headline, time and counts only.
+  if (isLead || i === 0) main.append(...storyProse((story.brief && story.brief.agreed) || [], isLead ? 2 : 1, "gist"));
   li.append(main);
   return li;
 }
