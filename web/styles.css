@@ -60,7 +60,7 @@ code { font: 400 0.8125rem var(--mono); }
 .topic-section:first-child { margin-top: 8px; }
 .topic-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding-bottom: 12px; margin-bottom: 20px; border-bottom: 2px solid var(--ink); }
 .topic-name { margin: 0; font: 700 1.75rem/1.1 var(--sans); letter-spacing: -0.02em; }
-.topic-span { margin: 0; font: 500 0.75rem/1.2 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); white-space: nowrap; }
+.topic-span { margin: 0; font: 500 0.75rem/1.2 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); }
 .topic-empty { margin: 0; max-width: 56ch; font-size: 1rem; line-height: 1.55; color: var(--ink-2); }
 
 /* ---------- Archive ---------- */
@@ -210,11 +210,12 @@ details[open] > summary::after { content: "\2212"; }
 .facts { list-style: none; margin: 0; padding: 0; display: grid; gap: 18px; }
 .facts .story-text { font-size: 1.125rem; line-height: 1.5; }
 .lede { margin: 0; font: 400 1.3125rem/1.45 var(--serif); letter-spacing: -0.005em; color: var(--ink); }
+.lede + .lede { margin-top: 14px; }
+.fact-tag { font: 400 0.75em/1 var(--mono); color: var(--ink-2); }
 .lede.muted { font-size: 1.125rem; color: var(--ink-2); }
 .sub-title { margin: 28px 0 12px; font: 600 0.75rem/1.2 var(--sans); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); }
 .fact-sides { margin: 4px 0 0; font: 400 0.75rem/1.45 var(--mono); color: var(--ink-3); }
 
-.timeline { margin: 4px 0 0; }
 .foot-meta { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 
 /* ---------- Spectrum: outlets placed by audience, Pew 2025. Ink and gray only. ---------- */

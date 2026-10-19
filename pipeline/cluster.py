@@ -215,6 +215,7 @@ def main():
     side = {f["source"]: side_of(f) for f in feeds["feeds"]}
     # Audience lean, 0 = all Democratic users, 1 = all Republican users (Pew), for the spectrum charts.
     lean = {f["source"]: round(f["pew"]["rep"] / (f["pew"]["rep"] + f["pew"]["dem"]), 3) for f in feeds["feeds"] if f.get("pew")}
+    pew = {f["source"]: {"rep": f["pew"]["rep"], "dem": f["pew"]["dem"]} for f in feeds["feeds"] if f.get("pew")}
     working = {f["source"] for f in scan.get("feeds", []) if f["ok"]}
     roster = {k: sorted(src for src in working if side.get(src, "unplaced") == k) for k in (*SIDES, "unplaced")}
 
@@ -277,7 +278,8 @@ def main():
     out = {
         "scanned_at": scan["fetched_at"],
         "articles_scanned": len(articles),
-        "feeds": [{**f, "side": side.get(f["source"], "unplaced"), "lean": lean.get(f["source"])} for f in scan.get("feeds", [])],
+        "feeds": [{**f, "side": side.get(f["source"], "unplaced"), "lean": lean.get(f["source"]), "pew": pew.get(f["source"])}
+                  for f in scan.get("feeds", [])],
         "method": {"model": MODEL, "threshold": THRESHOLD, "window_hours": WINDOW_HOURS, "linkage": "average", "related": RELATED,
                    "topics": {"politics": "U.S. politics and U.S. policy abroad", "environment": "Environment and climate",
                               "science": "Science", "health": "Health"}, "topic_margin": TOPIC_MARGIN},
