@@ -111,6 +111,9 @@ Write:
   give, leaving out any number, quote or framing only one side uses. Even when the sides disagree on
   why or how, they usually agree on what happened: that is common ground. Each sentence is one fact
   with every article number that states it. Fewer sentences only if the coverage truly shares less.
+  The first sentence is the news itself, standing alone for a reader who knows nothing about the story:
+  who did what, and where or when (as a wire story's first line would put it), never a detail, a
+  consequence or a follow-up. It is shown alone on the home page.
 - agreed: up to 3 more facts, not already in common_ground, that several outlets report. Plain, neutral sentences. Prefer facts reported
   by outlets of different leans. When left- and right-leaning outlets both report the same core event,
   write that fact at the level of detail they share: leave out a number, quote or detail only some of
