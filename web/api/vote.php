@@ -31,6 +31,10 @@ function reply(array $body, int $code = 200): void {
 }
 
 if (($_GET['v'] ?? '') === '1') reply(['ok' => true, 'version' => VERSION]);
+// TEMPORARY (2026-10-19): which header carries the reader's address behind the host's CDN. Shows a caller
+// only their own address. Remove once the network count uses the right one.
+if (($_GET['v'] ?? '') === 'net') reply(['remote' => $_SERVER['REMOTE_ADDR'] ?? null, 'xff' => $_SERVER['HTTP_X_FORWARDED_FOR'] ?? null,
+    'real' => $_SERVER['HTTP_X_REAL_IP'] ?? null, 'true' => $_SERVER['HTTP_TRUE_CLIENT_IP'] ?? null, 'cf' => $_SERVER['HTTP_CF_CONNECTING_IP'] ?? null]);
 
 $post = ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST';
 $in = $post ? (json_decode((string) file_get_contents('php://input'), true) ?: []) : $_GET;
