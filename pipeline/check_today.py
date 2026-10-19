@@ -65,6 +65,8 @@ DECIDED = ("Holds up", "Missing context", "Doesn't hold up")
 # One-off fresh checks, by library key, when a verdict is known to rest on thin evidence. Runs once each.
 FORCE_RECHECK = {"ff5e92501774": "court order cited never names the course; look for a filing that does (2026-10-19)"}
 OPUS_TYPICAL_USD = 0.51          # measured mean per Opus second opinion, 2026-10-17 eval
+RESTORE_VERSION = "1"          # bump to re-run the one-time restore of dropped checked splits from the archive
+ARCHIVE_DAYS_BACK = [(datetime.now(ZoneInfo("America/New_York")).date() - timedelta(days=n)).isoformat() for n in (2, 1, 0)]
 CARRY_OVER = 0.80               # same story, same side: an earlier decided claim this close is the same claim, reworded
 SAME_CLAIM = 0.93                # embedding similarity at which two wordings are one claim
 MIN_OUTLETS_AGREED = 2           # an agreed fact needs at least this many outlets to state it
@@ -517,6 +519,7 @@ def main():
                                          .replace("{coverage}", "\n".join(lines)), BRIEF_SCHEMA)
                 charge_gemini(usage)
                 brief = build_brief(raw, arts, lines, side_of, gemini_json, charge_gemini)
+                brief = keep_checked_splits(brief, cached["brief"] if cached else None, claims, vec)
                 briefs[story["sid"]] = {"version": BRIEF_VERSION, "roster": ROSTER_VERSION, "outlets": outlets_now, "sides": sides_now, "brief": brief,
                                         "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                                         "openings_read": sum(1 for x in excerpts if x)}
@@ -524,6 +527,14 @@ def main():
                 print(f"  brief failed for {story['sid']}: {e}")
         if not brief:
             return False
+        # Once per story: splits with finished checks that a rewrite dropped before keep_checked_splits
+        # existed come back from the archived summaries (today and the two days before).
+        if brief.get("restored_v") != RESTORE_VERSION:
+            for day in ARCHIVE_DAYS_BACK:
+                old = archived_brief(day, story["sid"])
+                if old:
+                    brief = keep_checked_splits(brief, old, claims, vec)
+            brief["restored_v"] = RESTORE_VERSION
         # Loaded language: once per summary, a separate small pass over the same coverage, verified in code.
         if brief.get("loaded_v") != LOADED_VERSION and gemini_ok():
             try:
@@ -894,6 +905,19 @@ def _live_json(url):
         raise
 
 
+_ARCHIVED = {}
+
+
+def archived_brief(day, sid):
+    """A story's summary as the archive kept it on a given day, or None. Each day's file is read once per scan."""
+    if day not in _ARCHIVED:
+        try:
+            _ARCHIVED[day] = _live_json(f"{ARCHIVE_URL}{day}.json") or {}
+        except Exception:
+            _ARCHIVED[day] = {}
+    return ((_ARCHIVED[day].get("stories") or {}).get(sid) or {}).get("brief")
+
+
 def write_archive(stories, feeds):
     """Keep every story that was on Today, by day (U.S. Eastern), so the site builds an archive. A story
     keeps its latest summary for the day. If the live archive can't be read, skip: never overwrite it."""
@@ -931,6 +955,29 @@ def deattribute(claim, outlets):
     out = re.sub(rf"^(?:the\s+)?(?:{names})\s+(?:reported|reports|says|said|states|stated|writes|wrote)\s+(?:that\s+)?",
                  "", claim.strip(), flags=re.I) if names else claim.strip()
     return out[:1].upper() + out[1:]
+
+
+def keep_checked_splits(new, old, claims, vec, limit=3):
+    """A rewrite may refresh the story and add splits, but a split whose claim already has a finished check
+    stays exactly as it was. Rewrites had been choosing different claims, so a Confirmed fell off the page
+    and a fresh claim sat at "Checking" until the next day's budget. A new, unchecked split on the same
+    point as a kept one is that split reworded, and is dropped."""
+    if not old:
+        return new
+    done = lambda p: bool(p.get("check")) and (claims.get(p["check"]) or {}).get("verdict") in DECIDED
+    checked = lambda d: any(done(p) for p in d["positions"])
+    current = new.get("differences", [])
+    have = {p.get("check") for d in current for p in d["positions"] if p.get("check")}
+    kept = [d for d in old.get("differences", []) if checked(d) and not ({p.get("check") for p in d["positions"]} & have)]
+    if not kept:
+        return new
+    mine = [d for d in current if checked(d)]
+    fresh = [d for d in current if not checked(d)]
+    if fresh:
+        same = vec([d["point"] for d in fresh]) @ vec([d["point"] for d in kept]).T
+        fresh = [d for d, row in zip(fresh, same) if float(row.max()) < 0.85]
+    new["differences"] = (kept + mine + fresh)[:max(limit, len(kept) + len(mine))]
+    return new
 
 
 def build_brief(raw, arts, lines, side_of, ask, charge):

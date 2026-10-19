@@ -176,6 +176,7 @@ function spectrum(points, legend, ariaLabel) {
 }
 
 // Name a group of outlets by where their audiences sit, from Pew data, never by hand.
+let ARTICLE = {};  // outlet -> its article in the story on screen, so a name can link to what it said
 let SIDE = {};  // outlet -> left/center/right, placed in the scan from Pew, else AllSides
 const sidesIn = outlets => new Set(outlets.map(o => SIDE[o]).filter(x => x && x !== "unplaced"));
 function sideName(outlets, leanOf) {
@@ -237,7 +238,7 @@ function metricRow(story, cls) {
   const tiles = cls.includes("tiles");
   for (const [n, l] of metrics(story)) {
     const li = el("li", l === "agreed" ? "is-agreed" : null);
-    li.append(el("span", "m-n", String(n)), document.createTextNode(" "), el("span", "m-l", l === "loaded" && !tiles ? "loaded words" : l));
+    li.append(el("span", "m-n", String(n)), document.createTextNode(" "), el("span", "m-l", l === "loaded" && !tiles ? (n === 1 ? "loaded word" : "loaded words") : l));
     ul.append(li);
   }
   return ul;
@@ -258,11 +259,26 @@ function linkTiles(ul) {
   }
 }
 
+// When a story broke: its first article. Shown on every card, since everything after the lead is in this order.
+const brokeAt = s => Math.min(...s.articles.map(a => Date.parse(a.published) || Infinity));
+function brokeAgo(s) {
+  const t = brokeAt(s);
+  if (!isFinite(t)) return null;
+  const m = Math.max(0, Math.round((Date.now() - t) / 60000));
+  if (m < 60) return `Broke ${Math.max(m, 1)} min ago`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `Broke ${h}h ago`;
+  const d = Math.round(h / 24);
+  return d === 1 ? "Broke yesterday" : `Broke ${d} days ago`;
+}
+
 function storyCard(story, i, data, isLead) {
   const li = el("li", isLead ? "story story-lead" : "story");
   // The first story in each section shows its photo, when it has one.
   if (story.image && (isLead || i === 0)) li.append(figure(story.image, isLead ? "lead-photo" : "card-photo", storyHref(story)));
   const main = el("div", "story-main");
+  const when = brokeAgo(story);
+  if (when) main.append(el("p", "story-when", when));
   main.append(metricRow(story, "metrics"));
   const h = el("h2", "headline");
   const a = el("a", null, story.working_title);
@@ -284,7 +300,8 @@ function renderToday(data) {
   let total = 0;
   const nav = $("topic-nav");
   for (const t of TOPICS) {
-    const list = data.stories.filter(s => shown(s) && s.topic === t.key);
+    const ranked = data.stories.filter(s => shown(s) && s.topic === t.key);
+    const list = ranked.slice(0, 1).concat(ranked.slice(1).sort((a, b) => brokeAt(b) - brokeAt(a)));
     total += list.length;
     const sec = el("section", "topic-section");
     sec.id = t.key;
@@ -515,6 +532,29 @@ function sourcesLine(c) {
   return p;
 }
 
+// The outlets on one side, each linked to its own article in this story.
+function outletLinks(outlets, max) {
+  const out = el("p", "side-outlets");
+  const shown = outlets.slice(0, max);
+  shown.forEach((o, i) => {
+    if (i) out.append(document.createTextNode(i === shown.length - 1 && outlets.length <= max ? " and " : ", "));
+    const url = ARTICLE[o];
+    if (url) out.append(sourceLink(o, url)); else out.append(document.createTextNode(o));
+  });
+  if (outlets.length > max) out.append(document.createTextNode(` and ${outlets.length - max} more`));
+  return out;
+}
+
+// A claim waiting for its check: the same chip shape as a verdict, and the claim itself unless it repeats the line above.
+function pendingCheck(claim, above) {
+  const wrap = el("div", "check check-pending");
+  const c = el("span", "chip chip-wait");
+  c.append(el("span", "chip-glyph", "\u2026"), el("span", "chip-word", "Checking"));
+  wrap.append(c);
+  if (!restates(claim, above)) wrap.append(el("p", "check-claim", claim));
+  return wrap;
+}
+
 // True when the checked claim restates the line printed just above it, nearly word for word.
 function restates(claim, says) {
   const words = t => (t || "").toLowerCase().match(/[a-z0-9']+/g) || [];
@@ -618,10 +658,10 @@ function differenceBlock(d, lib, leanOf) {
     const col = el("div", "side");
     col.append(el("p", "side-tag", tags[i]));
     col.append(withCrux(el("p", "side-says"), p.says, p.crux));
-    col.append(el("p", "side-outlets", listNames(p.outlets, 4)));
+    col.append(outletLinks(p.outlets, 4));
     const c = claimOf(lib, p.check);
     if (c) col.append(claimDetails(c, p.says));
-    else if (p.checkable_claim) col.append(el("p", "side-pending", "Checking this claim."));
+    else if (p.checkable_claim) col.append(pendingCheck(p.checkable_claim, p.says));
     else if (p.no_claim) col.append(el("p", "side-pending", "Framing, not a factual claim."));
     cols.append(col);
   });
@@ -712,6 +752,8 @@ function renderStory(data) {
   const leanOf = Object.fromEntries((data.feeds || []).filter(f => f.lean != null).map(f => [f.source, f.lean]));
   PEW = Object.fromEntries((data.feeds || []).filter(f => f.pew).map(f => [f.source, f.pew]));
   SIDE = Object.fromEntries((data.feeds || []).map(f => [f.source, f.side]));
+  ARTICLE = {};
+  for (const a of story.articles) if (!ARTICLE[a.source]) ARTICLE[a.source] = a.url;
   ALLSIDES = Object.fromEntries((data.feeds || []).filter(f => f.lean == null && f.allsides).map(f => [f.source, f.allsides]));
   $("story-sub").querySelector(".byline").after(metricRow(story, "metrics metrics-tiles"));
 

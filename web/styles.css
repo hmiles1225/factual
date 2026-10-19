@@ -110,7 +110,7 @@ html.app .tab-bar { display: flex; }
 /* ---------- Today ---------- */
 .intro { padding: 16px 0 4px; }
 .topic-nav { display: flex; flex-wrap: wrap; gap: 6px; }
-.topic-chip { display: inline-flex; align-items: center; gap: 7px; min-height: 44px; padding: 0 12px; border-radius: 8px; background: var(--surf);
+.topic-chip { display: inline-flex; align-items: baseline; gap: 7px; min-height: 44px; box-sizing: border-box; padding: 14px 12px; border-radius: 8px; background: var(--surf);
   color: var(--ink-2); font: 600 0.9375rem/1 var(--cond); text-decoration: none; transition: background 150ms ease-out, color 150ms ease-out; }
 .topic-chip:hover { background: var(--brand); color: #fff; }
 .topic-chip:hover .topic-count { color: #fff; }
@@ -134,6 +134,7 @@ html.app .tab-bar { display: flex; }
 .gist { margin: 0; font: 400 0.96875rem/1.45 var(--sans); color: var(--ink-2); max-width: 64ch; }
 
 /* The numbers that lead: outlets, agreed, splits, loaded words. */
+.story-when { margin: 0 0 6px; font: 500 0.75rem/1.2 var(--mono); letter-spacing: 0.02em; color: var(--ink-3); }
 .metrics { list-style: none; display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; padding: 0; }
 .metrics li { display: inline-flex; align-items: baseline; gap: 4px; }
 .m-n { font: 700 0.8125rem/1 var(--mono); color: var(--ink); }
@@ -204,6 +205,10 @@ figcaption a:hover { text-decoration: underline; }
 .side-says { margin: 0; font: 400 0.96875rem/1.45 var(--sans); color: var(--ink-2); }
 .side-says strong { font-weight: 600; color: var(--ink); }
 .side > .check, .side > .side-pending { margin-top: auto; }
+.chip-wait { background: var(--surf-2); color: var(--ink-2); }
+.check-pending { border-top: 1px solid var(--line); padding-top: 10px; display: grid; gap: 6px; }
+.side-outlets a { color: inherit; text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 2px; }
+.side-outlets a:hover { color: var(--ink); text-decoration-color: currentColor; }
 .side-outlets { margin: 0; font: 400 0.65625rem/1.45 var(--mono); color: var(--ink-3); }
 .side-pending { margin: 0; font-size: 0.8125rem; color: var(--ink-3); }
 
@@ -354,7 +359,7 @@ details[open] > summary::after { content: "\2212"; }
 .gap-guess, .gap-actual { position: absolute; top: 1px; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%; box-sizing: border-box; }
 .gap-guess { border: 2px solid var(--ink-2); background: var(--surf); }
 .gap-actual { background: var(--lav); box-shadow: 0 0 0 2px var(--surf); }
-.gap-nums { margin: 2px 0 0; font: 400 0.75rem/1.45 var(--mono); color: var(--ink-3); }
+.gap-nums { margin: 2px 0 0; font: 400 0.8125rem/1.45 var(--sans); font-variant-numeric: tabular-nums; color: var(--ink-3); }
 .misread-list { list-style: none; margin: 0; padding: 0; counter-reset: m; }
 .misread { position: relative; padding: 14px 0 16px 34px; border-top: 1px solid var(--line); counter-increment: m; }
 .misread::before { content: counter(m, decimal-leading-zero); position: absolute; left: 0; top: 17px; font: 700 0.8125rem/1 var(--mono); color: var(--lav); }
