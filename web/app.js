@@ -1300,11 +1300,14 @@ function citedBlock(r, cands) {
   }
   const since = cited.map(c => c.day).filter(Boolean).sort()[0];
   const sum = side => {
+    // Distinct polls, not articles: two CBS videos naming the same CBS poll are one poll.
     const list = by(side);
-    if (!list.length) return `${side === "left" ? "Left" : "Right"}-leaning outlets: no poll named.`;
-    const lead = i => list.filter(c => Math.sign(gapOf(c.shares)) === (i === 0 ? 1 : -1)).length;
-    const tied = list.filter(c => Math.abs(gapOf(c.shares)) < 0.05).length;
-    return `${side === "left" ? "Left" : "Right"}-leaning outlets named ${plural(list.length, "poll", "polls")}: ${surname(cands[1])} ahead in ${lead(1)}, ${surname(cands[0])} ahead in ${lead(0)}${tied ? `, tied in ${tied}` : ""}.`;
+    const label = side === "left" ? "Left" : "Right";
+    if (!list.length) return `${label}-leaning outlets: no poll named.`;
+    const polls = [...new Map(list.map(c => [`${c.pollster}|${c.poll_end}`, c])).values()];
+    const lead = i => polls.filter(c => Math.sign(gapOf(c.shares)) === (i === 0 ? 1 : -1)).length;
+    const tied = polls.filter(c => Math.abs(gapOf(c.shares)) < 0.05).length;
+    return `${label}-leaning outlets named ${plural(polls.length, "poll", "polls")} in ${plural(list.length, "article", "articles")}: ${surname(cands[1])} ahead in ${lead(1)}, ${surname(cands[0])} ahead in ${lead(0)}${tied ? `, tied in ${tied}` : ""}.`;
   };
   box.append(el("p", "num-lede", `${sum("left")} ${sum("right")}`));
   const cols = el("div", "num-cols");
