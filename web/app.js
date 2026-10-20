@@ -1401,7 +1401,9 @@ function moneyBlock(m, cands) {
     return box;
   }
   const rows = [["Raised by the campaign", "raised"], ["Cash on hand", "cash"]];
-  if (m.source === "FEC") rows.push(["Outside groups spent for", "outside_support"], ["Outside groups spent against", "outside_oppose"]);
+  // Outside spending is shown only once the scan marks it checked (m.outside_ok): FEC raw filings can list the same
+  // spending twice, in a 24/48-hour notice and again in the regular report (caught 2026-10-20).
+  if (m.source === "FEC" && m.outside_ok) rows.push(["Outside groups spent for", "outside_support"], ["Outside groups spent against", "outside_oppose"]);
   const ul = el("ul", "money-list");
   for (const [label, k] of rows.filter(([, k]) => m.candidates.some(c => c[k] != null))) {
     const li = el("li", "money-row");
@@ -1419,7 +1421,7 @@ function moneyBlock(m, cands) {
     ul.append(li);
   }
   box.append(ul);
-  if (m.source === "FEC") {
+  if (m.source === "FEC" && m.outside_ok) {
     const groups = m.candidates.flatMap(c => [...(c.top_support || []).map(g => `${g.group} (${usd(g.usd)} for ${surname(c)})`), ...(c.top_oppose || []).map(g => `${g.group} (${usd(g.usd)} against ${surname(c)})`)]);
     if (groups.length) box.append(el("p", "num-note", `Biggest outside spenders: ${listNames(groups, 6)}.`));
   }
