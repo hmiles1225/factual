@@ -212,16 +212,23 @@ For each, give every article number that reports it. None is fine.
 
 Coverage:
 {coverage}"""
-LEFT_OUT_VERSION = "1"
-LEFT_OUT_SCHEMA = _item({"left_out": {"type": "string"}}, ["left_out"])
-LEFT_OUT_PROMPT = """A fact-checker found this claim true as stated, but missing context that changes the picture.
+EXPLAIN_VERSION = "1"
+EXPLAIN_SCHEMA = _item({"part": {"type": "string"}, "context": {"type": "string"}}, ["part", "context"])
+EXPLAIN_ASK = {  # what each line says, by verdict
+    "Holds up": ("what in the claim the sources confirm", "leave empty"),
+    "Missing context": ("the part of the claim that is true", "what the claim leaves out that changes the picture"),
+    "Doesn't hold up": ("exactly which part of the claim is false", "what the sources show instead"),
+    "Unproven": ("the part of the claim the sources do establish, or empty if none", "what the sources could not establish"),
+}
+EXPLAIN_PROMPT = """A fact-checker has checked this claim. Explain its verdict to a reader in two short, plain lines, using only
+facts in the checker's finding. No opinion, no judgment of anyone's motives, no "the claim" or "the statement".
 
 Claim: {claim}
+Verdict: {verdict}
 The checker's finding: {finding}
 
-Write the missing context itself as one plain sentence of at most 25 words, using only facts in the
-finding: what a reader would need to know that the claim leaves out. No opinion, no judgment of the claim,
-no "the claim" or "the statement". If the finding does not say what is missing, return an empty string."""
+part (at most 25 words): {part}
+context (at most 30 words): {context}"""
 POLL_VERSION = "1"
 POLL_SCHEMA = _item({"polls": {"type": "array", "items": _item({
     "question": {"type": "string", "description": "The question as a reader would answer it, neutral, at most 25 words."},
@@ -809,23 +816,27 @@ def main():
                 story["on_today"] = True
         print(f"  {topic}: {done} of {quota} on Today ({len(cands)} stories covered by both sides)")
 
-    # Missing context, said plainly: one line of what each such claim leaves out, from its finding, shown
-    # under the claim without a tap. Once per claim; only for claims on stories that are on Today.
+    # Every verdict, explained plainly: which part holds, is false, or is missing, and what the sources show,
+    # from the checker's finding only. Once per claim, for claims on stories on Today.
     on_today_checks = {k for s in data["stories"] if s.get("on_today") for k in s.get("checks", [])}
     for k in sorted(on_today_checks):
         c = claims.get(k)
-        if not c or c.get("verdict") != "Missing context" or c.get("left_out_v") == LEFT_OUT_VERSION or not gemini_ok():
+        ask = EXPLAIN_ASK.get((c or {}).get("verdict"))
+        if not c or not ask or not c.get("finding") or c.get("explain_v") == EXPLAIN_VERSION or not gemini_ok():
             continue
         try:
-            out, usage = gemini_json(LEFT_OUT_PROMPT.replace("{claim}", c["claim"]).replace("{finding}", (c.get("finding") or "")[:1500]),
-                                     LEFT_OUT_SCHEMA, "low")
+            out, usage = gemini_json(EXPLAIN_PROMPT.replace("{claim}", c["claim"]).replace("{verdict}", c["verdict"])
+                                     .replace("{finding}", c["finding"][:1500]).replace("{part}", ask[0]).replace("{context}", ask[1]),
+                                     EXPLAIN_SCHEMA, "low")
             charge_gemini(usage)
-            line = (out.get("left_out") or "").strip()
-            c["left_out"] = line if 0 < len(line) <= 220 else ""
-            c["left_out_v"] = LEFT_OUT_VERSION
-            print(f"  left out: {c['left_out'][:90]}")
+            part, ctx = (out.get("part") or "").strip(), (out.get("context") or "").strip()
+            c["explain"] = {"part": part if len(part) <= 240 else "", "context": ctx if len(ctx) <= 280 else ""}
+            if c["verdict"] == "Missing context":
+                c["left_out"] = c["explain"]["context"]
+            c["explain_v"] = EXPLAIN_VERSION
+            print(f"  explained {c['verdict']}: {part[:60]} | {ctx[:60]}")
         except Exception as e:
-            print(f"  left-out line failed: {e}")
+            print(f"  explain failed: {e}")
     write_archive([s for s in data["stories"] if s.get("on_today")], data.get("feeds", []))
     write_share_pages([s for s in data["stories"] if s.get("on_today")])
 

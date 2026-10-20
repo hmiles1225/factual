@@ -869,6 +869,31 @@ function pendingCheck(claim, above) {
   return wrap;
 }
 
+// Every verdict opens with the same two plain answers: which part holds, is false or is missing, and what the
+// sources show. Written once per claim by the scan (c.explain); until then, taken from the finding itself.
+function verdictLines(c) {
+  const x = c.explain || {};
+  const split = c.finding ? splitFinding(c.finding) : { truth: "", missing: null };
+  const lines = {
+    "Holds up": [["What checks out:", x.part || c.finding]],
+    "Missing context": [["What\u2019s true:", x.part || split.truth], ["What\u2019s left out:", x.context || c.left_out || split.missing]],
+    "Doesn't hold up": x.part ? [["What\u2019s false:", x.part], ["What the sources show:", x.context || c.finding]] : [["What the sources show:", c.finding]],
+    "Unproven": x.context ? [["What\u2019s established:", x.part], ["What isn\u2019t:", x.context]] : [["What the sources show:", c.finding]],
+  }[c.verdict] || [["What the sources show:", c.finding]];
+  return lines.filter(([, t]) => t);
+}
+
+// A finding, split where it turns: the sentences before "However/But/While..." are what holds; that sentence
+// (and one after it) is what the claim leaves out. Null missing when the finding never turns.
+function splitFinding(text) {
+  const parts = [];
+  let rest = text.trim();
+  while (rest) { const one = firstSentence(rest); parts.push(one.trim()); rest = rest.slice(one.length).trim(); }
+  const turn = parts.findIndex((p, i) => i > 0 && /^(However|But|While|Although|Yet|Still)\b|\b(leaves? out|omits?|does not mention|did not mention)\b/i.test(p));
+  if (turn < 1) return { truth: text, missing: null };
+  return { truth: parts.slice(0, turn).join(" "), missing: parts.slice(turn, turn + 2).join(" ") };
+}
+
 // True when the checked claim restates the line printed just above it, nearly word for word.
 function restates(claim, says) {
   const words = t => (t || "").toLowerCase().match(/[a-z0-9']+/g) || [];
@@ -889,24 +914,38 @@ function claimDetails(c, above) {
   why.insertAdjacentHTML("beforeend", '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>');
   sum.append(why);
   det.append(sum);
+  // Opened, a check answers first and supports second: what the sources show (for Misleading, what is true
+  // and what is left out), then the quotes, then why the claim can sound right.
   const body = el("div", "check-body");
-  if (c.steelman) body.append(el("p", "why", `Why this sounds right: ${c.steelman}`));
+  const labelled = (k, text) => { const p = el("p", "check-lead"); p.append(el("strong", null, `${k} `), document.createTextNode(text)); return p; };
+  for (const [k, text] of verdictLines(c)) body.append(labelled(k, text));
   if (c.figures && c.figures.length) body.append(statTiles(c.figures));
-  if (c.finding) body.append(el("p", "finding", c.finding));
   if (c.note) body.append(el("p", "check-note", c.note.charAt(0).toUpperCase() + c.note.slice(1)));
   if (c.evidence && c.evidence.length) {
+    body.append(el("p", "check-sub", "From the sources"));
     const ul = el("ul", "evidence");
-    for (const e of c.evidence) {
+    const SHOW = 3;
+    c.evidence.forEach((e, i) => {
+      if (i === SHOW) {
+        const more = el("li", "ev-more");
+        const b = el("button", "ev-more-btn", `Show ${c.evidence.length - SHOW} more`);
+        b.type = "button";
+        b.addEventListener("click", () => { ul.querySelectorAll(".ev-hidden").forEach(n => n.classList.remove("ev-hidden")); more.remove(); });
+        more.append(b);
+        ul.append(more);
+      }
       const li = el("li");
       li.append(el("span", "ev-quote", `\u201c${e.quote}\u201d`));
       const src = el("a", "ev-src", `${e.publisher}${e.published ? ", " + e.published : ""} \u2197`);
       src.href = e.url;
       src.rel = "noopener";
       li.append(src);
+      if (i >= SHOW) li.classList.add("ev-hidden");
       ul.append(li);
-    }
+    });
     body.append(ul);
   }
+  if (c.steelman && c.verdict !== "Holds up") body.append(labelled("Why it can sound right:", c.steelman));
   const by = [c.checked_by, c.second_opinion].filter(Boolean).map(m => MODEL_NAMES[m] || m).join(" and ");
   body.append(el("p", "check-meta", `Checked ${stamp(c.checked_at)} by ${by}. Every quote above was found on its source page.`));
   det.append(body);
@@ -923,9 +962,10 @@ function claimDetails(c, above) {
   // Missing context, said plainly and visible without a tap: what the claim leaves out.
   if (c.verdict === "Missing context") {
     wrap.classList.add("is-ctx");
-    if (c.left_out) {
+    const gap = (c.explain && c.explain.context) || c.left_out || (c.finding && (splitFinding(c.finding) || {}).missing);
+    if (gap) {
       const p = el("p", "left-out");
-      p.append(el("span", "left-out-k", "True, but left out: "), document.createTextNode(c.left_out));
+      p.append(el("span", "left-out-k", "True, but left out: "), document.createTextNode(gap));
       wrap.append(p);
     }
   }

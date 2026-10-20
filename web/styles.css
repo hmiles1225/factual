@@ -577,3 +577,11 @@ details[open] > summary::after { content: "\2212"; }
 .settings-close { position: sticky; top: 0; float: right; z-index: 1; display: grid; place-items: center; width: 40px; height: 40px; margin: -6px -8px 0 8px;
   padding: 0; border: 0; border-radius: 8px; background: var(--surf); color: var(--ink-2); cursor: pointer; }
 .settings-close:hover { background: var(--surf-2); color: var(--ink); }
+
+/* An opened check: the answer first, labelled; then the quotes; then why the claim can sound right. */
+.check-lead { margin: 0 0 8px; font: 400 0.9375rem/1.5 var(--sans); color: var(--ink-2); }
+.check-lead strong { color: var(--ink); font-weight: 600; }
+.check-sub { margin: 12px 0 4px; font: 700 0.75rem/1.2 var(--cond); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
+.ev-hidden { display: none; }
+.ev-more-btn { min-height: 36px; padding: 0; border: 0; background: none; color: var(--lav); font: 600 0.875rem/1 var(--cond); cursor: pointer; }
+.check:has(.check-row[open]) > .left-out { display: none; }  /* the opened check already says it */
