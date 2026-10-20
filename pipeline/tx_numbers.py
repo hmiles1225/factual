@@ -28,6 +28,7 @@ ROOT = Path(__file__).resolve().parent.parent
 LIVE_URL = "https://hestonmiles.com/factual/data/tx-numbers.json"
 OUT = ROOT / "data/tx-numbers.json"
 VERSION = "1"
+SQUASH_V = "2"           # 2: quotes compared on letters, digits and % only
 MONEY_V = "3"            # 2: governor accounts by TEC filer id, cash on hand only. 3: outside spending counted once, checked
 RECENT_DAYS = 30          # the polls drawn: fielded (end date) within this many days of the scan
 WIKI_API = "https://en.wikipedia.org/w/api.php"
@@ -289,8 +290,9 @@ NUMBER = re.compile(r"(?<![\d.])\d{1,2}(?:\.\d)?(?![\d])")
 
 
 def squash(t):
-    """Text and quotes compared the same way: casefolded, dot leaders and spacing collapsed."""
-    return re.sub(r"[\s.\u2026]{2,}", " ", C.norm(t))
+    """Text and quotes compared the same way: casefolded, letters, digits, decimal points and % only, single
+    spaces. PDF tables put dot leaders, column gaps and stray symbols between the words a quote keeps."""
+    return " ".join(re.findall(r"[a-z0-9%]+(?:\.\d+)?", C.norm(t)))
 
 
 def close(x, v):
@@ -588,6 +590,8 @@ def main():
         return 0
     live = load_live()
     cache = live.get("confirmed", {}) if live.get("version") == VERSION else {}
+    # Quotes from PDF tables failed an over-strict comparison until 2026-10-20 (squash): check those again.
+    cache = {k: v for k, v in cache.items() if v.get("why") != "the passage given is not in the release" or v.get("squash") == SQUASH_V}
     lib_path = ROOT / "data/library.json"
     lib = json.loads(lib_path.read_text()) if lib_path.exists() else None
     ask = charge = None
@@ -652,7 +656,7 @@ def main():
                     if ok is not None:
                         moe_ok = bool(p["moe"]) and abs((ans.get("moe") or 0) - p["moe"]) < 0.051 and f"{p['moe']:g}" in squash(text)
                         n_ok = bool(p["n"]) and ans.get("n") == p["n"]
-                        cache[key] = {"ok": ok, "why": why, "moe_ok": moe_ok, "n_ok": n_ok, "at": now.isoformat(timespec="seconds")}
+                        cache[key] = {"ok": ok, "why": why, "moe_ok": moe_ok, "n_ok": n_ok, "at": now.isoformat(timespec="seconds"), "squash": SQUASH_V}
                         print(f"  {rid} {p['pollster']} {p['pop']} {p['shares']}: {'confirmed' if ok else why}")
             got = cache.get(key)
             if got and got["ok"]:
@@ -681,6 +685,9 @@ def main():
                 money["at"], money["v"] = now.isoformat(timespec="seconds"), MONEY_V
             except Exception as e:
                 print(f"  {rid}: money not updated ({e})")
+                # Written to the file so a failure can be read without the Actions log (never the key itself).
+                money = dict(money or {}, error=f"{type(e).__name__}: {e}"[:200], error_at=now.isoformat(timespec="seconds"),
+                             fec_key_set=bool(os.environ.get("FEC_API_KEY")))
         out["races"][rid] = {
             "name": race["name"], "candidates": [{"name": c["name"], "party": c["party"]} for c in cands],
             "wiki": f"https://en.wikipedia.org/wiki/{race['wiki']}", "wiki_rev": rev,
