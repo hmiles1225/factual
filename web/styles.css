@@ -599,7 +599,8 @@ details[open] > summary::after { content: "\2212"; }
 .num-updated { margin: 20px 0 0; font: 400 0.75rem/1.4 var(--mono); color: var(--ink-3); }
 
 /* Forecast */
-.fc-row { display: flex; flex-wrap: wrap; gap: 8px 32px; align-items: baseline; }
+.fc-row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 32px; align-items: baseline; }
+.fc-cand + .fc-cand { align-items: flex-end; text-align: right; }  /* each number over its end of the bar */
 .fc-cand { display: flex; flex-direction: column; gap: 2px; }
 .fc-pct { font: 700 2.5rem/1 var(--mono); color: var(--ink); }
 .fc-cand + .fc-cand .fc-pct { color: var(--ink-2); }
