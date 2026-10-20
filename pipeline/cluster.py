@@ -196,15 +196,31 @@ def previous_ids():
 
 
 # The Texas demo edition: election coverage about Texas, from Texas outlets and national ones alike.
-TX_TEXT = re.compile(r"\b(Texas|Texan|Texans|Abbott|Paxton|Talarico|Cornyn|Dan Patrick|Austin|Houston|Dallas|San Antonio|El Paso|Fort Worth|Rio Grande)\b")
-ELECTION_TEXT = re.compile(r"\b(elections?|vote[sd]?|voters?|voting|ballots?|polls?|polling|campaign(s|ing)?|candidates?|race|ads?|attack ad|debates?|primary|runoff|midterms?|"
-                           r"turnout|Senate|governor|gubernatorial|attorney general|lieutenant governor|redistricting|congressional|GOP|Democrats?|Republicans?)\b", re.I)
+# An article is in only when it is about a Texas race, not when it merely mentions Texas and politics. Measured
+# 2026-10-20: the old rule (any Texas word, including city names, plus any of "Senate", "Republicans", "vote", or
+# an election-topic score above zero, which nearly every political article has) let in 13 of 41 off-topic
+# articles: a Temu settlement, a 9/11 plea deal, "Top 1940s Girl Names", "Tyler Austin Harper", the Spurs.
+TX_CHALLENGERS = re.compile(r"\b(Talarico|Hinojosa)\b")  # statewide challengers: national outlets cover them for the race
+TX_OFFICEHOLDERS = re.compile(r"\b(Paxton|Greg Abbott|Gov\. Abbott|Dan Patrick|Cornyn)\b")  # official acts are not the race
+TX_TITLE = re.compile(r"\b(Texas|Texans?)\b")  # in the headline, so a passing mention ("...and Texas") is not enough
+CAMPAIGN_TEXT = re.compile(r"\b(elections?|voters?|voting|ballots?|polls?|polling|campaign(s|ing|ed)?|candidates?|candidacy|"
+                           r"(Senate|governor'?s?|House|tight|close|statewide) race|race for|bids?|rall(y|ies)|endorse\w*|ads?|"
+                           r"debates?|primary|runoff|midterms?|turnout|redistrict\w*|congressional district|nominee)\b", re.I)
+
+
+def tx_admit(art, from_region):
+    """True when an article belongs in the Texas Election section."""
+    text = text_for(art)
+    if TX_CHALLENGERS.search(text):
+        return True
+    about_texas = from_region or TX_TITLE.search(art["title"]) or TX_OFFICEHOLDERS.search(text)
+    return bool(about_texas and CAMPAIGN_TEXT.search(text))
 TX_SID = "tx"  # Texas story ids start with this, so they never collide with a national story's id
 # Texas Election is grouped by race, not by event: one story per race, updated through Election Day. First match
 # wins, so an article on Paxton's Senate bid is a Senate story even though he is attorney general.
 TX_RACES = [
-    ("senate", "Texas Senate race: Talarico vs. Paxton", re.compile(r"\b(Senate|Paxton|Talarico|Cornyn)\b")),
-    ("governor", "Texas governor's race", re.compile(r"\b(governor|gubernatorial|Abbott)\b", re.I)),
+    ("senate", "Texas Senate race: Talarico vs. Paxton", re.compile(r"(?<!State )\b(Senate|Paxton|Talarico|Cornyn)\b")),  # not the state Senate
+    ("governor", "Texas governor's race", re.compile(r"\b(governor|gubernatorial|Abbott|Hinojosa)\b", re.I)),
     ("statewide", "Texas attorney general and lieutenant governor", re.compile(r"\b(attorney general|lieutenant governor|Dan Patrick)\b", re.I)),
     ("house", "Texas House races and redistricting", re.compile(r"\b(redistrict\w*|congressional|district|U\.S\. House)\b", re.I)),
     ("voting", "Voting in Texas: early voting, turnout and rules", re.compile(r"\b(early voting|turnout|ballots?|polling places?|voter rolls?|voter registration|mail-in|election officials?)\b", re.I)),
@@ -321,9 +337,7 @@ def main():
     # Texas Election: recent election coverage that is about Texas (or from a Texas outlet), grouped on its own.
     if tx_live:
         # A week of it: election stories build over days, and the demo runs to Election Day.
-        tx_ids = [i for i, a in enumerate(news) if hours(a) is not None
-                  and (a["source"] in region_of or TX_TEXT.search(text_for(a)))
-                  and (ELECTION_TEXT.search(text_for(a)) or art["elections"][i] > 0)]
+        tx_ids = [i for i, a in enumerate(news) if hours(a) is not None and tx_admit(a, a["source"] in region_of)]
         by_race = {}
         for i in tx_ids:
             key = next(k for k, _, rx in TX_RACES if rx.search(text_for(news[i])))
