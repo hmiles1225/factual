@@ -296,7 +296,7 @@ def headline_ok(h, facts):
         if n.rstrip(".,").casefold() not in low:
             return f"number {n} is not in the facts"
     words = h.split()
-    for w in words[1:]:  # capitalized words after the first: names, which must be in the facts
+    for w in words:  # capitalized words are names (the first word too: sentence case hides a leading name), so in the facts
         w = re.sub(r"[^\w'\u2019.-]", "", w).rstrip(".")
         if w[:1].isupper() and w.casefold().split("'")[0].split("\u2019")[0] not in low:
             return f"name {w} is not in the facts"
