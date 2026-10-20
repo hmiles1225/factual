@@ -169,7 +169,7 @@ SUPPORT_SCHEMA = _item({"established": {"type": "string", "enum": ["all", "part"
                        ["established", "missing"])
 LOADED_VERSION = "2"
 IMAGES_VERSION = "6"   # 2: aliases, transliterations, headline fallback; 3: no maps, flags, logos; 4: article pictures, nothing graphic
-ALT_VERSION = IMAGES_VERSION + ".2"   # .2: a backup never shares the first picture's surname
+ALT_VERSION = IMAGES_VERSION + ".3"   # .2: a backup never shares the first picture's surname; .3: on every path
 LOADED_SCHEMA = _item({"terms": {"type": "array", "items": _item({
     "term": {"type": "string", "description": "Copied exactly as the outlet wrote it."},
     "articles": _ints,
@@ -622,10 +622,12 @@ def main():
         """The story's picture, best first, skipping any subject in avoid (so a second call finds a different
         one): the main subject, a verified person named in the headline, the headline's actor from the shared
         facts, a Wikipedia article's picture, then any person the facts name."""
-        ok = lambda rec: bool(rec) and rec.get("subject") not in avoid
         # A backup picture never goes to someone who shares the first picture's surname (Melania Trump on a
         # Donald Trump story, 2026-10-19); a surname alone names someone only when no one else cached shares it.
+        # Checked in ok(), which every path uses: .2 checked only two paths, and the main subject path still
+        # picked Melania for the women's health story she led.
         avoid_last = {a.split()[-1] for a in avoid}
+        ok = lambda rec: bool(rec) and rec.get("subject") not in avoid and (rec.get("subject") or "?").split()[-1] not in avoid_last
         last_count = Counter(r["subject"].split()[-1] for k, r in images.items() if k.startswith("person:") and r)
         subj = brief.get("main_subject") or {}
         if subj.get("name") and subj.get("kind") in ("person", "organization", "place"):
