@@ -222,6 +222,7 @@ EXPLAIN_ASK = {  # what each line says, by verdict
 }
 EXPLAIN_PROMPT = """A fact-checker has checked this claim. Explain its verdict to a reader in two short, plain lines, using only
 facts in the checker's finding. No opinion, no judgment of anyone's motives, no "the claim" or "the statement".
+Never say why the claim sounds right, believable or credible, and never argue for it: only what the sources show.
 
 Claim: {claim}
 Verdict: {verdict}
@@ -813,6 +814,9 @@ def main():
                                      EXPLAIN_SCHEMA, "low")
             charge_gemini(usage)
             part, ctx = (out.get("part") or "").strip(), (out.get("context") or "").strip()
+            # Held to what readers were promised: the verdict's two plain lines, never a case for the claim.
+            pleading = re.compile(r"\b(sounds?|seems?|appears?) (right|true|credible|plausible|believable|reasonable)|\bcredib|\bwhy (it|this|people|some)\b|\bbelievab", re.I)
+            part, ctx = ("" if pleading.search(part) else part), ("" if pleading.search(ctx) else ctx)
             c["explain"] = {"part": part if len(part) <= 240 else "", "context": ctx if len(ctx) <= 280 else ""}
             if c["verdict"] == "Missing context":
                 c["left_out"] = c["explain"]["context"]
