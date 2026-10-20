@@ -59,7 +59,7 @@ GEMINI_DAILY_USD = 2.00          # summaries, checks, and searches past Google's
 TESTING_UNTIL = "2026-10-25"
 TESTING_GEMINI_USD, TESTING_ANTHROPIC_USD = 5.00, 2.00
 # One-off raises, approved by Heston for a specific date only. Expires by itself.
-GEMINI_EXTRA_USD = {"2026-10-19": 6.50}   # one-off, Heston 2026-10-19: fill the new sections, then write polls now; cap $8.50
+GEMINI_EXTRA_USD = {"2026-10-19": 7.00}   # one-off, Heston 2026-10-19: new sections, polls, then check explanations now; cap $9.00
 # Bump when the outlet list changes: a story whose outlets changed since its summary is re-summarized once.
 ROSTER_VERSION = "2026-10-19b"   # 35 outlets, 15 left / 15 right
 GEMINI_FREE_SEARCHES = 150      # Google gives 5,000 free a month across Gemini 3 models; ~150 a day
@@ -798,6 +798,28 @@ def main():
         return bool(shared)  # Today shows only what both sides report; no common ground, no slot
 
 
+    # Every verdict, explained plainly: which part holds, is false, or is missing, and what the sources show,
+    # from the checker's finding only. Once per claim. First in the scan: it is cheap, and readers see it on
+    # every check, so it should never wait behind summaries and new checks for the day's budget.
+    live_sids = {s["sid"] for s in data["stories"]}
+    for k in sorted(k for k, c in claims.items() if set(c.get("stories", [])) & live_sids):
+        c = claims.get(k)
+        ask = EXPLAIN_ASK.get((c or {}).get("verdict"))
+        if not c or not ask or not c.get("finding") or c.get("explain_v") == EXPLAIN_VERSION or not gemini_ok():
+            continue
+        try:
+            out, usage = gemini_json(EXPLAIN_PROMPT.replace("{claim}", c["claim"]).replace("{verdict}", c["verdict"])
+                                     .replace("{finding}", c["finding"][:1500]).replace("{part}", ask[0]).replace("{context}", ask[1]),
+                                     EXPLAIN_SCHEMA, "low")
+            charge_gemini(usage)
+            part, ctx = (out.get("part") or "").strip(), (out.get("context") or "").strip()
+            c["explain"] = {"part": part if len(part) <= 240 else "", "context": ctx if len(ctx) <= 280 else ""}
+            if c["verdict"] == "Missing context":
+                c["left_out"] = c["explain"]["context"]
+            c["explain_v"] = EXPLAIN_VERSION
+            print(f"  explained {c['verdict']}: {part[:60]} | {ctx[:60]}")
+        except Exception as e:
+            print(f"  explain failed: {e}")
     # Each topic: walk its ranking (stories covered by both left- and right-leaning outlets only) until
     # its quota has a real summary, trying at most EXTRA_CANDIDATES more. Only these appear on Today.
     both = lambda s: bool(s["coverage"].get("left")) and bool(s["coverage"].get("right"))
@@ -816,27 +838,6 @@ def main():
                 story["on_today"] = True
         print(f"  {topic}: {done} of {quota} on Today ({len(cands)} stories covered by both sides)")
 
-    # Every verdict, explained plainly: which part holds, is false, or is missing, and what the sources show,
-    # from the checker's finding only. Once per claim, for claims on stories on Today.
-    on_today_checks = {k for s in data["stories"] if s.get("on_today") for k in s.get("checks", [])}
-    for k in sorted(on_today_checks):
-        c = claims.get(k)
-        ask = EXPLAIN_ASK.get((c or {}).get("verdict"))
-        if not c or not ask or not c.get("finding") or c.get("explain_v") == EXPLAIN_VERSION or not gemini_ok():
-            continue
-        try:
-            out, usage = gemini_json(EXPLAIN_PROMPT.replace("{claim}", c["claim"]).replace("{verdict}", c["verdict"])
-                                     .replace("{finding}", c["finding"][:1500]).replace("{part}", ask[0]).replace("{context}", ask[1]),
-                                     EXPLAIN_SCHEMA, "low")
-            charge_gemini(usage)
-            part, ctx = (out.get("part") or "").strip(), (out.get("context") or "").strip()
-            c["explain"] = {"part": part if len(part) <= 240 else "", "context": ctx if len(ctx) <= 280 else ""}
-            if c["verdict"] == "Missing context":
-                c["left_out"] = c["explain"]["context"]
-            c["explain_v"] = EXPLAIN_VERSION
-            print(f"  explained {c['verdict']}: {part[:60]} | {ctx[:60]}")
-        except Exception as e:
-            print(f"  explain failed: {e}")
     write_archive([s for s in data["stories"] if s.get("on_today")], data.get("feeds", []))
     write_share_pages([s for s in data["stories"] if s.get("on_today")])
 
