@@ -859,6 +859,27 @@ function outletLinks(outlets, max) {
   return out;
 }
 
+// An account with no factual claim to check: a tag like a verdict's, in neutral grey (it isn't a judgment),
+// and the same short explanation every time. What differs is already in bold above, and loaded words are
+// called out below, so nothing is written about any one outlet's intent.
+function framingCheck() {
+  const wrap = el("div", "check check-framing");
+  const det = el("details", "check-row");
+  const sum = el("summary");
+  const c = el("span", "chip chip-frame");
+  c.append(el("span", "chip-glyph", "\u25C7"), el("span", "chip-word", "Framing"));
+  const why = el("span", "check-why", "See why");
+  why.insertAdjacentHTML("beforeend", '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>');
+  sum.append(c, why);
+  const body = el("div", "check-body");
+  const p = el("p", "check-lead");
+  p.append(el("strong", null, "Framing, not a factual claim. "), document.createTextNode("This side\u2019s account is a matter of emphasis or interpretation, so there\u2019s nothing to check."));
+  body.append(p);
+  det.append(sum, body);
+  wrap.append(det);
+  return wrap;
+}
+
 // A claim waiting for its check: the same chip shape as a verdict, and the claim itself unless it repeats the line above.
 function pendingCheck(claim, above) {
   const wrap = el("div", "check check-pending");
@@ -1029,7 +1050,7 @@ function differenceBlock(d, lib, leanOf) {
     const c = claimOf(lib, p.check);
     if (c) col.append(claimDetails(c, p.says));
     else if (p.checkable_claim) col.append(pendingCheck(p.checkable_claim, p.says));
-    else if (p.no_claim) col.append(el("p", "side-pending", "Framing, not a factual claim."));
+    else if (p.no_claim) col.append(framingCheck());
     cols.append(col);
   });
   art.append(cols);

@@ -585,3 +585,4 @@ details[open] > summary::after { content: "\2212"; }
 .ev-hidden { display: none; }
 .ev-more-btn { min-height: 36px; padding: 0; border: 0; background: none; color: var(--lav); font: 600 0.875rem/1 var(--cond); cursor: pointer; }
 .check:has(.check-row[open]) > .left-out { display: none; }  /* the opened check already says it */
+.chip-frame { background: var(--line); color: var(--ink); }  /* not a verdict: neutral grey, set apart from the row behind it */
