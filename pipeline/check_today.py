@@ -21,6 +21,7 @@ import json
 import os
 import re
 import sys
+import time
 import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
@@ -213,6 +214,8 @@ For each, give every article number that reports it. None is fine.
 Coverage:
 {coverage}"""
 EXPLAIN_VERSION = "1"
+EXPLAIN_PER_SCAN = 20     # explanations written per scan, six at a time
+RUN_BUDGET_S = 22 * 60    # after this, a scan starts no new AI work and saves
 EXPLAIN_SCHEMA = _item({"part": {"type": "string"}, "context": {"type": "string"}}, ["part", "context"])
 EXPLAIN_ASK = {  # what each line says, by verdict
     "Holds up": ("what in the claim the sources confirm", "leave empty"),
@@ -408,8 +411,14 @@ def main():
     more_day, more_scan = CLAIMS_EXTRA.get(today, (0, 0))
     new_per_day, new_per_scan = MAX_NEW_PER_DAY + more_day, MAX_NEW_PER_SCAN + more_scan
 
+    # A scan has RUN_BUDGET_S to start new AI work; after that it only saves what it has, so GitHub's time limit
+    # can never kill it before the library (and the day's spend) is written. 2026-10-19: four scans in a row ran
+    # past 30 minutes and were killed unsaved.
+    started = time.monotonic()
+    past_deadline = lambda: time.monotonic() - started > RUN_BUDGET_S
+
     def gemini_ok():
-        return spend["gemini_usd"] < gemini_cap
+        return spend["gemini_usd"] < gemini_cap and not past_deadline()
 
     def charge_gemini(usage, searches=0):
         paid = max(0, spend["gemini_searches"] + searches - GEMINI_FREE_SEARCHES) - max(0, spend["gemini_searches"] - GEMINI_FREE_SEARCHES)
@@ -497,7 +506,7 @@ def main():
         # Searches past Google's free allowance are paid, and charged to the Gemini cap (charge_gemini).
         # Start a check only with room for a worst-case one: the cap is checked before a check, but its
         # paid searches are charged after, and one overran the cap by $0.45 on 2026-10-19.
-        if state["new_this_scan"] >= new_per_scan or spend["new_claims"] >= new_per_day \
+        if past_deadline() or state["new_this_scan"] >= new_per_scan or spend["new_claims"] >= new_per_day \
                 or spend["gemini_usd"] + CHECK_RESERVE_USD > gemini_cap:
             return existing
         try:
@@ -803,27 +812,36 @@ def main():
     # from the checker's finding only. Once per claim. First in the scan: it is cheap, and readers see it on
     # every check, so it should never wait behind summaries and new checks for the day's budget.
     live_sids = {s["sid"] for s in data["stories"]}
-    for k in sorted(k for k, c in claims.items() if set(c.get("stories", [])) & live_sids):
-        c = claims.get(k)
-        ask = EXPLAIN_ASK.get((c or {}).get("verdict"))
-        if not c or not ask or not c.get("finding") or c.get("explain_v") == EXPLAIN_VERSION or not gemini_ok():
-            continue
-        try:
-            out, usage = gemini_json(EXPLAIN_PROMPT.replace("{claim}", c["claim"]).replace("{verdict}", c["verdict"])
-                                     .replace("{finding}", c["finding"][:1500]).replace("{part}", ask[0]).replace("{context}", ask[1]),
-                                     EXPLAIN_SCHEMA, "low")
-            charge_gemini(usage)
-            part, ctx = (out.get("part") or "").strip(), (out.get("context") or "").strip()
-            # Held to what readers were promised: the verdict's two plain lines, never a case for the claim.
-            pleading = re.compile(r"\b(sounds?|seems?|appears?) (right|true|credible|plausible|believable|reasonable)|\bcredib|\bwhy (it|this|people|some)\b|\bbelievab", re.I)
-            part, ctx = ("" if pleading.search(part) else part), ("" if pleading.search(ctx) else ctx)
-            c["explain"] = {"part": part if len(part) <= 240 else "", "context": ctx if len(ctx) <= 280 else ""}
-            if c["verdict"] == "Missing context":
-                c["left_out"] = c["explain"]["context"]
-            c["explain_v"] = EXPLAIN_VERSION
-            print(f"  explained {c['verdict']}: {part[:60]} | {ctx[:60]}")
-        except Exception as e:
-            print(f"  explain failed: {e}")
+    todo = [k for k, c in sorted(claims.items()) if set(c.get("stories", [])) & live_sids and c.get("finding")
+            and EXPLAIN_ASK.get(c.get("verdict")) and c.get("explain_v") != EXPLAIN_VERSION][:EXPLAIN_PER_SCAN]
+
+    def explain(k):
+        c = claims[k]
+        ask = EXPLAIN_ASK[c["verdict"]]
+        out, usage = gemini_json(EXPLAIN_PROMPT.replace("{claim}", c["claim"]).replace("{verdict}", c["verdict"])
+                                 .replace("{finding}", c["finding"][:1500]).replace("{part}", ask[0]).replace("{context}", ask[1]),
+                                 EXPLAIN_SCHEMA, "low")
+        return k, out, usage
+
+    if todo and gemini_ok():
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            for fut in [pool.submit(explain, k) for k in todo]:
+                try:
+                    k, out, usage = fut.result()
+                except Exception as e:
+                    print(f"  explain failed: {e}")
+                    continue
+                charge_gemini(usage)
+                c = claims[k]
+                part, ctx = (out.get("part") or "").strip(), (out.get("context") or "").strip()
+                # Held to what readers were promised: the verdict's two plain lines, never a case for the claim.
+                pleading = re.compile(r"\b(sounds?|seems?|appears?) (right|true|credible|plausible|believable|reasonable)|\bcredib|\bwhy (it|this|people|some)\b|\bbelievab", re.I)
+                part, ctx = ("" if pleading.search(part) else part), ("" if pleading.search(ctx) else ctx)
+                c["explain"] = {"part": part if len(part) <= 240 else "", "context": ctx if len(ctx) <= 280 else ""}
+                if c["verdict"] == "Missing context":
+                    c["left_out"] = c["explain"]["context"]
+                c["explain_v"] = EXPLAIN_VERSION
+        print(f"  explained {len(todo)} checks")
     # Each topic: walk its ranking (stories covered by both left- and right-leaning outlets only) until
     # its quota has a real summary, trying at most EXTRA_CANDIDATES more. Only these appear on Today.
     both = lambda s: bool(s["coverage"].get("left")) and bool(s["coverage"].get("right"))

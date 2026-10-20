@@ -25,7 +25,7 @@ permissions:
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40   # check_today stops new AI work at 22 minutes and saves; this is the margin
     env:
       FASTEMBED_CACHE_PATH: ${{ github.workspace }}/.fastembed
     steps:
