@@ -1,6 +1,6 @@
 /* fACTUAL, Direction C "Instrument" (Figma AU7aaZm109MOZR5fq3y9kd, section 08: 113:6, 113:75).
    Dark, data-first: the numbers lead. One brand purple in two shades: lavender for text and marks
-   on dark, the deep purple for fills under white text. Yellow and vermilion are verdicts only.
+   on dark, the deep purple for fills under white text. Green, amber and vermilion are verdicts only.
    Three voices: Barlow Semi Condensed = fACTUAL's labels and headlines, Barlow = reading,
    JetBrains Mono = numbers and receipts. */
 
@@ -23,8 +23,12 @@
   --ink-3: #858C95;   /* 5.5:1 on bg, 5.1:1 on surf */
   --lav: #9D8FF0;     /* brand purple for text and marks on dark: 6.9:1 on bg, 6.3:1 on surf */
   --brand: #4B3A9E;   /* brand purple for fills; white text on it is 8.8:1 */
-  --hi: #F5E663;      /* Confirmed, and nothing else */
-  --verm: #B3261E;    /* Doesn't hold up, and nothing else */
+  /* Verdict colours, each meaning one verdict and nothing else (Heston, 2026-10-19: yellow read as caution, a dashed
+     edge was easy to miss). Green leans blue so it stays apart from the red for red-green colour blindness
+     (deutan dE 8.0); the glyph and the word always go with the colour. */
+  --ok: #047857;      /* Confirmed (shown "Confirmed"): white text 5.5:1 */
+  --warn: #F0A92B;    /* Missing context (shown "Misleading"): dark ink 9.2:1 */
+  --verm: #B3261E;    /* Doesn't hold up (shown "False"): white text 6.5:1 */
   --cond: "Barlow Semi Condensed", "Arial Narrow", system-ui, sans-serif;
   --sans: "Barlow", system-ui, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, monospace;
@@ -320,8 +324,8 @@ figcaption a:hover { text-decoration: underline; }
 
 /* Verdict chips: glyph + word, never color alone */
 .chip { display: inline-flex; align-items: center; gap: 5px; justify-self: start; padding: 2px 8px; border-radius: 5px; font: 700 0.75rem/1.4 var(--cond); letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; }
-.chip-hold { background: var(--hi); color: #111316; }  /* dark ink on yellow in both themes: 14.5:1 */
-.chip-ctx { border: 1.5px dashed var(--ink-2); color: var(--ink); padding: 0.5px 6.5px; }
+.chip-hold { background: var(--ok); color: #fff; }       /* the same in both themes */
+.chip-ctx { background: var(--warn); color: #111316; }
 .chip-no { background: var(--verm); color: #fff; }
 .chip-unk { border: 1.5px solid var(--ink-3); color: var(--ink); padding: 0.5px 6.5px; }
 

@@ -117,8 +117,8 @@ function chip(verdict) {
 }
 
 
-/* ---------- Charts: built only from data the scan has. Ink and gray only: yellow and
-   vermilion mean Holds up and Doesn't hold up, so a chart never borrows them. ---------- */
+/* ---------- Charts: built only from data the scan has. Ink, gray and the brand purple only: green, amber and
+   vermilion are verdict colours, so a chart never borrows them. ---------- */
 const SVGNS = "http://www.w3.org/2000/svg";
 const svgEl = (tag, attrs = {}) => {
   const n = document.createElementNS(SVGNS, tag);
