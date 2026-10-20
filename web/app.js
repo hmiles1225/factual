@@ -914,8 +914,7 @@ function claimDetails(c, above) {
   why.insertAdjacentHTML("beforeend", '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>');
   sum.append(why);
   det.append(sum);
-  // Opened, a check answers first and supports second: what the sources show (for Misleading, what is true
-  // and what is left out), then the quotes, then why the claim can sound right.
+  // Opened, a check answers first and supports second: the two plain lines for its verdict, then the quotes.
   const body = el("div", "check-body");
   const labelled = (k, text) => { const p = el("p", "check-lead"); p.append(el("strong", null, `${k} `), document.createTextNode(text)); return p; };
   for (const [k, text] of verdictLines(c)) body.append(labelled(k, text));
@@ -945,7 +944,6 @@ function claimDetails(c, above) {
     });
     body.append(ul);
   }
-  if (c.steelman && c.verdict !== "Holds up") body.append(labelled("Why it can sound right:", c.steelman));
   const by = [c.checked_by, c.second_opinion].filter(Boolean).map(m => MODEL_NAMES[m] || m).join(" and ");
   body.append(el("p", "check-meta", `Checked ${stamp(c.checked_at)} by ${by}. Every quote above was found on its source page.`));
   det.append(body);
