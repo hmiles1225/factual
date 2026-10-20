@@ -334,7 +334,10 @@ function brokeAgo(s) {
 // Photo subjects already on the home page, top to bottom. A repeat uses the story's second picture, or none.
 let SHOWN = new Set();
 function photoFor(story) {
-  for (const img of [story.image, story.image_alt]) if (img && !SHOWN.has(img.subject)) { SHOWN.add(img.subject); return img; }
+  const last = n => (n || "").split(" ").pop();
+  // A backup never shares the first picture's surname (Melania Trump on a Donald Trump story).
+  const alt = story.image_alt && story.image && last(story.image_alt.subject) === last(story.image.subject) ? null : story.image_alt;
+  for (const img of [story.image, alt]) if (img && !SHOWN.has(img.subject)) { SHOWN.add(img.subject); return img; }
   return null;
 }
 
