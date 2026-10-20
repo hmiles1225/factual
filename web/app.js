@@ -1544,7 +1544,8 @@ function renderStory(data) {
   top.classList.add("share-top");
   top.setAttribute("aria-label", "Share this story");
   document.querySelector(".mast-right").prepend(top);
-  $("story-sub").append(el("p", "byline", `Headline \u00b7 ${lead(story).source}`));
+  // A Texas race story's headline is written by us from the facts both sides report, so no outlet is credited.
+  $("story-sub").append(el("p", "byline", story.headline_by === "fACTUAL" ? "Headline by fACTUAL, from facts outlets on both sides report" : `Headline \u00b7 ${lead(story).source}`));
   if (story.image) $("story-sub").append(figure(story.image, "story-photo"));
 
   const brief = story.brief;

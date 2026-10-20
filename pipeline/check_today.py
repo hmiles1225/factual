@@ -271,6 +271,38 @@ The checker's finding: {finding}
 
 part (at most 25 words): {part}
 context (at most 30 words): {context}"""
+# Texas race stories are grouped by race, so they have no outlet headline of their own: the race's label was the
+# title ("Texas Senate race: Paxton vs. Talarico"). Heston, 2026-10-20: headlines must be specific to the story.
+# Written from the facts outlets on both sides report, kept as "<race>: <what happened>", and held in code to
+# those facts: every name and number must appear in them. Else the label stays.
+HEADLINE_VERSION = "1"
+HEADLINE_SCHEMA = _item({"headline": {"type": "string"}}, ["headline"])
+HEADLINE_PROMPT = """Write a news headline for the latest in this Texas election race, using only the facts below, which
+outlets on both the left and the right report. Rules: at most 11 words; plain, neutral words; what happened, newest
+first; only names and numbers that appear in the facts; no quotation marks, no colon, no question; never say who is
+winning unless a fact says so; sentence case. The race's name is added in front, so don't repeat it.
+
+Race: {race}
+Facts:
+{facts}"""
+
+
+def headline_ok(h, facts):
+    """Why a race headline can't be used, or None."""
+    if not h or len(h) > 90 or re.search(r"[:\"?\u201c\u201d]", h):
+        return "too long, or has a colon, quotes or a question"
+    low = facts.casefold()
+    for n in re.findall(r"\d[\d,.]*%?", h):
+        if n.rstrip(".,").casefold() not in low:
+            return f"number {n} is not in the facts"
+    words = h.split()
+    for w in words[1:]:  # capitalized words after the first: names, which must be in the facts
+        w = re.sub(r"[^\w'\u2019.-]", "", w).rstrip(".")
+        if w[:1].isupper() and w.casefold().split("'")[0].split("\u2019")[0] not in low:
+            return f"name {w} is not in the facts"
+    return None
+
+
 POLL_VERSION = "1"
 POLL_SCHEMA = _item({"polls": {"type": "array", "items": _item({
     "question": {"type": "string", "description": "The question as a reader would answer it, neutral, at most 25 words."},
@@ -843,6 +875,26 @@ def main():
             if not a.get("check"):
                 a["check"] = check_claim(a["assertion"], story["sid"], a["outlets"])
         story["brief"] = brief
+        if story.get("region") == "tx":
+            label = story.setdefault("race_label", story["working_title"])
+            if brief.get("headline_v") != HEADLINE_VERSION and gemini_ok():
+                facts = [f["fact"] for f in brief["agreed"] if "left" in f["sides"] and "right" in f["sides"]]
+                brief["headline_v"], brief["headline"] = HEADLINE_VERSION, None
+                if facts:
+                    race = label.split(":")[0]
+                    try:
+                        out, usage = gemini_json(HEADLINE_PROMPT.replace("{race}", race).replace("{facts}", "\n".join(f"- {f}" for f in facts)), HEADLINE_SCHEMA, "low")
+                        charge_gemini(usage)
+                        h = (out.get("headline") or "").strip().rstrip(".")
+                        why = headline_ok(h, " ".join(facts) + " " + race)
+                        if why:
+                            print(f"  headline dropped ({why}): {h}")
+                        else:
+                            brief["headline"] = f"{race}: {h[:1].upper()}{h[1:]}"
+                    except Exception as e:
+                        print(f"  headline failed: {e}")
+            if brief.get("headline"):
+                story["working_title"], story["headline_by"] = brief["headline"], "fACTUAL"
         story["checks"] = [k for d in brief["differences"] for k in [d.get("check")] + [p.get("check") for p in d["positions"]] if k] \
             + [a["check"] for a in brief.get("ad_claims", []) if a.get("check")]
         # A picture approved for this summary is kept: stable from scan to scan, and no lookup or check repeats
