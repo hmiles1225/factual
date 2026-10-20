@@ -60,7 +60,7 @@ GEMINI_DAILY_USD = 2.00          # summaries, checks, and searches past Google's
 TESTING_UNTIL = "2026-10-25"
 TESTING_GEMINI_USD, TESTING_ANTHROPIC_USD = 5.00, 2.00
 # One-off raises, approved by Heston for a specific date only. Expires by itself.
-GEMINI_EXTRA_USD = {"2026-10-19": 7.00}   # one-off, Heston 2026-10-19: new sections, polls, then check explanations now; cap $9.00
+GEMINI_EXTRA_USD = {"2026-10-19": 8.00}   # one-off, Heston 2026-10-19: new sections, polls, explanations, Texas races; cap $10.00
 # Bump when the outlet list changes: a story whose outlets changed since its summary is re-summarized once.
 ROSTER_VERSION = "2026-10-19b"   # 35 outlets, 15 left / 15 right
 GEMINI_FREE_SEARCHES = 150      # Google gives 5,000 free a month across Gemini 3 models; ~150 a day
