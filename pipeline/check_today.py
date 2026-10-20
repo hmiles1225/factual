@@ -24,6 +24,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
@@ -168,6 +169,7 @@ SUPPORT_SCHEMA = _item({"established": {"type": "string", "enum": ["all", "part"
                        ["established", "missing"])
 LOADED_VERSION = "2"
 IMAGES_VERSION = "6"   # 2: aliases, transliterations, headline fallback; 3: no maps, flags, logos; 4: article pictures, nothing graphic
+ALT_VERSION = IMAGES_VERSION + ".2"   # .2: a backup never shares the first picture's surname
 LOADED_SCHEMA = _item({"terms": {"type": "array", "items": _item({
     "term": {"type": "string", "description": "Copied exactly as the outlet wrote it."},
     "articles": _ints,
@@ -587,6 +589,10 @@ def main():
         one): the main subject, a verified person named in the headline, the headline's actor from the shared
         facts, a Wikipedia article's picture, then any person the facts name."""
         ok = lambda rec: bool(rec) and rec.get("subject") not in avoid
+        # A backup picture never goes to someone who shares the first picture's surname (Melania Trump on a
+        # Donald Trump story, 2026-10-19); a surname alone names someone only when no one else cached shares it.
+        avoid_last = {a.split()[-1] for a in avoid}
+        last_count = Counter(r["subject"].split()[-1] for k, r in images.items() if k.startswith("person:") and r)
         subj = brief.get("main_subject") or {}
         if subj.get("name") and subj.get("kind") in ("person", "organization", "place"):
             ikey = f"{subj['kind']}:{subj['name'].casefold()}"
@@ -605,14 +611,16 @@ def main():
                 continue
             full = rec["subject"]
             last = full.split()[-1]
-            if re.search(rf"\b{re.escape(full)}\b", title) or (len(last) >= 5 and re.search(rf"\b{re.escape(last)}\b", title)):
+            if last in avoid_last:
+                continue
+            if re.search(rf"\b{re.escape(full)}\b", title) or (len(last) >= 5 and last_count[last] == 1 and re.search(rf"\b{re.escape(last)}\b", title)):
                 return rec
         # The headline's actor: a full name from the shared facts whose surname is in the headline ("Trump
         # Says ..." -> Donald Trump). Heston: a person the headline is about beats a picture of the place.
         facts_text = " ".join(f["fact"] for f in brief["agreed"] if "left" in f["sides"] and "right" in f["sides"])
         for name in person_names(facts_text)[:6]:
             last = name.split()[-1]
-            if len(last) >= 4 and re.search(rf"\b{re.escape(last)}\b", title) and ok(person(name)):
+            if last not in avoid_last and len(last) >= 4 and re.search(rf"\b{re.escape(last)}\b", title) and ok(person(name)):
                 return person(name)
         if brief.get("img_v") != IMAGES_VERSION and gemini_ok():
             # Ask once which Wikipedia articles' main pictures would illustrate the story (for an Ebola story,
@@ -639,7 +647,7 @@ def main():
         # they are in sentence case, so capitalized runs are names; headlines are in title case.
         text = " ".join([f["fact"] for f in brief["agreed"] if "left" in f["sides"] and "right" in f["sides"]][:3] + [title])
         for name in person_names(text)[:6]:
-            if ok(person(name)):
+            if name.split()[-1] not in avoid_last and ok(person(name)):
                 return person(name)
         return None
 
@@ -799,9 +807,9 @@ def main():
         story["image"] = brief.get("image") if brief.get("image_v") == IMAGES_VERSION else None
         # A second picture of a different subject, for when the home page has already shown the first one
         # higher up (two Trump portraits in two sections). Found once, like the first.
-        if story["image"] and brief.get("image_alt_v") != IMAGES_VERSION:
+        if story["image"] and brief.get("image_alt_v") != ALT_VERSION:
             brief["image_alt"] = find_image(story, brief, avoid={story["image"]["subject"]})
-            brief["image_alt_v"] = IMAGES_VERSION
+            brief["image_alt_v"] = ALT_VERSION
         story["image_alt"] = brief.get("image_alt") if story["image"] else None
         shared = [f for f in brief["agreed"] if "left" in f["sides"] and "right" in f["sides"]]
         print(f"  {story['sid']} [{story['topic']}]: {len(shared)} common ground of {len(brief['agreed'])} agreed, {len(brief['differences'])} differences")
