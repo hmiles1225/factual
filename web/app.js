@@ -1123,6 +1123,321 @@ function loadedItem(t, side) {
   return li;
 }
 
+/* ---------- Texas race numbers (data/tx-numbers.json, written by pipeline/tx_numbers.py) ----------
+   The Senate and governor race pages carry the race's numbers: the forecast, every poll from the last 30 days
+   that we confirmed against its pollster's release, the published averages, which polls each side's outlets
+   reported, how far Texas polls have missed before, and the money. No party colours: candidates are told
+   apart by name and by side of the tie line (the Democrat's lead to the left, the Republican's to the right,
+   as on the outlet spectrum). Every number is text in the page; the tracks only draw it. */
+const RACE_PAGES = ["tx-senate", "tx-governor"];
+const surname = c => c.name.split(" ").pop();
+const pts = x => { const r = Math.round(Math.abs(x) * 10) / 10; return Number.isInteger(r) ? String(r) : r.toFixed(1); };
+// shares are [first candidate (Republican, ballot order), second]; a positive gap is the first one ahead.
+const gapOf = sh => sh[0] - sh[1];
+function gapText(gap, cands) {
+  if (Math.abs(gap) < 0.05) return "Tied";
+  return `${surname(cands[gap > 0 ? 0 : 1])} +${pts(gap)}`;
+}
+const usd = v => v == null ? "–" : v >= 1e6 ? `$${(v / 1e6).toFixed(v >= 1e8 ? 0 : 1)}M` : v >= 1e3 ? `$${Math.round(v / 1e3)}K` : `$${Math.round(v)}`;
+const shortDate = iso => new Date(`${iso}T12:00:00`).toLocaleDateString([], { month: "short", day: "numeric" });
+function basedOn(text, link, href) {
+  // Heston's basis rule: what a number is based on sits right where it appears, never in a footnote.
+  const p = el("p", "num-basis");
+  p.append(el("strong", null, "Based on "), document.createTextNode(text));
+  if (link) { p.append(document.createTextNode(" ")); const a = el("a", null, `${link} ↗`); a.href = href; a.rel = "noopener"; p.append(a); }
+  return p;
+}
+// A track: the tie line in the middle, a dot at the gap, and (for a poll) a whisker as wide as its margin of
+// error on the gap. Positions are percentages, so it needs no redrawing at any width.
+function track(gap, moe, max, cls) {
+  const t = el("div", `num-track ${cls || ""}`);
+  t.setAttribute("aria-hidden", "true");
+  const at = v => `${50 + 50 * Math.max(-1, Math.min(1, v / max))}%`;
+  t.append(el("i", "num-tie"));
+  if (moe) {
+    const w = el("i", "num-whisker");
+    w.style.left = at(gap - moe);
+    w.style.right = `calc(100% - ${at(gap + moe)})`;
+    t.append(w);
+  }
+  const d = el("i", "num-dot");
+  d.style.left = at(gap);
+  t.append(d);
+  return t;
+}
+function trackAxis(max, cands) {
+  const ax = el("div", "num-axis");
+  ax.setAttribute("aria-hidden", "true");
+  const half = Math.round(max / 2);
+  for (const [v, t] of [[-max, String(max)], [-half, String(half)], [0, "Tie"], [half, String(half)], [max, String(max)]]) {
+    const s = el("span", null, t);
+    s.style.left = `${50 + 50 * v / max}%`;
+    ax.append(s);
+  }
+  const sides = el("div", "num-sides");
+  sides.setAttribute("aria-hidden", "true");
+  sides.append(el("span", null, `← ${surname(cands[1])} ahead`), el("span", null, `${surname(cands[0])} ahead →`));
+  const wrap = el("div", "num-axis-wrap");
+  wrap.append(sides, ax);
+  return wrap;
+}
+
+function forecastBlock(f, cands) {
+  const box = el("div", "num-forecast");
+  box.append(el("h3", "num-h", "Chance of winning"));
+  const row = el("div", "fc-row");
+  const order = [0, 1].sort((a, b) => f.chance[b] - f.chance[a]);
+  for (const i of order) {
+    const c = el("div", "fc-cand");
+    c.append(el("span", "fc-pct", `${f.chance[i]}%`), el("span", "fc-name", `${cands[i].name} (${cands[i].party})`));
+    row.append(c);
+  }
+  box.append(row);
+  const bar = el("div", "fc-bar");
+  bar.setAttribute("aria-hidden", "true");
+  for (const i of order) { const s = el("i"); s.style.flexGrow = f.chance[i]; bar.append(s); }
+  box.append(bar);
+  box.append(basedOn(f.method));
+  box.append(el("p", "num-note", "A forecast is arithmetic on the polls, not a fact check."));
+  return box;
+}
+
+function pollsBlock(r, cands, recentDays) {
+  const box = el("div", "num-polls");
+  box.append(el("h3", "num-h", `Polls · last ${recentDays} days`));
+  const polls = r.polls;
+  if (!polls.length) {
+    box.append(el("p", "num-note", "No poll from the last 30 days is confirmed against its pollster's release yet. Checking continues every hour."));
+  } else {
+    const inside = polls.filter(p => p.lead_moe && Math.abs(gapOf(p.shares)) <= p.lead_moe).length;
+    const measured = polls.filter(p => p.lead_moe).length;
+    box.append(el("p", "num-lede", measured === inside
+      ? `In all ${plural(measured, "poll", "polls")} with a stated margin of error, the gap is inside that margin, so no single poll shows a clear leader.`
+      : (() => {
+        const out = polls.filter(p => p.lead_moe && Math.abs(gapOf(p.shares)) > p.lead_moe);
+        const named = out.length <= 3 ? ` (${out.map(p => `${p.pollster}, ${gapText(gapOf(p.shares), cands)}`).join("; ")})` : "";
+        return `In ${inside} of ${plural(measured, "poll", "polls")} with a stated margin of error, the gap is inside that margin. In ${out.length}${named}, the lead is bigger than the margin.`;
+      })()));
+  }
+  const all = [...polls.map(p => Math.abs(gapOf(p.shares)) + (p.lead_moe || 0)), ...r.averages.map(a => Math.abs(gapOf(a.shares)))];
+  const max = Math.max(10, Math.ceil(Math.max(0, ...all) / 10) * 10);  // ticks at the ends and halfway: whole numbers
+  if (polls.length) {
+    box.append(trackAxis(max, cands));
+    const ul = el("ul", "num-rows");
+    for (const p of polls) {
+      const li = el("li", `num-row${p.one_side ? " is-side" : ""}`);
+      const who = el("div", "num-who");
+      const name = p.url ? el("a", "num-name", p.pollster) : el("span", "num-name", p.pollster);
+      if (p.url) { name.href = p.url; name.rel = "noopener"; }
+      const meta = [p.dates.replace(/, \d{4}$/, ""), p.n ? `${p.n.toLocaleString()} ${p.pop === "RV" ? "registered" : p.pop === "LV" ? "likely" : ""} voters`.replace("  ", " ") : (p.pop === "RV" ? "registered voters" : p.pop === "LV" ? "likely voters" : "")].filter(Boolean);
+      if (p.affiliation === "R" || p.affiliation === "D") meta.push(`${p.affiliation === "R" ? "Republican" : "Democratic"}-affiliated pollster`);
+      who.append(name, el("span", "num-meta", meta.join(" · ")));
+      if (p.client) who.append(el("span", `num-client${p.one_side ? " is-side" : ""}`, p.client));
+      const val = el("div", "num-val");
+      val.append(el("span", "num-gap", gapText(gapOf(p.shares), cands)),
+        el("span", "num-moe", p.lead_moe ? `±${pts(p.lead_moe)} on the gap` : "margin not stated"));
+      li.append(who, track(gapOf(p.shares), p.lead_moe, max, p.one_side ? "hollow" : ""), val);
+      ul.append(li);
+    }
+    box.append(ul);
+    const key = el("div", "spectrum-legend");
+    for (const [cls, t] of [["fill", "Independent poll"], ["hollow", "Paid for by a campaign or a group backing one"], ["bar", "Margin of error on the gap"]]) {
+      const k = el("span", "key"); k.append(el("i", cls === "bar" ? "num-key-bar" : `dot ${cls}`), el("span", null, t)); key.append(k);
+    }
+    box.append(key);
+    box.append(basedOn(`polls listed on Wikipedia, each shown only when our own read of the pollster's release finds the same numbers. A poll's stated margin of error applies to each candidate; on the gap between them it is about twice as large, computed from the poll's own numbers.`,
+      "Wikipedia's list", r.wiki));
+  }
+  if (r.unconfirmed.length) {
+    const det = el("details", "num-more");
+    det.append(el("summary", null, `${plural(r.unconfirmed.length, "more poll", "more polls")} we could not confirm`));
+    const ul = el("ul", "num-unconf");
+    for (const u of r.unconfirmed) {
+      const li = el("li");
+      li.append(el("span", "num-name", u.pollster), el("span", "num-meta", `${u.dates} · ${u.why}`));
+      ul.append(li);
+    }
+    det.append(ul);
+    box.append(det);
+  }
+  // The published averages, on the same scale.
+  if (r.averages.length) {
+    const ab = el("div", "num-avgs");
+    ab.append(el("h3", "num-h", "Published averages"));
+    const gaps = r.averages.map(a => gapOf(a.shares));
+    const lo = Math.min(...gaps), hi = Math.max(...gaps);
+    ab.append(el("p", "num-lede", lo * hi > 0
+      ? `All ${r.averages.length} put ${surname(cands[hi > 0 ? 0 : 1])} ahead, by ${pts(Math.min(Math.abs(lo), Math.abs(hi)))} to ${pts(Math.max(Math.abs(lo), Math.abs(hi)))} points.`
+      : `They disagree on who is ahead: from ${gapText(lo, cands)} to ${gapText(hi, cands)}.`));
+    ab.append(trackAxis(max, cands));
+    const ul = el("ul", "num-rows");
+    for (const a of r.averages) {
+      const li = el("li", "num-row");
+      const who = el("div", "num-who");
+      const name = a.url ? el("a", "num-name", a.source) : el("span", "num-name", a.source);
+      if (a.url) { name.href = a.url; name.rel = "noopener"; }
+      who.append(name, el("span", "num-meta", `Updated ${a.updated.replace(/, \d{4}$/, "")}`));
+      const val = el("div", "num-val");
+      val.append(el("span", "num-gap", gapText(gapOf(a.shares), cands)), el("span", "num-moe", `${pts(a.shares[0])} to ${pts(a.shares[1])}`));
+      li.append(who, track(gapOf(a.shares), null, max, "avg"), val);
+      ul.append(li);
+    }
+    ab.append(ul);
+    ab.append(basedOn("each publisher's own average, as listed on Wikipedia with a link to the publisher. Most of these sites refuse automated readers, so we could not read them ourselves.", "Wikipedia's list", r.wiki));
+    box.append(ab);
+  }
+  return box;
+}
+
+function citedBlock(r, cands) {
+  const box = el("div", "num-cited");
+  box.append(el("h3", "num-h", "Which polls each side reported"));
+  const cited = r.cited || [];
+  const by = side => cited.filter(c => c.side === side);
+  if (!cited.length) {
+    box.append(el("p", "num-note", "No article in this race's coverage has named a poll yet."));
+    return box;
+  }
+  const since = cited.map(c => c.day).filter(Boolean).sort()[0];
+  const sum = side => {
+    const list = by(side);
+    if (!list.length) return `${side === "left" ? "Left" : "Right"}-leaning outlets: no poll named.`;
+    const lead = i => list.filter(c => Math.sign(gapOf(c.shares)) === (i === 0 ? 1 : -1)).length;
+    const tied = list.filter(c => Math.abs(gapOf(c.shares)) < 0.05).length;
+    return `${side === "left" ? "Left" : "Right"}-leaning outlets named ${plural(list.length, "poll", "polls")}: ${surname(cands[1])} ahead in ${lead(1)}, ${surname(cands[0])} ahead in ${lead(0)}${tied ? `, tied in ${tied}` : ""}.`;
+  };
+  box.append(el("p", "num-lede", `${sum("left")} ${sum("right")}`));
+  const cols = el("div", "num-cols");
+  for (const side of ["left", "right"]) {
+    const col = el("div", "num-col");
+    col.append(el("p", "num-col-h", side === "left" ? "Left-leaning outlets" : "Right-leaning outlets"));
+    const ul = el("ul", "num-cite-list");
+    for (const c of by(side)) {
+      const li = el("li");
+      li.append(el("span", "num-cite-poll", `${c.pollster} · ${gapText(gapOf(c.shares), cands)}`));
+      const a = el("a", null, c.title);
+      a.href = c.url; a.rel = "noopener";
+      const by2 = el("span", "num-cite-by", `${c.outlet}${c.day ? ` · ${shortDate(c.day)}` : ""}: `);
+      by2.append(a);
+      li.append(by2);
+      ul.append(li);
+    }
+    if (!by(side).length) ul.append(el("li", "num-note", "None yet."));
+    col.append(ul);
+    cols.append(col);
+  }
+  box.append(cols);
+  const center = cited.filter(c => c.side !== "left" && c.side !== "right").length;
+  box.append(basedOn(`headlines and summaries in the coverage we read${since ? ` since ${shortDate(since)}` : ""} that name a pollster, matched in code to that pollster's latest poll at the time.${center ? ` ${plural(center, "article", "articles")} from center or unplaced outlets not shown.` : ""}`));
+  return box;
+}
+
+function historyBlock(h, f, cands) {
+  const box = el("div", "num-history");
+  box.append(el("h3", "num-h", "How far Texas polls have missed"));
+  const races = h.races;
+  const better = races.filter(r => r.miss > 0).length, worse = races.filter(r => r.miss < 0).length;
+  const lead = f ? Math.abs(f.center) : null;
+  box.append(el("p", "num-lede", `Since 2016 the final polling average missed by ${pts(h.typical_miss)} points on average, in both directions: the Republican did better than the polls in ${better} of ${races.length} races and worse in ${worse}.`
+    + (lead != null ? ` Today's lead, ${pts(lead)} points, is ${lead < h.typical_miss ? "smaller than" : "bigger than"} that.` : "")));
+  const max = Math.max(5, Math.ceil(Math.max(...races.map(r => Math.abs(r.miss))) / 5) * 5);
+  const sides = el("div", "num-sides");
+  sides.setAttribute("aria-hidden", "true");
+  sides.append(el("span", null, "← Democrat beat the polls"), el("span", null, "Republican beat the polls →"));
+  box.append(sides);
+  const ul = el("ul", "num-rows num-hist");
+  for (const r of [...races].reverse()) {
+    const li = el("li", "num-row");
+    const who = el("div", "num-who");
+    who.append(el("span", "num-name", `${r.year} · ${r.office}`), el("span", "num-meta", `${r.r.split(" ").pop()} (R) vs. ${r.d.split(" ").pop()} (D)`));
+    const t = el("div", "num-track miss");
+    t.setAttribute("aria-hidden", "true");
+    t.append(el("i", "num-tie"));
+    const b = el("i", "num-bar");
+    const w = 50 * Math.min(1, Math.abs(r.miss) / max);
+    b.style.left = r.miss >= 0 ? "50%" : `${50 - w}%`;
+    b.style.width = `${w}%`;
+    t.append(b);
+    const val = el("div", "num-val");
+    val.append(el("span", "num-gap", `${r.miss > 0 ? "R" : "D"} beat by ${pts(r.miss)}`),
+      el("span", "num-moe", `polls R+${pts(r.poll.margin)} · won R+${pts(r.result_margin)}`));
+    li.append(who, t, val);
+    ul.append(li);
+  }
+  box.append(ul);
+  const src = el("details", "num-more");
+  src.append(el("summary", null, "Sources for each race"));
+  const sl = el("ul", "num-unconf");
+  for (const r of races) {
+    const li = el("li");
+    li.append(el("span", "num-name", `${r.year} ${r.office}`));
+    const a1 = el("a", null, `${r.poll.source} ↗`); a1.href = r.poll.url; a1.rel = "noopener";
+    const a2 = el("a", null, `${r.result.source} ↗`); a2.href = r.result.url; a2.rel = "noopener";
+    const m = el("span", "num-meta"); m.append(a1, document.createTextNode(" · "), a2);
+    li.append(m);
+    sl.append(li);
+  }
+  src.append(sl);
+  box.append(src);
+  box.append(basedOn("RealClearPolitics' final average for every Texas race for president, U.S. Senate and governor since 2016, read from archived copies of its pages, against the official count."));
+  return box;
+}
+
+function moneyBlock(m, cands) {
+  const box = el("div", "num-money");
+  box.append(el("h3", "num-h", "Money"));
+  if (!m || !m.candidates || !m.candidates.length) {
+    box.append(el("p", "num-note", "We could not load the campaign finance reports this time. Each scan tries again."));
+    return box;
+  }
+  const rows = [["Raised by the campaign", "raised"], ["Cash on hand", "cash"]];
+  if (m.source === "FEC") rows.push(["Outside groups spent for", "outside_support"], ["Outside groups spent against", "outside_oppose"]);
+  const ul = el("ul", "money-list");
+  for (const [label, k] of rows.filter(([, k]) => m.candidates.some(c => c[k] != null))) {
+    const li = el("li", "money-row");
+    li.append(el("p", "money-label", label));
+    const top = Math.max(1, ...m.candidates.map(c => c[k] || 0));
+    for (const c of m.candidates) {
+      const line = el("div", "money-line");
+      const bar = el("i", "money-bar");
+      bar.setAttribute("aria-hidden", "true");
+      bar.style.width = `${Math.max(1, 100 * (c[k] || 0) / top)}%`;
+      const barWrap = el("span", "money-track"); barWrap.append(bar);
+      line.append(el("span", "money-name", c.name.split(" ").pop()), barWrap, el("span", "money-usd", usd(c[k])));
+      li.append(line);
+    }
+    ul.append(li);
+  }
+  box.append(ul);
+  if (m.source === "FEC") {
+    const groups = m.candidates.flatMap(c => [...(c.top_support || []).map(g => `${g.group} (${usd(g.usd)} for ${surname(c)})`), ...(c.top_oppose || []).map(g => `${g.group} (${usd(g.usd)} against ${surname(c)})`)]);
+    if (groups.length) box.append(el("p", "num-note", `Biggest outside spenders: ${listNames(groups, 6)}.`));
+  }
+  const through = m.candidates.map(c => c.through).filter(Boolean).sort().pop();
+  const when = through ? (through.length === 8 ? `${through.slice(0, 4)}-${through.slice(4, 6)}-${through.slice(6)}` : through) : null;
+  box.append(basedOn(`${m.note}${when ? ` Reports through ${shortDate(when)}.` : ""}`, m.source === "FEC" ? "FEC filings" : "Texas Ethics Commission", (m.candidates[0] || {}).url));
+  return box;
+}
+
+function raceNumbers(story) {
+  const sec = el("section", "block numbers");
+  sec.id = "numbers";
+  sec.append(el("h2", "block-title", "The numbers"));
+  const key = CAPSULE ? sget("fx-capsule", sessionStorage) : null;
+  getJSON(key ? `data/capsule/${key}/tx-numbers.json` : "data/tx-numbers.json", true).then(nums => {
+    const r = nums && nums.races && nums.races[story.sid];
+    if (!r) { sec.remove(); return; }
+    const cands = r.candidates;
+    if (r.forecast) sec.append(forecastBlock(r.forecast, cands));
+    sec.append(pollsBlock(r, cands, nums.recent_days || 30));
+    sec.append(citedBlock(r, cands));
+    if (nums.history) sec.append(historyBlock(nums.history, r.forecast, cands));
+    sec.append(moneyBlock(r.money, cands));
+    sec.append(el("p", "num-updated", `Numbers updated ${stamp(nums.updated_at)}`));
+  }).catch(() => sec.remove());
+  return sec;
+}
+
 function renderStory(data) {
   const sid = new URLSearchParams(location.search).get("s");
   const story = data.stories.find(s => s.sid === sid);
@@ -1173,6 +1488,9 @@ function renderStory(data) {
     s1.append(ul);
     body.append(s1);
   }
+
+  // Texas Senate and governor: the race's numbers, right after what both sides agree on.
+  if (story.region === "tx" && RACE_PAGES.includes(story.sid)) body.append(raceNumbers(story));
 
   // 2. Splits, each side's claim checked inside its panel.
   const diffs = (brief && brief.differences) || [];
