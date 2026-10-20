@@ -28,7 +28,7 @@ ROOT = Path(__file__).resolve().parent.parent
 LIVE_URL = "https://hestonmiles.com/factual/data/tx-numbers.json"
 OUT = ROOT / "data/tx-numbers.json"
 VERSION = "1"
-MONEY_V = "2"            # 2: governor accounts by TEC filer id, cash on hand only
+MONEY_V = "3"            # 2: governor accounts by TEC filer id, cash on hand only. 3: outside spending counted once, checked
 RECENT_DAYS = 30          # the polls drawn: fielded (end date) within this many days of the scan
 WIKI_API = "https://en.wikipedia.org/w/api.php"
 FEC_API = "https://api.open.fec.gov/v1"
@@ -344,41 +344,65 @@ def fec(path, **params):
 
 
 def fec_money(cands):
-    out = []
+    """Campaign totals, and outside spending counted once. Groups file 24/48-hour notices first and repeat the same
+    spending in their next regular report, so the raw list double-counts (2026-10-20: it showed $155M against
+    Talarico). Counted: regular-report lines up to the last date that group's reports cover, then notices after
+    it; superseded amendments and memo lines dropped. Shown only if the regular-report lines add up to the FEC's
+    own processed total for the candidate (within 2%), so the counting is checked against the FEC itself."""
+    out, all_ok = [], True
     for c in cands:
         if not c.get("fec"):
             continue
         tot = (fec(f"/candidate/{c['fec']}/totals/", cycle=2026).get("results") or [{}])[0]
-        # Outside spending in the general election only: the primary's (a pro-Cornyn group spent $25M against
-        # Paxton there) is a different contest. Each filing is marked with its election; unmarked ones count from
-        # the day after the primary runoff.
         rows, last = [], None
-        for _ in range(30):
+        for _ in range(40):
             params = dict(candidate_id=c["fec"], cycle=2026, per_page=100, sort="-expenditure_date", **(last or {}))
             page = fec("/schedules/schedule_e/", **params)
             rows += page.get("results") or []
             last = (page.get("pagination") or {}).get("last_indexes")
             if not page.get("results") or not last:
                 break
-        general = lambda r: (r.get("election_type") or "").startswith("G") or (not r.get("election_type") and (r.get("expenditure_date") or "") >= GENERAL_FROM)
+        day = lambda r: (r.get("expenditure_date") or r.get("dissemination_date") or "")[:10]
+        cid = lambda r: r.get("committee_id") or (r.get("committee") or {}).get("committee_id") or ""
+        name = lambda r: (r.get("committee") or {}).get("name") or r.get("committee_name") or "Unnamed group"
+        keep = [r for r in rows if r.get("most_recent") is not False and r.get("memo_code") != "X" and r.get("memoed_subtotal") is not True]
+        cutoff = {}
+        for r in keep:
+            if not r.get("is_notice"):
+                cutoff[cid(r)] = max(cutoff.get(cid(r), ""), day(r))
+        counted = [r for r in keep if not r.get("is_notice") or day(r) > cutoff.get(cid(r), "")]
+        # The check: regular-report lines (every election) against the FEC's processed totals for the candidate.
+        proc = fec("/schedules/schedule_e/by_candidate/", candidate_id=c["fec"], cycle=2026, per_page=100).get("results") or []
+        check = {}
+        for k in ("S", "O"):
+            mine = sum(r.get("expenditure_amount") or 0 for r in keep if not r.get("is_notice") and r.get("support_oppose_indicator") == k)
+            theirs = sum(r.get("total") or 0 for r in proc if r.get("support_oppose_indicator") == k)
+            check[k] = {"regular_reports": round(mine), "fec_processed": round(theirs),
+                        "ok": abs(mine - theirs) <= max(10000, 0.02 * max(mine, theirs))}
+        ok = all(v["ok"] for v in check.values())
+        all_ok = all_ok and ok
+        # General election only: the primary's spending (a pro-Cornyn group spent $25M against Paxton) is another contest.
+        general = lambda r: (r.get("election_type") or "").startswith("G") or (not r.get("election_type") and day(r) >= GENERAL_FROM)
         by = {}
-        for r in rows:
-            if general(r) and r.get("memoed_subtotal") is not True:
-                k = (r.get("support_oppose_indicator"), (r.get("committee") or {}).get("name") or r.get("committee_name") or "Unnamed group")
+        for r in counted:
+            if general(r):
+                k = (r.get("support_oppose_indicator"), name(r))
                 by[k] = by.get(k, 0) + (r.get("expenditure_amount") or 0)
-        ie = [{"support_oppose_indicator": k[0], "committee_name": k[1], "total": v} for k, v in by.items()]
-        top = lambda k: [{"group": r["committee_name"].title(), "usd": round(r["total"])}
-                         for r in sorted([r for r in ie if r.get("support_oppose_indicator") == k], key=lambda r: -r["total"])[:3]]
+        top = lambda k: [{"group": g.title(), "usd": round(v)} for (s_, g), v in sorted(by.items(), key=lambda kv: -kv[1]) if s_ == k][:3]
         out.append({"name": c["name"], "party": c["party"], "fec": c["fec"],
                     "raised": tot.get("receipts"), "spent": tot.get("disbursements"),
                     "cash": tot.get("last_cash_on_hand_end_period"), "through": (tot.get("coverage_end_date") or "")[:10],
-                    "outside_support": round(sum(r["total"] for r in ie if r.get("support_oppose_indicator") == "S")),
-                    "outside_oppose": round(sum(r["total"] for r in ie if r.get("support_oppose_indicator") == "O")),
+                    "outside_support": round(sum(v for (k, _), v in by.items() if k == "S")),
+                    "outside_oppose": round(sum(v for (k, _), v in by.items() if k == "O")),
                     "top_support": top("S"), "top_oppose": top("O"),
+                    "outside_check": {"rows": len(rows), "kept": len(keep), "counted": len(counted),
+                                      "notices_dropped_usd": round(sum(r.get("expenditure_amount") or 0 for r in keep if r not in counted)), **check},
                     "url": f"https://www.fec.gov/data/candidate/{c['fec']}/?cycle=2026"})
-    return {"source": "FEC", "candidates": out,
-            "note": "Campaign: the candidate's own committee, the whole 2026 cycle (primary included). Outside: spending "
-                    "by any group for or against the candidate in the general election, as reported to the FEC."}
+    note = "Campaign: the candidate's own committee, the whole 2026 cycle (primary included)."
+    if all_ok:
+        note += (" Outside: spending by any group for or against the candidate in the general election, as reported to the FEC, "
+                 "each expense counted once (a 24- or 48-hour notice and the regular report that repeats it are one expense).")
+    return {"source": "FEC", "candidates": out, "outside_ok": all_ok, "note": note}
 
 
 # ---------- money (Texas Ethics Commission, state races) ----------
