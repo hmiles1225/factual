@@ -218,9 +218,11 @@ def tx_admit(art, from_region):
 TX_SID = "tx"  # Texas story ids start with this, so they never collide with a national story's id
 # Texas Election is grouped by race, not by event: one story per race, updated through Election Day. First match
 # wins, so an article on Paxton's Senate bid is a Senate story even though he is attorney general.
+# Titles name the candidates in Texas ballot order (the governor's party first), which this year is also
+# alphabetical, and match the numbers stories ("Texas Senate race: latest numbers"). Heston, 2026-10-20.
 TX_RACES = [
-    ("senate", "Texas Senate race: Talarico vs. Paxton", re.compile(r"(?<!State )\b(Senate|Paxton|Talarico|Cornyn)\b")),  # not the state Senate
-    ("governor", "Texas Governor's race", re.compile(r"\b(governor|gubernatorial|Abbott|Hinojosa)\b", re.I)),
+    ("senate", "Texas Senate race: Paxton vs. Talarico", re.compile(r"(?<!State )\b(Senate|Paxton|Talarico|Cornyn)\b")),  # not the state Senate
+    ("governor", "Texas Governor race: Abbott vs. Hinojosa", re.compile(r"\b(governor|gubernatorial|Abbott|Hinojosa)\b", re.I)),
     ("statewide", "Texas Attorney General and Lieutenant Governor", re.compile(r"\b(attorney general|lieutenant governor|Dan Patrick)\b", re.I)),
     ("house", "Texas House races and redistricting", re.compile(r"\b(redistrict\w*|congressional|district|U\.S\. House)\b", re.I)),
     ("voting", "Voting in Texas: early voting, turnout and rules", re.compile(r"\b(early voting|turnout|ballots?|polling places?|voter rolls?|voter registration|mail-in|election officials?)\b", re.I)),
