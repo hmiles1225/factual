@@ -275,7 +275,7 @@ context (at most 30 words): {context}"""
 # title ("Texas Senate race: Paxton vs. Talarico"). Heston, 2026-10-20: headlines must be specific to the story.
 # Written from the facts outlets on both sides report, kept as "<race>: <what happened>", and held in code to
 # those facts: every name and number must appear in them. Else the label stays.
-HEADLINE_VERSION = "1"
+HEADLINE_VERSION = "2"   # 2: first word checked as a name (a scan ran with the gap)
 HEADLINE_SCHEMA = _item({"headline": {"type": "string"}}, ["headline"])
 HEADLINE_PROMPT = """Write a news headline for the latest in this Texas election race, using only the facts below, which
 outlets on both the left and the right report. Rules: at most 11 words; plain, neutral words; what happened, newest
