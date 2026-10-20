@@ -1388,7 +1388,7 @@ function historyBlock(h, leads) {
   }
   src.append(sl);
   box.append(src);
-  box.append(basedOn("RealClearPolitics' final average for every Texas race for president, U.S. Senate and governor since 2016, read from archived copies of its pages, against the official count."));
+  box.append(basedOn("RealClearPolitics' final average for every Texas race for President, U.S. Senate and Governor since 2016, read from archived copies of its pages, against the official count."));
   return box;
 }
 
@@ -1434,7 +1434,7 @@ function moneyBlock(m, cands) {
 // (all eight races, read against this race's lead), which polls each side reported, and the money.
 const NUMBER_STORIES = [
   { key: "senate", sid: "tx-senate", race: "tx-senate", title: "Texas Senate race: latest numbers" },
-  { key: "governor", sid: "tx-governor", race: "tx-governor", title: "Texas governor race: latest numbers" },
+  { key: "governor", sid: "tx-governor", race: "tx-governor", title: "Texas Governor race: latest numbers" },
 ];
 let TXNUM = null;  // data/tx-numbers.json, once loaded
 const txNumbersURL = () => { const key = CAPSULE ? sget("fx-capsule", sessionStorage) : null; return key ? `data/capsule/${key}/tx-numbers.json` : "data/tx-numbers.json"; };
