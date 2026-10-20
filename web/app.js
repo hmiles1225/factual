@@ -890,7 +890,9 @@ function splitFinding(text) {
   let rest = text.trim();
   while (rest) { const one = firstSentence(rest); parts.push(one.trim()); rest = rest.slice(one.length).trim(); }
   const turn = parts.findIndex((p, i) => i > 0 && /^(However|But|While|Although|Yet|Still)\b|\b(leaves? out|omits?|does not mention|did not mention)\b/i.test(p));
-  if (turn < 1) return { truth: text, missing: null };
+  // No turning word: a finding of two or more sentences still turns after its first (what holds, then what else
+  // the sources show), so the first is what's true and the rest is what's left out.
+  if (turn < 1) return parts.length > 1 ? { truth: parts[0], missing: parts.slice(1, 3).join(" ") } : { truth: text, missing: null };
   return { truth: parts.slice(0, turn).join(" "), missing: parts.slice(turn, turn + 2).join(" ") };
 }
 
