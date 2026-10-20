@@ -192,7 +192,7 @@ For each term give every article number that uses it, why it is loaded, and a ne
 Coverage:
 {coverage}"""
 
-AD_VERSION = "2"   # 2: the claims driving the race, not only ads (Heston, 2026-10-19)
+AD_VERSION = "3"   # 2: the claims driving the race, not only ads (Heston, 2026-10-19). 3: re-run on the tightened Texas filter
 AD_SCHEMA = _item({"claims": {"type": "array", "items": _item({
     "speaker": {"type": "string", "description": "Who made the claim: the campaign, candidate, party or group, by name."},
     "target": {"type": "string", "description": "Who the claim is about, by name. Empty if no one."},
@@ -219,6 +219,36 @@ EXPLAIN_VERSION = "1"
 EXPLAIN_PER_SCAN = 20     # explanations written per scan, six at a time
 RUN_BUDGET_S = 22 * 60    # after this, a scan starts no new AI work and saves
 EXPLAIN_SCHEMA = _item({"part": {"type": "string"}, "context": {"type": "string"}}, ["part", "context"])
+# What an explanation line may never do (Heston, 2026-10-20, after two shipped). Checked in code on every new
+# line and, every scan, on every line already live, so a line that breaks a rule is rewritten, never left up.
+PLEADING = re.compile(r"\b(sounds?|seems?|appears?) (right|true|credible|plausible|believable|reasonable)|\bcredib|\bwhy (it|this|people|some)\b|\bbelievab", re.I)
+ABOUT_THE_CHECK = re.compile(r"\b(rated|rating|verdict|classified|labell?ed|deemed|judged)\b[^.]{0,60}\b(unproven|false|misleading|confirmed|"
+                             r"holds? up|missing context|doesn'?t hold up|accurate|inaccurate)\b|\bexplain\w* why\b|\b(the|this) (fact-?)?check(er)?\b", re.I)
+_FILLER = {"a", "an", "the", "of", "u", "s"}
+
+
+def explain_problem(line):
+    """Why an explanation line can't be shown, or None. Empty is fine: the page leaves that line out."""
+    if not line:
+        return None
+    if PLEADING.search(line):
+        return "it argues for the claim"
+    if ABOUT_THE_CHECK.search(line):
+        return "it talks about the rating or the check instead of the facts"
+    m = re.match(r"^(.+?)\s+(?:is|are|was|were)\s+(.+?)[.!]?$", line.strip(), re.I)
+    words = lambda t: set(re.findall(r"[a-z0-9']+", t.lower())) - _FILLER
+    # A short "X is a Y" whose Y only repeats X: "District Judge Ana C. Reyes is a district judge." Short only, so a
+    # real finding that ends in a name ("...declares that the name of the state is New Mexico") still stands.
+    if m and len(m[1].split()) <= 6 and words(m[2]) and words(m[2]) <= words(m[1]):
+        return "it is true by definition and tells the reader nothing"
+    if len(line) > 280:
+        return "it is too long"
+    return None
+
+
+def explain_ok(c):
+    x = c.get("explain") or {}
+    return not explain_problem(x.get("part")) and not explain_problem(x.get("context"))
 EXPLAIN_ASK = {  # what each line says, by verdict
     "Holds up": ("what in the claim the sources confirm", "leave empty"),
     "Missing context": ("the part of the claim that is true", "what the claim leaves out that changes the picture"),
@@ -228,6 +258,10 @@ EXPLAIN_ASK = {  # what each line says, by verdict
 EXPLAIN_PROMPT = """A fact-checker has checked this claim. Explain its verdict to a reader in two short, plain lines, using only
 facts in the checker's finding. No opinion, no judgment of anyone's motives, no "the claim" or "the statement".
 Never say why the claim sounds right, believable or credible, and never argue for it: only what the sources show.
+Never mention the verdict, the rating, the check or the checker, and never say what the sources fail to explain
+about a rating: the reader wants the facts, not our process. Each line must say something specific about the
+claim's subject that a reader could not know without the sources, never something true by definition ("Judge
+Reyes is a judge").
 
 Claim: {claim}
 Verdict: {verdict}
@@ -780,16 +814,20 @@ def main():
                 alines, _ = coverage_lines(arts, side_of, summaries)
                 out, usage = gemini_json(AD_PROMPT.replace("{coverage}", "\n".join(alines)), AD_SCHEMA)
                 charge_gemini(usage)
-                ads = []
-                for c in out.get("claims", [])[:3]:
+                ads, proposed = [], out.get("claims", [])
+                for c in proposed[:3]:
                     speaker, assertion = (c.get("speaker") or "").strip(), (c.get("assertion") or "").strip()
                     found = [arts[i - 1]["source"] for i in c.get("articles", []) if isinstance(i, int) and 1 <= i <= len(arts)
                              and speaker and speaker.split()[-1].casefold() in alines[i - 1].casefold()]
                     if speaker and assertion and found:
                         ads.append({"speaker": speaker, "target": (c.get("target") or "").strip(), "kind": c.get("kind", "statement"),
                                     "assertion": assertion, "outlets": sorted(set(found)), "check": None})
+                    else:  # say why, so an empty race can be told apart from a filter that is too strict
+                        why = "no speaker" if not speaker else "no assertion" if not assertion else \
+                            f"speaker not named in cited articles {c.get('articles')}"
+                        print(f"  race claim dropped ({why}): {speaker or '?'}: {assertion[:90]}")
                 brief["ad_claims"], brief["ad_v"] = ads, AD_VERSION
-                print(f"  ad watch: {len(ads)} claims")
+                print(f"  race claims: {len(proposed)} proposed, {len(ads)} kept, from {len(arts)} articles")
             except Exception as e:
                 print(f"  ad watch failed: {e}")
         for a in brief.get("ad_claims", []):
@@ -821,14 +859,22 @@ def main():
     # every check, so it should never wait behind summaries and new checks for the day's budget.
     live_sids = {s["sid"] for s in data["stories"]}
     todo = [k for k, c in sorted(claims.items()) if set(c.get("stories", [])) & live_sids and c.get("finding")
-            and EXPLAIN_ASK.get(c.get("verdict")) and c.get("explain_v") != EXPLAIN_VERSION][:EXPLAIN_PER_SCAN]
+            and EXPLAIN_ASK.get(c.get("verdict")) and (c.get("explain_v") != EXPLAIN_VERSION or not explain_ok(c))][:EXPLAIN_PER_SCAN]
 
     def explain(k):
         c = claims[k]
         ask = EXPLAIN_ASK[c["verdict"]]
-        out, usage = gemini_json(EXPLAIN_PROMPT.replace("{claim}", c["claim"]).replace("{verdict}", c["verdict"])
-                                 .replace("{finding}", c["finding"][:1500]).replace("{part}", ask[0]).replace("{context}", ask[1]),
-                                 EXPLAIN_SCHEMA, "low")
+        prompt = (EXPLAIN_PROMPT.replace("{claim}", c["claim"]).replace("{verdict}", c["verdict"])
+                  .replace("{finding}", c["finding"][:1500]).replace("{part}", ask[0]).replace("{context}", ask[1]))
+        out, usage = gemini_json(prompt, EXPLAIN_SCHEMA, "low")
+        # One retry, told what was wrong; a line that still breaks a rule is left empty (explain_problem).
+        problems = [f"Your {f} line \"{out.get(f)}\" can't be used: {why}." for f in ("part", "context")
+                    for why in [explain_problem((out.get(f) or "").strip())] if why]
+        if problems:
+            print(f"  explain retry: {' '.join(problems)[:200]}")
+            out2, usage2 = gemini_json(prompt + "\n\n" + " ".join(problems) + " Write both lines again.", EXPLAIN_SCHEMA, "low")
+            usage = {key: usage.get(key, 0) + usage2.get(key, 0) for key in set(usage) | set(usage2)}
+            out = out2
         return k, out, usage
 
     if todo and gemini_ok():
@@ -842,10 +888,9 @@ def main():
                 charge_gemini(usage)
                 c = claims[k]
                 part, ctx = (out.get("part") or "").strip(), (out.get("context") or "").strip()
-                # Held to what readers were promised: the verdict's two plain lines, never a case for the claim.
-                pleading = re.compile(r"\b(sounds?|seems?|appears?) (right|true|credible|plausible|believable|reasonable)|\bcredib|\bwhy (it|this|people|some)\b|\bbelievab", re.I)
-                part, ctx = ("" if pleading.search(part) else part), ("" if pleading.search(ctx) else ctx)
-                c["explain"] = {"part": part if len(part) <= 240 else "", "context": ctx if len(ctx) <= 280 else ""}
+                # Held to what readers were promised: the verdict's two plain lines, facts only (explain_problem).
+                part, ctx = ("" if explain_problem(part) else part), ("" if explain_problem(ctx) else ctx)
+                c["explain"] = {"part": part if len(part) <= 240 else "", "context": ctx}
                 if c["verdict"] == "Missing context":
                     c["left_out"] = c["explain"]["context"]
                 c["explain_v"] = EXPLAIN_VERSION
