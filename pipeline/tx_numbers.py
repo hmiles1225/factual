@@ -28,6 +28,7 @@ ROOT = Path(__file__).resolve().parent.parent
 LIVE_URL = "https://hestonmiles.com/factual/data/tx-numbers.json"
 OUT = ROOT / "data/tx-numbers.json"
 VERSION = "1"
+MONEY_V = "2"            # 2: governor accounts by TEC filer id, cash on hand only
 RECENT_DAYS = 30          # the polls drawn: fielded (end date) within this many days of the scan
 WIKI_API = "https://en.wikipedia.org/w/api.php"
 FEC_API = "https://api.open.fec.gov/v1"
@@ -39,8 +40,11 @@ RACES = {
                   "candidates": [{"name": "Ken Paxton", "party": "R", "fec": "S6TX00388"},
                                  {"name": "James Talarico", "party": "D", "fec": "S6TX00479"}]},
     "tx-governor": {"name": "Governor", "wiki": "2026_Texas_gubernatorial_election",
-                    "candidates": [{"name": "Greg Abbott", "party": "R"},
-                                   {"name": "Gina Hinojosa", "party": "D"}]},
+                    # Texas Ethics Commission filer ids (read from the TEC's cover sheets, 2026-10-20). Abbott's money is
+                    # mostly in Texans for Greg Abbott (00051153), a committee beside his own account (00019652): their
+                    # Sept 24 cash, $17,317,177 + $870,089, is the $18.2M the Texas Tribune reported. Hinojosa files as Regina.
+                    "candidates": [{"name": "Greg Abbott", "party": "R", "tec": ["00019652", "00051153"]},
+                                   {"name": "Gina Hinojosa", "party": "D", "tec": ["00080440"]}]},
 }
 
 
@@ -413,33 +417,30 @@ def zip_member(url, name):
 
 
 def tec_money(cands):
+    """Cash on hand only. Raised and spent are left out: Abbott's campaign moves money between its two accounts
+    (his own account's July to September 'raised' is exactly $4,750,000, a transfer), so adding their totals would
+    count it twice. Cash at one date can't double-count."""
     import csv, io
     raw, modified = zip_member(TEC_ZIP, "cover.csv")
-    rows = [r for r in csv.DictReader(io.StringIO(raw.decode("latin-1")))
-            if r["filerSeekOfficeCd"] == "GOVERNOR" and r["periodEndDt"] >= "20250101" and r.get("infoOnlyFlag") != "Y"]
+    ids = {i for c in cands for i in c.get("tec", [])}
+    rows = [r for r in csv.DictReader(io.StringIO(raw.decode("latin-1"))) if r["filerIdent"] in ids and r["periodEndDt"] >= "20250101"]
     out = []
     for c in cands:
-        first, last = c["name"].split()[0], c["name"].split()[-1]
-        mine = [r for r in rows if r["filerNameLast"] == last and r["filerNameFirst"].startswith(first[:3])]
-        if not mine:
-            continue
-        latest = max(mine, key=lambda r: (r["periodEndDt"], r["filedDt"]))
-        cycle = {}
-        for r in mine:  # one report per period: the latest filed (a correction replaces the original)
-            k = (r["periodStartDt"], r["periodEndDt"])
-            if k not in cycle or r["filedDt"] > cycle[k]["filedDt"]:
-                cycle[k] = r
-        num = lambda v: round(float(v or 0))
-        out.append({"name": c["name"], "party": c["party"], "filer": latest["filerIdent"],
-                    "raised": sum(num(r["totalContribAmount"]) for r in cycle.values()),
-                    "spent": sum(num(r["totalExpendAmount"]) for r in cycle.values()),
-                    "cash": num(latest["contribsMaintainedAmount"]),
-                    "since": min(r["periodStartDt"] for r in cycle.values()), "through": latest["periodEndDt"],
-                    "last_period_raised": num(latest["totalContribAmount"]),
+        latest = {}
+        for r in rows:
+            if r["filerIdent"] in c["tec"]:
+                cur = latest.get(r["filerIdent"])
+                if not cur or (r["periodEndDt"], r["filedDt"]) > (cur["periodEndDt"], cur["filedDt"]):
+                    latest[r["filerIdent"]] = r
+        if len(latest) != len(c["tec"]) or len({r["periodEndDt"] for r in latest.values()}) != 1:
+            continue  # an account missing, or reports ending on different days: no total we can stand behind
+        end = next(iter(latest.values()))["periodEndDt"]
+        out.append({"name": c["name"], "party": c["party"], "cash": round(sum(float(r["contribsMaintainedAmount"] or 0) for r in latest.values())),
+                    "accounts": [r["filerName"] for r in latest.values()], "through": end,
                     "url": "https://www.ethics.state.tx.us/search/cf/"})
     return {"source": "Texas Ethics Commission", "file_date": modified, "candidates": out,
-            "note": "The candidate's own campaign, from the totals on each report filed with the Texas Ethics Commission, "
-                    "Jan 1 2025 on. Outside spending is not included: the state publishes it in a form we don't read yet."}
+            "note": "Cash on hand in every account the campaign reports to the Texas Ethics Commission. Raised and spent are "
+                    "left out: one campaign moves money between its accounts, so adding their totals would count it twice."}
 
 
 # ---------- which polls each side's outlets reported ----------
@@ -538,10 +539,9 @@ def forecast(averages, cands, hist):
     p_first = t_cdf(center / hist["typical_miss"], df)
     return {"center": round(center, 2), "spread": hist["typical_miss"], "df": df, "averages": k,
             "chance": [round(100 * p_first), 100 - round(100 * p_first)],
-            "method": f"Centered on the middle of {k} published averages; as uncertain as Texas polls have been: the final "
-                      f"RealClearPolitics averages missed the result by {hist['typical_miss']} points on average in "
-                      f"{len(hist['races'])} races since 2016, in both directions. Fatter tails than a bell curve, because "
-                      f"{len(hist['races'])} races is a small sample."}
+            "method": f"the middle of {k} published averages, and how far Texas polls have missed: in {len(hist['races'])} races "
+                      f"since 2016, RealClearPolitics' final average missed the result by {hist['typical_miss']} points on average, "
+                      f"in both directions. Wider tails than a bell curve, because {len(hist['races'])} races is a small sample."}
 
 
 # ---------- the run ----------
@@ -648,13 +648,13 @@ def main():
             print(f"  {rid}: cited polls failed ({e})")
             cited = prev.get("cited", [])
         money = prev.get("money")
-        if not money or (money.get("at") or "")[:10] != now.date().isoformat():  # once a day
+        if not money or money.get("v") != MONEY_V or (money.get("at") or "")[:10] != now.date().isoformat():  # once a day
             try:
                 if any(c.get("fec") for c in cands):
                     money = fec_money(cands)
                 else:
                     money = tec_money(cands)
-                money["at"] = now.isoformat(timespec="seconds")
+                money["at"], money["v"] = now.isoformat(timespec="seconds"), MONEY_V
             except Exception as e:
                 print(f"  {rid}: money not updated ({e})")
         out["races"][rid] = {

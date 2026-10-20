@@ -66,6 +66,7 @@ GEMINI_EXTRA_USD = {"2026-10-19": 8.00}   # one-off, Heston 2026-10-19: new sect
 ROSTER_VERSION = "2026-10-19b"   # 35 outlets, 15 left / 15 right
 GEMINI_FREE_SEARCHES = 150      # Google gives 5,000 free a month across Gemini 3 models; ~150 a day
 SEARCH_USD = 0.014               # then $14 per 1,000 searches (ai.google.dev pricing, 2026-10-18), charged to the Gemini cap
+TX_NUMBERS_USD = 0.40            # kept for tx_numbers.py out of the same cap (polls checked against releases), Texas edition only
 CHECK_RESERVE_USD = 0.35         # most one fact-check has cost (tokens plus paid searches), with margin
 UNDERCOUNT = 1.7                 # our cost log ran this far under the real bill (2026-10-17)
 RECHECK_AFTER_DAYS = 7
@@ -453,8 +454,13 @@ def main():
     started = time.monotonic()
     past_deadline = lambda: time.monotonic() - started > RUN_BUDGET_S
 
+    # While the Texas edition runs, the race numbers step (tx_numbers.py, after this one) keeps a little of the
+    # day's cap for confirming new polls against their releases; claims stop that much short of the cap.
+    tx = (data.get("regions") or {}).get("tx")
+    work_cap = gemini_cap - (TX_NUMBERS_USD if tx and datetime.now(timezone.utc) < datetime.fromisoformat(tx["until"]) else 0.0)
+
     def gemini_ok():
-        return spend["gemini_usd"] < gemini_cap and not past_deadline()
+        return spend["gemini_usd"] < work_cap and not past_deadline()
 
     def charge_gemini(usage, searches=0):
         paid = max(0, spend["gemini_searches"] + searches - GEMINI_FREE_SEARCHES) - max(0, spend["gemini_searches"] - GEMINI_FREE_SEARCHES)
@@ -543,7 +549,7 @@ def main():
         # Start a check only with room for a worst-case one: the cap is checked before a check, but its
         # paid searches are charged after, and one overran the cap by $0.45 on 2026-10-19.
         if past_deadline() or state["new_this_scan"] >= new_per_scan or spend["new_claims"] >= new_per_day \
-                or spend["gemini_usd"] + CHECK_RESERVE_USD > gemini_cap:
+                or spend["gemini_usd"] + CHECK_RESERVE_USD > work_cap:
             return existing
         try:
             first = C.check(text, "gemini")
