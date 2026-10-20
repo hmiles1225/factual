@@ -1,0 +1,29 @@
+{
+ "_rule": "Every race for president, U.S. Senate and governor in Texas from 2016 on. Poll average: RealClearPolitics' final average for every race (one publisher, so the years compare), read from an archived copy of RCP's own page saved on or just before Election Day (Nov 22 2016 for 2016: no earlier copy). Result: the official count. Margins are Republican minus Democrat, in points. Checked by Claude 2026-10-20 against each linked page.",
+ "races": [
+  {"year": 2016, "office": "President", "r": "Donald Trump", "d": "Hillary Clinton",
+   "poll": {"margin": 11.7, "source": "RealClearPolitics final average (Oct 27 to Nov 1)", "url": "https://web.archive.org/web/20161122043923/http://www.realclearpolitics.com/epolls/2016/president/tx/texas_trump_vs_clinton-5694.html"},
+   "result": {"r_pct": 52.23, "d_pct": 43.24, "source": "Texas Secretary of State, 2016 General Election race summary", "url": "https://elections.sos.state.tx.us/elchist319_state.htm"}},
+  {"year": 2018, "office": "U.S. Senate", "r": "Ted Cruz", "d": "Beto O'Rourke",
+   "poll": {"margin": 6.8, "source": "RealClearPolitics final average", "url": "https://web.archive.org/web/20181106215525/https://www.realclearpolitics.com/epolls/2018/senate/tx/texas_senate_cruz_vs_orourke-6310.html"},
+   "result": {"r_pct": 50.89, "d_pct": 48.33, "source": "Texas Secretary of State, 2018 General Election race summary", "url": "https://elections.sos.state.tx.us/elchist331_state.htm"}},
+  {"year": 2018, "office": "Governor", "r": "Greg Abbott", "d": "Lupe Valdez",
+   "poll": {"margin": 17.9, "source": "RealClearPolitics final average", "url": "https://web.archive.org/web/20181104221848/https://www.realclearpolitics.com/epolls/2018/governor/tx/texas_governor_abbott_vs_valdez-6435.html"},
+   "result": {"r_pct": 55.81, "d_pct": 42.51, "source": "Texas Secretary of State, 2018 General Election race summary", "url": "https://elections.sos.state.tx.us/elchist331_state.htm"}},
+  {"year": 2020, "office": "President", "r": "Donald Trump", "d": "Joe Biden",
+   "poll": {"margin": 1.3, "source": "RealClearPolitics final average (Oct 20 to 31)", "url": "https://web.archive.org/web/20201103224125/https://www.realclearpolitics.com/epolls/2020/president/tx/texas_trump_vs_biden-6818.html"},
+   "result": {"r_votes": 5890347, "d_votes": 5259126, "total": 11315056, "source": "FEC, Federal Elections 2020 (official results)", "url": "https://www.fec.gov/resources/cms-content/documents/federalelections2020.xlsx"}},
+  {"year": 2020, "office": "U.S. Senate", "r": "John Cornyn", "d": "MJ Hegar",
+   "poll": {"margin": 6.5, "source": "RealClearPolitics final average", "url": "https://web.archive.org/web/20201104031458/https://www.realclearpolitics.com/epolls/2020/senate/tx/texas_senate_cornyn_vs_hegar-7047.html"},
+   "result": {"r_votes": 5962983, "d_votes": 4888764, "total": 11144040, "source": "FEC, Federal Elections 2020 (official results)", "url": "https://www.fec.gov/resources/cms-content/documents/federalelections2020.xlsx"}},
+  {"year": 2022, "office": "Governor", "r": "Greg Abbott", "d": "Beto O'Rourke",
+   "poll": {"margin": 10.4, "source": "RealClearPolitics final average", "url": "https://web.archive.org/web/20221108235307/https://www.realclearpolitics.com/epolls/2022/governor/tx/texas-governor-abbott-vs-orourke-7376.html"},
+   "result": {"r_votes": 4437099, "d_votes": 3553656, "total": 8102908, "source": "Official canvass, Texas Legislature (Senate Journal, Jan 12 2023)", "url": "https://journals.senate.texas.gov/SJRNL/88R/HTML/88RSJ01-12-F.HTM"}},
+  {"year": 2024, "office": "President", "r": "Donald Trump", "d": "Kamala Harris",
+   "poll": {"margin": 9.0, "source": "RealClearPolitics final average (Oct 22 to Nov 4)", "url": "https://web.archive.org/web/20241106003057/https://www.realclearpolling.com/polls/president/general/2024/texas/trump-vs-harris"},
+   "result": {"r_votes": 6393597, "d_votes": 4835250, "total": 11388674, "source": "FEC, Official 2024 Presidential General Election Results", "url": "https://www.fec.gov/resources/cms-content/documents/2024presgeresults.xlsx"}},
+  {"year": 2024, "office": "U.S. Senate", "r": "Ted Cruz", "d": "Colin Allred",
+   "poll": {"margin": 4.4, "source": "RealClearPolitics final average (Oct 22 to Nov 4)", "url": "https://web.archive.org/web/20241106003219/https://www.realclearpolling.com/polls/senate/general/2024/texas/cruz-vs-allred"},
+   "result": {"r_votes": 5990741, "d_votes": 5031249, "total": 11290935, "source": "Clerk of the U.S. House, Statistics of the Nov 5 2024 Election (total = the four counted candidates; one write-in's count was cut off in our read and is under 0.01 point)", "url": "https://clerk.house.gov/member_info/electionInfo/2024/statistics2024.pdf"}}
+ ]
+}

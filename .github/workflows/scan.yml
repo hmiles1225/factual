@@ -62,6 +62,18 @@ jobs:
           CAPSULE_KEY: ${{ secrets.CAPSULE_KEY }}
         run: python pipeline/check_today.py
 
+      # Texas race numbers: polls (each confirmed against its release), published averages, which polls each
+      # side's outlets reported, past polling misses, the forecast, and money. Shares the day's Gemini cap.
+      - name: Texas race numbers
+        timeout-minutes: 8
+        continue-on-error: true   # never blocks the deploy: the site keeps the last numbers
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          FEC_API_KEY: ${{ secrets.FEC_API_KEY }}
+          CAPSULE_KEY: ${{ secrets.CAPSULE_KEY }}
+        run: python pipeline/tx_numbers.py
+
       - name: Keep a copy of this run's output
         uses: actions/upload-artifact@v7
         with:
