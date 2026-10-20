@@ -386,6 +386,8 @@ function renderToday(data) {
   TODAY = data;
   drawToday();
   document.addEventListener("fx-topics", drawToday);
+  // The Texas race numbers come in their own file; their cards join the Texas section when it arrives.
+  if (LOCAL_ON) getJSON(txNumbersURL(), true).then(n => { if (n && n.races) { TXNUM = n; const y = window.scrollY; drawToday(); window.scrollTo({ top: y, behavior: "instant" }); } }).catch(() => {});
   // Coming back from a story: Today is drawn after the browser would restore the scroll, so keep the
   // position ourselves (this tab only) and put it back once the stories are on the page.
   try { history.scrollRestoration = "manual"; } catch (e) {}
@@ -423,6 +425,7 @@ function drawToday() {
     const head = el("div", "topic-head");
     head.append(el("h2", "topic-name", t.name), el("p", "topic-span", `${t.span} \u00b7 ${list.length}`));
     sec.append(head);
+    const numbers = t.key === "texas" && TXNUM && Object.keys(TXNUM.races || {}).length ? numbersCards(TXNUM) : null;
     if (list.length) {
       const ol = el("ol", "stories");
       ol.setAttribute("aria-label", `${t.name} stories`);
@@ -431,6 +434,7 @@ function drawToday() {
     } else {
       sec.append(el("p", "topic-empty", t.key === "local" ? `Local coverage is a Texas-only demo for now.` : `Nothing yet that both sides are covering.`));
     }
+    if (numbers) sec.append(numbers);
     $("sections").append(sec);
     const link = el("a", list.length ? "strip-link" : "strip-link is-empty", t.name);
     link.href = `#${t.key}`;
@@ -1129,7 +1133,6 @@ function loadedItem(t, side) {
    reported, how far Texas polls have missed before, and the money. No party colours: candidates are told
    apart by name and by side of the tie line (the Democrat's lead to the left, the Republican's to the right,
    as on the outlet spectrum). Every number is text in the page; the tracks only draw it. */
-const RACE_PAGES = ["tx-senate", "tx-governor"];
 const surname = c => c.name.split(" ").pop();
 const pts = x => { const r = Math.round(Math.abs(x) * 10) / 10; return Number.isInteger(r) ? String(r) : r.toFixed(1); };
 // shares are [first candidate (Republican, ballot order), second]; a positive gap is the first one ahead.
@@ -1184,7 +1187,7 @@ function trackAxis(max, cands) {
 
 function forecastBlock(f, cands) {
   const box = el("div", "num-forecast");
-  box.append(el("h3", "num-h", "Chance of winning"));
+  box.append(el("h2", "num-h", "Chance of winning"));
   const row = el("div", "fc-row");
   const order = [0, 1].sort((a, b) => f.chance[b] - f.chance[a]);
   for (const i of order) {
@@ -1204,7 +1207,7 @@ function forecastBlock(f, cands) {
 
 function pollsBlock(r, cands, recentDays) {
   const box = el("div", "num-polls");
-  box.append(el("h3", "num-h", `Polls · last ${recentDays} days`));
+  box.append(el("h2", "num-h", `Polls · last ${recentDays} days`));
   const polls = r.polls;
   if (!polls.length) {
     box.append(el("p", "num-note", "No poll from the last 30 days is confirmed against its pollster's release yet. Checking continues every hour."));
@@ -1263,7 +1266,7 @@ function pollsBlock(r, cands, recentDays) {
   // The published averages, on the same scale.
   if (r.averages.length) {
     const ab = el("div", "num-avgs");
-    ab.append(el("h3", "num-h", "Published averages"));
+    ab.append(el("h2", "num-h", "Published averages"));
     const gaps = r.averages.map(a => gapOf(a.shares));
     const lo = Math.min(...gaps), hi = Math.max(...gaps);
     ab.append(el("p", "num-lede", lo * hi > 0
@@ -1291,7 +1294,7 @@ function pollsBlock(r, cands, recentDays) {
 
 function citedBlock(r, cands) {
   const box = el("div", "num-cited");
-  box.append(el("h3", "num-h", "Which polls each side reported"));
+  box.append(el("h2", "num-h", "Which polls each side reported"));
   const cited = r.cited || [];
   const by = side => cited.filter(c => c.side === side);
   if (!cited.length) {
@@ -1335,14 +1338,17 @@ function citedBlock(r, cands) {
   return box;
 }
 
-function historyBlock(h, f, cands) {
+function historyBlock(h, leads) {
+  // leads: [{name, lead}] for each race today (from the forecast's center), so the miss is read against them.
   const box = el("div", "num-history");
-  box.append(el("h3", "num-h", "How far Texas polls have missed"));
+  box.append(el("h2", "num-h", "Final polls vs. results, 2016 to 2024"));
   const races = h.races;
   const better = races.filter(r => r.miss > 0).length, worse = races.filter(r => r.miss < 0).length;
-  const lead = f ? Math.abs(f.center) : null;
+  const now = leads.filter(l => l.lead != null);
+  const all = now.every(l => l.lead < h.typical_miss) ? "smaller" : now.every(l => l.lead >= h.typical_miss) ? "bigger" : null;
   box.append(el("p", "num-lede", `Since 2016 the final polling average missed by ${pts(h.typical_miss)} points on average, in both directions: the Republican did better than the polls in ${better} of ${races.length} races and worse in ${worse}.`
-    + (lead != null ? ` Today's lead, ${pts(lead)} points, is ${lead < h.typical_miss ? "smaller than" : "bigger than"} that.` : "")));
+    + (now.length === 1 ? ` The lead in ${now[0].name}, ${pts(now[0].lead)} points in the middle of the published averages, is ${all} than that.`
+      : now.length ? ` Today's leads (${now.map(l => `${l.name} ${pts(l.lead)}`).join(", ")} points) are ${all ? `both ${all} than that` : "on either side of that"}.` : "")));
   const max = Math.max(5, Math.ceil(Math.max(...races.map(r => Math.abs(r.miss))) / 5) * 5);
   const sides = el("div", "num-sides");
   sides.setAttribute("aria-hidden", "true");
@@ -1388,7 +1394,7 @@ function historyBlock(h, f, cands) {
 
 function moneyBlock(m, cands) {
   const box = el("div", "num-money");
-  box.append(el("h3", "num-h", "Money"));
+  box.append(el("h2", "num-h", "Money"));
   if (!m || !m.candidates || !m.candidates.length) {
     box.append(el("p", "num-note", "We could not load the campaign finance reports this time. Each scan tries again."));
     return box;
@@ -1422,23 +1428,95 @@ function moneyBlock(m, cands) {
   return box;
 }
 
-function raceNumbers(story) {
+// The race numbers are stories of their own (Heston, 2026-10-20: "dont conflate the polls with another story"):
+// a card each in the Texas Election section, a page each at numbers.html?n=<key>.
+// One story per race (Heston): its forecast, polls, the published averages, how far Texas polls have missed
+// (all eight races, read against this race's lead), which polls each side reported, and the money.
+const NUMBER_STORIES = [
+  { key: "senate", sid: "tx-senate", race: "tx-senate", title: "Texas Senate race: latest numbers" },
+  { key: "governor", sid: "tx-governor", race: "tx-governor", title: "Texas governor race: latest numbers" },
+];
+let TXNUM = null;  // data/tx-numbers.json, once loaded
+const txNumbersURL = () => { const key = CAPSULE ? sget("fx-capsule", sessionStorage) : null; return key ? `data/capsule/${key}/tx-numbers.json` : "data/tx-numbers.json"; };
+const raceLead = r => r && r.forecast ? Math.abs(r.forecast.center) : null;
+
+// One sentence per card, computed from the numbers.
+function numbersGist(n, nums) {
+  const r = n.race && nums.races[n.race];
+  if (r) {
+    const c = r.candidates, f = r.forecast;
+    const gaps = r.averages.map(a => gapOf(a.shares));
+    const same = gaps.length && gaps.every(g => Math.sign(g) === Math.sign(gaps[0]) && g !== 0);
+    const abs = gaps.map(Math.abs);
+    const avg = !gaps.length ? "" : same
+      ? ` ${surname(c[gaps[0] > 0 ? 0 : 1])} ahead by ${pts(Math.min(...abs))} to ${pts(Math.max(...abs))} points in ${plural(gaps.length, "published average", "published averages")}.`
+      : ` The ${gaps.length} published averages disagree on who is ahead.`;
+    const fc = f ? `${f.chance[0] > f.chance[1] ? c[0].name : c[1].name}, ${Math.max(...f.chance)}% chance to win.` : "";
+    return `${fc}${avg}`.trim();
+  }
+  return "";
+}
+
+function numbersCards(nums) {
+  const box = el("div", "numbers-group");
+  box.append(el("h3", "numbers-group-h", "By the numbers"));
+  const ol = el("ol", "stories");
+  ol.setAttribute("aria-label", "Texas Election numbers");
+  for (const n of NUMBER_STORIES) {
+    if (n.race && !nums.races[n.race]) continue;
+    const li = el("li", "story story-data");
+    const main = el("div", "story-main");
+    main.append(el("p", "story-when", `Updated ${stamp(nums.updated_at)}`));
+    const h = el("h2", "headline");
+    const a = el("a", null, n.title);
+    a.href = `numbers.html?n=${n.key}`;
+    h.append(a);
+    main.append(h, el("p", "gist", numbersGist(n, nums)));
+    li.append(main);
+    ol.append(li);
+  }
+  box.append(ol);
+  return box;
+}
+
+function renderNumbers(nums) {
+  const n = NUMBER_STORIES.find(x => x.key === new URLSearchParams(location.search).get("n")) || NUMBER_STORIES[0];
+  const body = $("story-body");
+  document.title = `${n.title} · fACTUAL`;
+  $("story-title").textContent = n.title;
+  $("story-meta").textContent = `Texas Election \u00b7 By the numbers \u00b7 Updated ${stamp(nums.updated_at)}`;
+  const tools = el("div", "story-tools");
+  const back = el("a", "back-link");
+  back.append(el("span", "back-arrow", "\u2190"), document.createTextNode(" Texas Election"));
+  back.querySelector(".back-arrow").setAttribute("aria-hidden", "true");
+  back.href = "./#texas";
+  tools.append(back);
+  $("story-meta").before(tools);
   const sec = el("section", "block numbers");
-  sec.id = "numbers";
-  sec.append(el("h2", "block-title", "The numbers"));
-  const key = CAPSULE ? sget("fx-capsule", sessionStorage) : null;
-  getJSON(key ? `data/capsule/${key}/tx-numbers.json` : "data/tx-numbers.json", true).then(nums => {
-    const r = nums && nums.races && nums.races[story.sid];
-    if (!r) { sec.remove(); return; }
-    const cands = r.candidates;
-    if (r.forecast) sec.append(forecastBlock(r.forecast, cands));
-    sec.append(pollsBlock(r, cands, nums.recent_days || 30));
-    sec.append(citedBlock(r, cands));
-    if (nums.history) sec.append(historyBlock(nums.history, r.forecast, cands));
-    sec.append(moneyBlock(r.money, cands));
-    sec.append(el("p", "num-updated", `Numbers updated ${stamp(nums.updated_at)}`));
-  }).catch(() => sec.remove());
-  return sec;
+  const r = n.race && nums.races[n.race];
+  if (r) {
+    const c = r.candidates;
+    $("story-sub").append(el("p", "byline", c.map(x => `${x.name} (${x.party})`).join(" vs. ")));
+    if (r.forecast) sec.append(forecastBlock(r.forecast, c));
+    sec.append(pollsBlock(r, c, nums.recent_days || 30));
+    if (nums.history) sec.append(historyBlock(nums.history, [{ name: "this race", lead: raceLead(r) }]));
+    sec.append(citedBlock(r, c));
+    sec.append(moneyBlock(r.money, c));
+  }
+  // The other number stories and the race's own coverage, so each is one tap away.
+  const more = el("ul", "num-next");
+  for (const o of NUMBER_STORIES.filter(o => o !== n)) {
+    const li = el("li"); const a = el("a", null, `${o.title} \u2192`); a.href = `numbers.html?n=${o.key}`; li.append(a); more.append(li);
+  }
+  if (n.sid) { const li = el("li"); const a = el("a", null, "The coverage of this race \u2192"); a.href = storyHref({ sid: n.sid }); li.append(a); more.prepend(li); }
+  sec.append(more);
+  body.append(sec);
+  const foot = el("p", "disclosure");
+  foot.append(document.createTextNode("Gathered and checked by code, with AI reading poll releases. No human review. "));
+  const m = el("a", null, "Method \u2192");
+  m.href = "how.html";
+  foot.append(m);
+  body.append(foot);
 }
 
 function renderStory(data) {
@@ -1492,8 +1570,15 @@ function renderStory(data) {
     body.append(s1);
   }
 
-  // Texas Senate and governor: the race's numbers, right after what both sides agree on.
-  if (story.region === "tx" && RACE_PAGES.includes(story.sid)) body.append(raceNumbers(story));
+  // Texas Senate and governor: the race's polls are their own story (Heston: never inside another story); a link.
+  const pollsStory = NUMBER_STORIES.find(n => n.sid === story.sid);
+  if (story.region === "tx" && pollsStory) {
+    const p = el("p", "num-link");
+    const a = el("a", null, `${pollsStory.title} \u2192`);
+    a.href = `numbers.html?n=${pollsStory.key}`;
+    p.append(a);
+    body.append(p);
+  }
 
   // 2. Splits, each side's claim checked inside its panel.
   const diffs = (brief && brief.differences) || [];
@@ -1811,6 +1896,14 @@ async function load() {
   if (page === "archive") return renderArchive(await getJSON("data/archive/index.json", true));
   if (page === "common") return renderCommon(await getJSON("common-ground.json"));
   if (page === "how") return renderHow(await getJSON("data/stories.json", true));
+  if (page === "numbers") {
+    // The investors' key shows the numbers as they stood at the cutoff, like the rest of the edition.
+    const k = sget("fx-capsule", sessionStorage);
+    const cap = k ? await getJSON(`data/capsule/${k}/tx.json`, true) : null;
+    if (cap && Date.now() >= Date.parse(cap.frozen_at)) { CAPSULE = cap; capsuleBar(cap); }
+    const nums = await getJSON(txNumbersURL());
+    return renderNumbers(nums);
+  }
   const params = new URLSearchParams(location.search);
   // The time capsule: after the Texas edition's cutoff, the investors' key opens Today as it stood then.
   const key = sget("fx-capsule", sessionStorage);

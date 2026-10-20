@@ -677,3 +677,15 @@ a.num-name:hover { text-decoration: underline; }
   .fc-pct { font-size: 2rem; }
   .money-line { grid-template-columns: 5.5rem minmax(0, 1fr) 4.25rem; gap: 8px; }
 }
+
+/* By the numbers: the Texas race numbers as stories of their own, after the section's news. */
+.numbers-group { margin-top: 24px; }
+.numbers-group-h { margin: 0 0 4px; font: 700 0.8125rem/1.2 var(--cond); letter-spacing: 0.08em; text-transform: uppercase; color: var(--lav); }
+.story-data .story-when { font-family: var(--mono); }
+.num-link { margin: 20px 0 0; font: 600 1rem/1.4 var(--cond); }
+.num-link a { color: var(--lav); text-decoration: none; }
+.num-link a:hover { text-decoration: underline; }
+.num-next { list-style: none; margin: 32px 0 0; padding: 0; border-top: 1px solid var(--line); }
+.num-next li { border-bottom: 1px solid var(--line); }
+.num-next a { display: flex; align-items: center; min-height: 48px; font: 600 0.9375rem/1.3 var(--cond); color: var(--lav); text-decoration: none; }
+.num-next a:hover { text-decoration: underline; }
