@@ -88,7 +88,12 @@ const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 const storyHref = (story, day) => `story.html?s=${encodeURIComponent(story.sid)}${day ? `&d=${day}` : ""}`;
 const dayName = d => new Date(`${d}T12:00:00`).toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
 const lead = story => story.articles.find(a => a.title === story.working_title) || story.articles[0];
-const claimOf = (lib, key) => (lib && lib.claims && lib.claims[key]) || null;
+// A decided verdict is shown only with its reason: one whose finding is empty reads as still being checked
+// (the scan checks it again). Heston, 2026-10-21: a False showed no why.
+const claimOf = (lib, key) => {
+  const c = (lib && lib.claims && lib.claims[key]) || null;
+  return c && DECIDED.includes(c.verdict) && !(c.finding || "").trim() ? null : c;
+};
 const listNames = (names, max = 4) => names.length <= max
   ? names.join(", ").replace(/, ([^,]*)$/, " and $1")
   : `${names.slice(0, max).join(", ")} and ${names.length - max} more`;

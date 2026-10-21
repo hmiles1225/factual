@@ -248,13 +248,31 @@ def explain_problem(line):
     return None
 
 
+def restates(line, claim):
+    """True when a line is mostly the claim's own words: "The assertion that Oz will lead the task force is false"
+    names nothing false. A False or Misleading line must say which part is wrong (Heston, 2026-10-21)."""
+    stop = {"the", "a", "an", "that", "is", "was", "are", "of", "to", "in", "on", "and", "it", "this", "claim", "assertion",
+            "statement", "false", "not", "true", "will", "be", "has", "have", "by", "for", "with", "as"}
+    w = lambda t: [x for x in re.findall(r"[a-z0-9']+", (t or "").lower()) if x not in stop]
+    mine, theirs = w(line), set(w(claim))
+    return bool(mine) and sum(x in theirs for x in mine) / len(mine) >= 0.8
+
+
+def line_problem(c, field, line):
+    """explain_problem, plus: a False or Misleading 'part' line must not just repeat the claim."""
+    why = explain_problem(line)
+    if not why and field == "part" and line and c.get("verdict") in ("Doesn't hold up", "Missing context") and restates(line, c.get("claim", "")):
+        why = "it repeats the claim instead of saying which part is false or what is missing"
+    return why
+
+
 def explain_ok(c):
     x = c.get("explain") or {}
-    return not explain_problem(x.get("part")) and not explain_problem(x.get("context"))
+    return not line_problem(c, "part", x.get("part")) and not line_problem(c, "context", x.get("context"))
 EXPLAIN_ASK = {  # what each line says, by verdict
     "Holds up": ("what in the claim the sources confirm", "leave empty"),
     "Missing context": ("the part of the claim that is true", "what the claim leaves out that changes the picture"),
-    "Doesn't hold up": ("exactly which part of the claim is false", "what the sources show instead"),
+    "Doesn't hold up": ("exactly which part of the claim is false, in your own words, never the claim restated", "what the sources show instead"),
     "Unproven": ("the part of the claim the sources do establish, or empty if none", "what the sources could not establish"),
 }
 EXPLAIN_PROMPT = """A fact-checker has checked this claim. Explain its verdict to a reader in two short, plain lines, using only
@@ -615,10 +633,18 @@ def main():
         if forced:
             record["rechecked"] = FORCE_RECHECK[existing]
         support_ok(record)
+        if forced and record["verdict"] in DECIDED and not record["finding"].strip():
+            record["verdict"], record["note"] = C.UN, "no part of the finding could be tied to a verified quote"
         claims[k] = record
         print(f"  {record['verdict']:<16} {text[:80]}")
         return k
 
+    # A verdict never goes out without its reason (Heston, 2026-10-21: a False claim showed no why). The number
+    # check (sourced_finding) can drop every sentence of a finding; such a claim is checked once more. If the
+    # second finding is emptied too, it is published as Unproven: we could not tie the reason to verified quotes.
+    for k, c in claims.items():
+        if c.get("verdict") in DECIDED and not (c.get("finding") or "").strip() and not c.get("rechecked"):
+            FORCE_RECHECK[k] = "its finding was emptied by the number check, and a verdict needs its reason"
     # One-off fresh checks run on their own: a claim already attached to a story is never asked for again.
     for k, why in FORCE_RECHECK.items():
         rec = claims.get(k)
@@ -933,7 +959,7 @@ def main():
         out, usage = gemini_json(prompt, EXPLAIN_SCHEMA, "low")
         # One retry, told what was wrong; a line that still breaks a rule is left empty (explain_problem).
         problems = [f"Your {f} line \"{out.get(f)}\" can't be used: {why}." for f in ("part", "context")
-                    for why in [explain_problem((out.get(f) or "").strip())] if why]
+                    for why in [line_problem(c, f, (out.get(f) or "").strip())] if why]
         if problems:
             print(f"  explain retry: {' '.join(problems)[:200]}")
             out2, usage2 = gemini_json(prompt + "\n\n" + " ".join(problems) + " Write both lines again.", EXPLAIN_SCHEMA, "low")
@@ -953,7 +979,7 @@ def main():
                 c = claims[k]
                 part, ctx = (out.get("part") or "").strip(), (out.get("context") or "").strip()
                 # Held to what readers were promised: the verdict's two plain lines, facts only (explain_problem).
-                part, ctx = ("" if explain_problem(part) else part), ("" if explain_problem(ctx) else ctx)
+                part, ctx = ("" if line_problem(c, "part", part) else part), ("" if line_problem(c, "context", ctx) else ctx)
                 c["explain"] = {"part": part if len(part) <= 240 else "", "context": ctx}
                 if c["verdict"] == "Missing context":
                     c["left_out"] = c["explain"]["context"]
