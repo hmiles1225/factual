@@ -275,12 +275,13 @@ context (at most 30 words): {context}"""
 # title ("Texas Senate race: Paxton vs. Talarico"). Heston, 2026-10-20: headlines must be specific to the story.
 # Written from the facts outlets on both sides report, kept as "<race>: <what happened>", and held in code to
 # those facts: every name and number must appear in them. Else the label stays.
-HEADLINE_VERSION = "2"   # 2: first word checked as a name (a scan ran with the gap)
+HEADLINE_VERSION = "3"   # 2: first word checked as a name (a scan ran with the gap). 3: no "race" after the race label
 HEADLINE_SCHEMA = _item({"headline": {"type": "string"}}, ["headline"])
 HEADLINE_PROMPT = """Write a news headline for the latest in this Texas election race, using only the facts below, which
 outlets on both the left and the right report. Rules: at most 11 words; plain, neutral words; what happened, newest
 first; only names and numbers that appear in the facts; no quotation marks, no colon, no question; never say who is
-winning unless a fact says so; sentence case. The race's name is added in front, so don't repeat it.
+winning unless a fact says so; sentence case. The race's name is added in front ("Texas Governor race: ..."), so never use the words race, contest or
+election, and don't repeat the office.
 
 Race: {race}
 Facts:
@@ -291,6 +292,8 @@ def headline_ok(h, facts):
     """Why a race headline can't be used, or None."""
     if not h or len(h) > 90 or re.search(r"[:\"?\u201c\u201d]", h):
         return "too long, or has a colon, quotes or a question"
+    if re.search(r"\b(race|contest)\b", h, re.I):
+        return "repeats the race label"
     low = facts.casefold()
     for n in re.findall(r"\d[\d,.]*%?", h):
         if n.rstrip(".,").casefold() not in low:
