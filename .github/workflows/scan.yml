@@ -50,8 +50,8 @@ jobs:
       - name: Group into stories
         run: python pipeline/cluster.py
 
-      # Checks claims in Today's top 5 stories. Daily caps are in pipeline/check_today.py
-      # (Anthropic $1.00, Gemini $1.50 and 150 searches, 25 new claims). Never fails the scan.
+      # Summarizes and checks Today's stories. Daily caps live in pipeline/check_today.py (testing through
+      # 2026-10-25: Gemini $5.00, Claude $2.00; then $2.00 and $1.10), 30 new claims a day. Never fails the scan.
       - name: Check Today's claims
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
