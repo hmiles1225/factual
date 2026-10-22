@@ -10,6 +10,9 @@ name: scan
 on:
   schedule:
     - cron: "17 * * * *"   # off the top of the hour, when GitHub's scheduler is busiest
+    # GitHub skips scheduled runs when busy: on 2026-10-21 it ran 5 of 24. A second time each hour covers a skip;
+    # concurrency queues overlaps, and the daily caps (not the scan count) set the cost.
+    - cron: "47 * * * *"
   push:
     branches: [main]   # a push is a deploy; one that changes only the site goes through site.yml instead
     paths-ignore: ["web/**", "method/**", "**/*.md", ".github/workflows/site.yml"]
