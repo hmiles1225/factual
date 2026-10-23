@@ -494,17 +494,33 @@ def pollster_keys(name):
     return keys or [name.lower()]
 
 
-def cited_polls(race_sid, all_polls, prior):
+def race_articles(rid):
+    """This race's articles from the scan: Texas election coverage (cluster.tx_admit) whose first matching race
+    (cluster.TX_RACES) is this one. Stories are grouped by event, so the race is read from the articles."""
+    import cluster as CL
+    path = ROOT / "data/articles.json"
+    if not path.exists():
+        return []
+    feeds = json.loads((ROOT / "pipeline/feeds.json").read_text())
+    region = {f["source"] for f in feeds["feeds"] if f.get("region")}
+    key = rid.split("-", 1)[1]
+    out = []
+    for a in json.loads(path.read_text())["articles"]:
+        if CL.tx_admit(a, a["source"] in region):
+            if next((k for k, _, rx in CL.TX_RACES if rx.search(CL.text_for(a))), None) == key:
+                out.append(a)
+    return out
+
+
+def cited_polls(rid, all_polls, prior):
     stories = json.loads((ROOT / "data/stories.json").read_text()) if (ROOT / "data/stories.json").exists() else {}
-    arts = {a["url"]: a for a in json.loads((ROOT / "data/articles.json").read_text())["articles"]} if (ROOT / "data/articles.json").exists() else {}
     side = {f["source"]: f.get("side", "unplaced") for f in stories.get("feeds", [])}
     keep = {c["url"]: c for c in prior}
-    story = next((s for s in stories.get("stories", []) if s["sid"] == race_sid), None)
-    for a in (story or {}).get("articles", []):
-        text = f"{a.get('title', '')}. {(arts.get(a['url']) or {}).get('summary', '')}".lower()
+    for a in race_articles(rid):
+        text = f"{a.get('title', '')}. {a.get('summary') or ''}".lower()
         if " poll" not in text and "survey" not in text:
             continue
-        day = (a.get("published") or (arts.get(a["url"]) or {}).get("published") or "")[:10]
+        day = (a.get("published") or "")[:10]
         for name in sorted({p["pollster"] for p in all_polls}):
             if not any(k in text for k in pollster_keys(name)):
                 continue

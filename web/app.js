@@ -432,6 +432,9 @@ function drawToday() {
     head.append(el("h2", "topic-name", t.name), el("p", "topic-span", `${t.span} \u00b7 ${list.length}`));
     sec.append(head);
     const numbers = t.key === "texas" && TXNUM && Object.keys(TXNUM.races || {}).length ? numbersCards(TXNUM) : null;
+    // Texas Election (Heston, 2026-10-23): the Capitol as its header, the numbers first, then the stories.
+    if (t.key === "texas") sec.append(figure(TX_HEADER, "section-photo"));
+    if (numbers) { sec.append(numbers); sec.append(el("h3", "numbers-group-h stories-h", "Stories")); }
     if (list.length) {
       const ol = el("ol", "stories");
       ol.setAttribute("aria-label", `${t.name} stories`);
@@ -440,7 +443,6 @@ function drawToday() {
     } else {
       sec.append(el("p", "topic-empty", t.key === "local" ? `Local coverage is a Texas-only demo for now.` : `Nothing yet that both sides are covering.`));
     }
-    if (numbers) sec.append(numbers);
     $("sections").append(sec);
     const link = el("a", list.length ? "strip-link" : "strip-link is-empty", t.name);
     link.href = `#${t.key}`;
@@ -1400,11 +1402,13 @@ function historyBlock(h, leads) {
 
 function moneyBlock(m, cands) {
   const box = el("div", "num-money");
-  box.append(el("h2", "num-h", "Money"));
+  box.append(el("h2", "num-h", m && m.source === "FEC" ? "The campaigns and outside groups" : "Cash on hand"));
   if (!m || !m.candidates || !m.candidates.length) {
     box.append(el("p", "num-note", "We could not load the campaign finance reports this time. Each scan tries again."));
     return box;
   }
+  const sides = sideSpending(m);
+  if (sides) box.append(el("p", "num-lede", `Counting what outside groups spent for a candidate and against the opponent: ${sides.map(([x, v]) => `${usd(v)} on ${x.name}\u2019s side`).join(", ")}, in the general election.`));
   const rows = [["Raised by the campaign", "raised"], ["Cash on hand", "cash"]];
   // Outside spending is shown only once the scan marks it checked (m.outside_ok): FEC raw filings can list the same
   // spending twice, in a 24/48-hour notice and again in the regular report (caught 2026-10-20).
@@ -1436,23 +1440,37 @@ function moneyBlock(m, cands) {
   return box;
 }
 
-// The race numbers are stories of their own (Heston, 2026-10-20: "dont conflate the polls with another story"):
-// a card each in the Texas Election section, a page each at numbers.html?n=<key>.
-// One story per race (Heston): its forecast, polls, the published averages, how far Texas polls have missed
-// (all eight races, read against this race's lead), which polls each side reported, and the money.
-const NUMBER_STORIES = [
-  { key: "senate", sid: "tx-senate", race: "tx-senate", title: "Texas Senate race: latest numbers" },
-  { key: "governor", sid: "tx-governor", race: "tx-governor", title: "Texas Governor race: latest numbers" },
-];
+// The race numbers are stories of their own, never inside the coverage (Heston, 2026-10-20). Two per race
+// (Heston, 2026-10-23): latest polls (forecast, polls, published averages, past misses, which polls each side
+// reported) and campaign funding. They lead the Texas Election section, then come the stories.
+const NUMBER_RACES = [{ race: "tx-senate", office: "U.S. Senate", slug: "senate" }, { race: "tx-governor", office: "Governor", slug: "governor" }];
+const NUMBER_STORIES = NUMBER_RACES.flatMap(r => [
+  { key: `${r.slug}-polls`, race: r.race, kind: "polls", title: `Texas ${r.office === "U.S. Senate" ? "Senate" : r.office} race: latest polls` },
+  { key: `${r.slug}-funding`, race: r.race, kind: "funding", title: `Texas ${r.office === "U.S. Senate" ? "Senate" : r.office} race: campaign funding` },
+]);
+const OLD_NUMBER_KEYS = { senate: "senate-polls", governor: "governor-polls" };  // links shared before the split
 let TXNUM = null;  // data/tx-numbers.json, once loaded
+// The Texas Election section's header picture: the Capitol, with the Texas flag (Commons, CC BY 3.0, credited).
+const TX_HEADER = { src: "img/texas-capitol-v1.jpg", alt: "The Texas State Capitol in Austin, under a blue sky",
+  caption: "Texas State Capitol, Austin. Photo: LoneStarMike \u00b7 CC BY 3.0 \u00b7 Wikimedia Commons",
+  source: "https://commons.wikimedia.org/wiki/File:TexasStateCapitol-2010-01.JPG" };
 const txNumbersURL = () => { const key = CAPSULE ? sget("fx-capsule", sessionStorage) : null; return key ? `data/capsule/${key}/tx-numbers.json` : "data/tx-numbers.json"; };
 const raceLead = r => r && r.forecast ? Math.abs(r.forecast.center) : null;
 
+// Outside money on each candidate's side: spent for them plus spent against their opponent.
+function sideSpending(m) {
+  if (!m || !m.outside_ok || !m.candidates || m.candidates.length !== 2) return null;
+  const [a, b] = m.candidates;
+  return [[a, (a.outside_support || 0) + (b.outside_oppose || 0)], [b, (b.outside_support || 0) + (a.outside_oppose || 0)]];
+}
+
 // One sentence per card, computed from the numbers.
 function numbersGist(n, nums) {
-  const r = n.race && nums.races[n.race];
-  if (r) {
-    const c = r.candidates, f = r.forecast;
+  const r = nums.races[n.race];
+  if (!r) return "";
+  const c = r.candidates;
+  if (n.kind === "polls") {
+    const f = r.forecast;
     const gaps = r.averages.map(a => gapOf(a.shares));
     const same = gaps.length && gaps.every(g => Math.sign(g) === Math.sign(gaps[0]) && g !== 0);
     const abs = gaps.map(Math.abs);
@@ -1462,33 +1480,48 @@ function numbersGist(n, nums) {
     const fc = f ? `${f.chance[0] > f.chance[1] ? c[0].name : c[1].name}, ${Math.max(...f.chance)}% chance to win.` : "";
     return `${fc}${avg}`.trim();
   }
-  return "";
+  const m = r.money;
+  if (!m || !m.candidates || !m.candidates.length) return "Campaign finance reports, as filed.";
+  const sides = sideSpending(m);
+  if (m.source === "FEC") {
+    const raised = m.candidates.filter(x => x.raised != null).sort((x, y) => y.raised - x.raised).map(x => `${surname(x)} ${usd(x.raised)}`).join(", ");
+    return `Raised: ${raised}.` + (sides ? ` Outside groups: ${sides.sort((x, y) => y[1] - x[1]).map(([x, v]) => `${usd(v)} on ${surname(x)}\u2019s side`).join(", ")}.` : "");
+  }
+  return `Cash on hand: ${m.candidates.filter(x => x.cash != null).sort((x, y) => y.cash - x.cash).map(x => `${surname(x)} ${usd(x.cash)}`).join(", ")}.`;
 }
 
 function numbersCards(nums) {
   const box = el("div", "numbers-group");
   box.append(el("h3", "numbers-group-h", "By the numbers"));
-  const ol = el("ol", "stories");
-  ol.setAttribute("aria-label", "Texas Election numbers");
-  for (const n of NUMBER_STORIES) {
-    if (n.race && !nums.races[n.race]) continue;
-    const li = el("li", "story story-data");
-    const main = el("div", "story-main");
-    main.append(el("p", "story-when", `Updated ${stamp(nums.updated_at)}`));
-    const h = el("h2", "headline");
-    const a = el("a", null, n.title);
-    a.href = `numbers.html?n=${n.key}`;
-    h.append(a);
-    main.append(h, el("p", "gist", numbersGist(n, nums)));
-    li.append(main);
-    ol.append(li);
+  for (const R of NUMBER_RACES) {
+    const r = nums.races[R.race];
+    if (!r) continue;
+    const g = el("div", "numbers-race");
+    g.append(el("h4", "numbers-race-h", `${R.office} \u00b7 ${r.candidates.map(x => `${x.name} (${x.party})`).join(" vs. ")}`));
+    const ol = el("ol", "stories numbers-pair");
+    ol.setAttribute("aria-label", `${R.office} numbers`);
+    for (const n of NUMBER_STORIES.filter(n => n.race === R.race)) {
+      const li = el("li", "story story-data");
+      const main = el("div", "story-main");
+      main.append(el("p", "story-when", `Updated ${stamp(nums.updated_at)}`));
+      const h = el("h2", "headline");
+      const a = el("a", null, n.kind === "polls" ? "Latest polls" : "Campaign funding");
+      a.href = `numbers.html?n=${n.key}`;
+      a.setAttribute("aria-label", n.title);
+      h.append(a);
+      main.append(h, el("p", "gist", numbersGist(n, nums)));
+      li.append(main);
+      ol.append(li);
+    }
+    g.append(ol);
+    box.append(g);
   }
-  box.append(ol);
   return box;
 }
 
 function renderNumbers(nums) {
-  const n = NUMBER_STORIES.find(x => x.key === new URLSearchParams(location.search).get("n")) || NUMBER_STORIES[0];
+  const q = new URLSearchParams(location.search).get("n");
+  const n = NUMBER_STORIES.find(x => x.key === (OLD_NUMBER_KEYS[q] || q)) || NUMBER_STORIES[0];
   const body = $("story-body");
   document.title = `${n.title} · fACTUAL`;
   $("story-title").textContent = n.title;
@@ -1505,18 +1538,20 @@ function renderNumbers(nums) {
   if (r) {
     const c = r.candidates;
     $("story-sub").append(el("p", "byline", c.map(x => `${x.name} (${x.party})`).join(" vs. ")));
-    if (r.forecast) sec.append(forecastBlock(r.forecast, c));
-    sec.append(pollsBlock(r, c, nums.recent_days || 30));
-    if (nums.history) sec.append(historyBlock(nums.history, [{ name: "this race", lead: raceLead(r) }]));
-    sec.append(citedBlock(r, c));
-    sec.append(moneyBlock(r.money, c));
+    if (n.kind === "polls") {
+      if (r.forecast) sec.append(forecastBlock(r.forecast, c));
+      sec.append(pollsBlock(r, c, nums.recent_days || 30));
+      if (nums.history) sec.append(historyBlock(nums.history, [{ name: "this race", lead: raceLead(r) }]));
+      sec.append(citedBlock(r, c));
+    } else {
+      sec.append(moneyBlock(r.money, c));
+    }
   }
-  // The other number stories and the race's own coverage, so each is one tap away.
+  // The other number stories, so each is one tap away.
   const more = el("ul", "num-next");
   for (const o of NUMBER_STORIES.filter(o => o !== n)) {
     const li = el("li"); const a = el("a", null, `${o.title} \u2192`); a.href = `numbers.html?n=${o.key}`; li.append(a); more.append(li);
   }
-  if (n.sid) { const li = el("li"); const a = el("a", null, "The coverage of this race \u2192"); a.href = storyHref({ sid: n.sid }); li.append(a); more.prepend(li); }
   sec.append(more);
   body.append(sec);
   const foot = el("p", "disclosure");
@@ -1549,8 +1584,7 @@ function renderStory(data) {
   top.classList.add("share-top");
   top.setAttribute("aria-label", "Share this story");
   document.querySelector(".mast-right").prepend(top);
-  // A Texas race story's headline is written by us from the facts both sides report, so no outlet is credited.
-  $("story-sub").append(el("p", "byline", story.headline_by === "fACTUAL" ? "Headline by fACTUAL, from facts outlets on both sides report" : `Headline \u00b7 ${lead(story).source}`));
+  $("story-sub").append(el("p", "byline", `Headline \u00b7 ${lead(story).source}`));
   if (story.image) $("story-sub").append(figure(story.image, "story-photo"));
 
   const brief = story.brief;
@@ -1577,16 +1611,6 @@ function renderStory(data) {
     }
     s1.append(ul);
     body.append(s1);
-  }
-
-  // Texas Senate and governor: the race's polls are their own story (Heston: never inside another story); a link.
-  const pollsStory = NUMBER_STORIES.find(n => n.sid === story.sid);
-  if (story.region === "tx" && pollsStory) {
-    const p = el("p", "num-link");
-    const a = el("a", null, `${pollsStory.title} \u2192`);
-    a.href = `numbers.html?n=${pollsStory.key}`;
-    p.append(a);
-    body.append(p);
   }
 
   // 2. Splits, each side's claim checked inside its panel.

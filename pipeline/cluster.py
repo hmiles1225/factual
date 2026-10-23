@@ -218,8 +218,8 @@ def tx_admit(art, from_region):
 TX_SID = "tx"  # Texas story ids start with this, so they never collide with a national story's id
 # Texas Election is grouped by race, not by event: one story per race, updated through Election Day. First match
 # wins, so an article on Paxton's Senate bid is a Senate story even though he is attorney general.
-# Titles name the candidates in Texas ballot order (the governor's party first), which this year is also
-# alphabetical, and match the numbers stories ("Texas Senate race: latest numbers"). Heston, 2026-10-20.
+# Races, in this order (first match wins): used to sort Texas articles by race for the numbers (tx_numbers.py).
+# Stories are grouped by event, not by race. Names in ballot order (the governor's party first).
 TX_RACES = [
     ("senate", "Texas Senate race: Paxton vs. Talarico", re.compile(r"(?<!State )\b(Senate|Paxton|Talarico|Cornyn)\b")),  # not the state Senate
     ("governor", "Texas Governor race: Abbott vs. Hinojosa", re.compile(r"\b(governor|gubernatorial|Abbott|Hinojosa)\b", re.I)),
@@ -339,12 +339,11 @@ def main():
     # Texas Election: recent election coverage that is about Texas (or from a Texas outlet), grouped on its own.
     if tx_live:
         # A week of it: election stories build over days, and the demo runs to Election Day.
+        # Grouped by event like every other section, each story under its own outlet headline (Heston,
+        # 2026-10-23: one rolling story per race put every headline under one title). TX_RACES still sorts
+        # articles by race for the numbers (tx_numbers.py).
         tx_ids = [i for i, a in enumerate(news) if hours(a) is not None and tx_admit(a, a["source"] in region_of)]
-        by_race = {}
-        for i in tx_ids:
-            key = next(k for k, _, rx in TX_RACES if rx.search(text_for(news[i])))
-            by_race.setdefault(key, []).append(i)
-        clusters += [(ids, "texas:" + key) for key, ids in by_race.items()]
+        clusters += [(m, "texas") for m in sub(tx_ids, POOL_DAYS * 24)]
 
     side = {f["source"]: side_of(f) for f in feeds["feeds"]}
     # Audience lean, 0 = all Democratic users, 1 = all Republican users (Pew), for the spectrum charts.
@@ -369,16 +368,16 @@ def main():
         order = [int(i) for i in np.argsort(-closeness)]
         lead = next((arts[i] for i in order if not is_media(arts[i])), arts[order[0]])
         coverage = {k: [src for src in sources if side.get(src, "unplaced") == k] for k in (*SIDES, "unplaced")}
-        texas = span.startswith("texas")
-        race = span.split(":", 1)[1] if texas else None
+        texas = span == "texas"
         r = roster_tx if texas else roster
         shares = [len(coverage[k]) / len(r[k]) if r[k] else 0.0 for k in SIDES]
         # A story keeps its id from the last scan when most of its articles were in that story, so
         # links keep working and its summary is not paid for again as old articles age out.
         first = min(arts, key=lambda a: (a["published"] or "", a["url"]))
-        votes = Counter(s for a in arts for s in prev_sid.get(a["url"], ()) if s.startswith(TX_SID) == texas)
+        # Texas ids are "tx" + hash; the retired race ids ("tx-senate") are never carried onto an event story.
+        votes = Counter(s for a in arts for s in prev_sid.get(a["url"], ()) if s.startswith(TX_SID) == texas and not s.startswith(TX_SID + "-"))
         carried = next((sid for sid, n in votes.most_common(1) if n >= max(2, 0.3 * len(arts)) and sid not in used_sids), None)
-        sid = f"{TX_SID}-{race}" if texas else (carried or hashlib.sha1(first["url"].encode()).hexdigest()[:10])  # a race keeps one address
+        sid = carried or (TX_SID if texas else "") + hashlib.sha1(first["url"].encode()).hexdigest()[:8 if texas else 10]
         while sid in used_sids:  # a new id can match one carried from the last scan: never reuse one
             sid = (TX_SID if texas else "") + hashlib.sha1((sid + "+").encode()).hexdigest()[:8 if texas else 10]
         used_sids.add(sid)
@@ -387,7 +386,7 @@ def main():
             "sid": sid,
             "span": "day" if texas else span,
             "region": "tx" if texas else None,
-            "working_title": next(t for k, t, _ in TX_RACES if k == race) if texas else lead["title"],
+            "working_title": lead["title"],
             "outlets": len(sources),
             "sources": sources,
             "coverage": coverage,
