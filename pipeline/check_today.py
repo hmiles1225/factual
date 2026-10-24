@@ -53,9 +53,9 @@ MAX_NEW_PER_SCAN = 5
 MAX_NEW_PER_DAY = 30
 CLAIMS_EXTRA = {"2026-10-19": (30, 10)}   # one-off (more per day, more per scan), Heston: check the new sections now
 # "Decent" fact-check coverage for the proof of concept (Heston's call, 2026-10-19): about 16 to 20 checks a
-# day, nearly every politics account. At most $3.10/day, ~$93/month.
+# day, nearly every politics account. At most $3.10/day, ~$93/month; $4.10/day (~$123/month) with full stories (2026-10-24).
 ANTHROPIC_DAILY_USD = 1.10       # two Opus second opinions (~$0.51 each) a day
-GEMINI_DAILY_USD = 2.00          # summaries, checks, and searches past Google's free allowance
+GEMINI_DAILY_USD = 3.00          # summaries, full stories, checks, and searches past Google's free allowance (Heston 2026-10-24: +$1 for full stories)
 # Testing period (Heston, 2026-10-19: "ok with going over cap, since we are testing"). A higher ceiling, not
 # none: it still stops a runaway loop. Ends by itself; the caps above apply again from TESTING_UNTIL + 1 day.
 TESTING_UNTIL = "2026-10-25"
@@ -289,6 +289,89 @@ The checker's finding: {finding}
 
 part (at most 25 words): {part}
 context (at most 30 words): {context}"""
+# The full story (Heston, 2026-10-24: readers ask "I want to read the whole story"). Written only from what the
+# brief already holds: facts both sides report (stated plainly), facts one side reports (always attributed to
+# their outlets), the splits (each version with its outlets) and our checks. Every sentence lists the material
+# it uses, and code holds it to that material: names and numbers must be in it, one-side material must name an
+# outlet, none of the story's loaded words, nothing that argues. A failing sentence is dropped; under three
+# sentences, no full story. Rewritten when the brief changes or a check on the story is decided.
+FULL_VERSION = "1"
+FULL_SCHEMA = _item({"paragraphs": {"type": "array", "items": _item({"sentences": {"type": "array", "items": _item({
+    "text": {"type": "string"}, "sources": {"type": "array", "items": {"type": "string"}}}, ["text", "sources"])}}, ["sentences"])}},
+    ["paragraphs"])
+FULL_PROMPT = """Write the full story of this news event for a reader who wants all of it, the way a neutral wire-service
+reporter would, using ONLY the numbered material below. Rules:
+- Open with what outlets on both the left and the right report (marked BOTH), stated plainly, most important first.
+- Anything not marked BOTH must say who reports it, by outlet name ("Fox News and the New York Post report that ...").
+- Where coverage differs, give each version with its outlets, in the same neutral words. If fACTUAL checked it, say what
+  the check found, in plain words ("fACTUAL's check found this false: ...").
+- No opinion, no judgment of anyone's motives, no words that take a side, and never these words: {loaded}.
+- Never add a fact, name, number, date or quotation that is not in the material.
+- 3 to 6 short paragraphs of 2 to 4 sentences. For every sentence, list the ids of the material it uses (F1, P1a, ...).
+
+Material:
+{material}"""
+SHOWN_VERDICT = {"Holds up": "confirmed", "Missing context": "misleading", "Doesn't hold up": "false", "Unproven": "unproven"}
+SIDE_WORDS = re.compile(r"\b(left|right)-leaning\b|\bcenter outlets?\b", re.I)
+TAKES_SIDES = re.compile(r"\b(clearly|obviously|shocking\w*|outrage\w*|disgrace\w*|so-called|slammed|blasted|radical|extremist|"
+                         r"far-left|far-right|smear\w*|unfortunately|fortunately|rightly|wrongly)\b", re.I)
+FULL_STARTS = {"according", "the", "a", "an", "in", "on", "at", "after", "before", "both", "outlets", "coverage", "it", "they",
+               "he", "she", "his", "her", "their", "this", "that", "these", "those", "while", "whether", "some", "other", "others",
+               "also", "however", "but", "and", "as", "when", "since", "for", "by", "of", "factual", "factual's", "left-leaning",
+               "right-leaning", "center", "neither", "no", "none", "until", "during", "with", "what", "which", "who"}
+
+
+def full_material(brief, claims):
+    """The numbered material for the full story, and per id: its text and its outlets (None when both sides)."""
+    lines, src = [], {}
+    for i, f in enumerate(brief.get("agreed", []), 1):
+        both = "left" in f["sides"] and "right" in f["sides"]
+        k = f"F{i}"
+        src[k] = {"text": f["fact"], "outlets": None if both else list(f.get("reported_by", []))}
+        lines.append(f"{k} [{'BOTH' if both else 'reported by ' + ', '.join(f.get('reported_by', []))}] {f['fact']}")
+    for di, d in enumerate(brief.get("differences", []), 1):
+        lines.append(f"D{di} where coverage differs: {d.get('point', '')}")
+        for pi, pos in enumerate(d.get("positions", [])):
+            k = f"P{di}{chr(97 + pi)}"
+            c = claims.get(pos.get("check")) if pos.get("check") else None
+            check = ""
+            if c and c.get("verdict") in SHOWN_VERDICT and (c.get("finding") or "").strip():
+                x = c.get("explain") or {}
+                check = f" | fACTUAL checked '{c['claim']}': {SHOWN_VERDICT[c['verdict']]}. " + " ".join(t for t in (x.get("part"), x.get("context")) if t)
+            text = f"{pos.get('says', '')}{check}"
+            src[k] = {"text": text, "outlets": list(pos.get("outlets", []))}
+            lines.append(f"  {k} [reported by {', '.join(pos.get('outlets', []))}] {text}")
+    return "\n".join(lines), src
+
+
+def full_sentence_problem(text, ids, src, loaded):
+    """Why a full-story sentence can't be used, or None."""
+    used = [src[i] for i in ids if i in src]
+    if not used or len(used) != len(ids):
+        return "it cites no material, or material that doesn't exist"
+    if len(text.split()) > 45:
+        return "too long"
+    pool = " ".join(u["text"] for u in used) + " " + " ".join(o for u in used for o in (u["outlets"] or []))
+    low = pool.casefold()
+    for n in re.findall(r"\d[\d,.]*", text):
+        if n.rstrip(".,") not in pool:
+            return f"number {n} is not in its material"
+    for j, w in enumerate(text.split()):
+        w = re.sub(r"[^\w'\u2019.-]", "", w).rstrip(".")
+        base = w.casefold().replace("\u2019", "'").split("'s")[0]
+        if w[:1].isupper() and base not in low and not (j == 0 and base in FULL_STARTS) and base not in FULL_STARTS:
+            return f"name {w} is not in its material"
+    for u in used:  # one-side material names its outlets (or the side)
+        if u["outlets"] and not any(o.casefold() in text.casefold() for o in u["outlets"]) and not SIDE_WORDS.search(text):
+            return "one side's material without saying who reports it"
+    for t in loaded:
+        if t and t.casefold() in text.casefold():
+            return f"uses the loaded term '{t}'"
+    if TAKES_SIDES.search(text) or PLEADING.search(text):
+        return "takes a side or argues"
+    return None
+
+
 POLL_VERSION = "1"
 POLL_SCHEMA = _item({"polls": {"type": "array", "items": _item({
     "question": {"type": "string", "description": "The question as a reader would answer it, neutral, at most 25 words."},
@@ -871,6 +954,35 @@ def main():
         story["brief"] = brief
         story["checks"] = [k for d in brief["differences"] for k in [d.get("check")] + [p.get("check") for p in d["positions"]] if k] \
             + [a["check"] for a in brief.get("ad_claims", []) if a.get("check")]
+        # The full story, for stories that will be on Today (facts both sides report), from the brief only.
+        if any("left" in f["sides"] and "right" in f["sides"] for f in brief["agreed"]):
+            sig = json.dumps(sorted((k, claims[k].get("verdict")) for k in story["checks"] if k in claims))
+            if (brief.get("full_v") != FULL_VERSION or brief.get("full_sig") != sig) and gemini_ok():
+                material, src = full_material(brief, claims)
+                loaded = [t.get("term", "") for t in brief.get("loaded", [])]
+                try:
+                    out, usage = gemini_json(FULL_PROMPT.replace("{loaded}", ", ".join(f'"{t}"' for t in loaded) or "(none)")
+                                             .replace("{material}", material), FULL_SCHEMA, "low")
+                    charge_gemini(usage)
+                    paras, dropped = [], 0
+                    for para in out.get("paragraphs", [])[:6]:
+                        keep = []
+                        for sent in para.get("sentences", [])[:4]:
+                            text, ids = (sent.get("text") or "").strip(), [i.strip() for i in sent.get("sources", [])]
+                            why = full_sentence_problem(text, ids, src, loaded)
+                            if why:
+                                dropped += 1
+                                print(f"  full story sentence dropped ({why}): {text[:90]}")
+                            else:
+                                keep.append({"text": text, "sources": ids})
+                        if keep:
+                            paras.append(keep)
+                    n = sum(len(p) for p in paras)
+                    brief["full_story"] = paras if n >= 3 else None
+                    brief["full_v"], brief["full_sig"] = FULL_VERSION, sig
+                    print(f"  full story: {n} sentences kept, {dropped} dropped")
+                except Exception as e:
+                    print(f"  full story failed: {e}")
         # A picture approved for this summary is kept: stable from scan to scan, and no lookup or check repeats
         # (so pictures don't drop when the day's budget is spent). A new summary or rule version re-picks.
         if brief.get("image_v") != IMAGES_VERSION or not brief.get("image"):

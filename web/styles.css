@@ -712,3 +712,7 @@ a.num-name:hover { text-decoration: underline; }
 .numbers-pair .story { margin: 0; }
 .stories-h { margin-top: 28px; }
 @media (max-width: 639px) { .numbers-pair { grid-template-columns: 1fr; } }
+
+/* The full story: reading text, not chrome. */
+.full-story .full-p { margin: 0 0 14px; max-width: 68ch; font: 400 1.0625rem/1.65 var(--sans); color: var(--ink); }
+.full-story .full-p:first-of-type { font-size: 1.125rem; }

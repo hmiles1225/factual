@@ -1613,6 +1613,20 @@ function renderStory(data) {
     body.append(s1);
   }
 
+  // The full story (Heston, 2026-10-24: readers want to read all of it), written by the scan from this page's own
+  // material: both sides' facts plainly, one side's facts attributed, each version of a split with its outlets.
+  const full = brief && brief.full_story;
+  if (full && full.length) {
+    const sf = el("section", "block full-story");
+    sf.id = "full-story";
+    sf.append(el("h2", "block-title", "The full story"));
+    for (const para of full) sf.append(el("p", "full-p", para.map(x => x.text).join(" ")));
+    const basis = el("p", "num-basis");
+    basis.append(el("strong", null, "Based on "), document.createTextNode("only the facts and splits on this page. What both sides report is stated plainly; anything one side reports names its outlets. Written by AI; every name and number checked in code against that material."));
+    sf.append(basis);
+    body.append(sf);
+  }
+
   // 2. Splits, each side's claim checked inside its panel.
   const diffs = (brief && brief.differences) || [];
   if (diffs.length) {
