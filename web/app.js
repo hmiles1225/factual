@@ -1505,9 +1505,9 @@ function numbersCards(nums) {
       const main = el("div", "story-main");
       main.append(el("p", "story-when", `Updated ${stamp(nums.updated_at)}`));
       const h = el("h2", "headline");
-      const a = el("a", null, n.kind === "polls" ? "Latest polls" : "Campaign funding");
+      // Card titles (Heston, 2026-10-24): "Senate race: latest polls"; the section already says Texas.
+      const a = el("a", null, n.title.replace(/^Texas /, ""));
       a.href = `numbers.html?n=${n.key}`;
-      a.setAttribute("aria-label", n.title);
       h.append(a);
       main.append(h, el("p", "gist", numbersGist(n, nums)));
       li.append(main);

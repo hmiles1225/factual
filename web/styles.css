@@ -184,6 +184,14 @@ html.app .tab-bar { display: flex; }
 .headline { margin: 0; font: 600 1.3125rem/1.12 var(--cond); }
 .headline a { text-decoration: none; }
 .headline a:hover { text-decoration: underline; text-decoration-thickness: 1px; }
+/* The whole card opens the story (Heston, 2026-10-24): the headline's link is stretched over the card, so
+   there is still one link per card for keyboards and screen readers. The photo credit stays clickable above it. */
+.story { position: relative; cursor: pointer; }
+.headline a::after { content: ""; position: absolute; inset: 0; z-index: 1; border-radius: 12px; }
+.headline a:focus-visible { outline: none; }
+.headline a:focus-visible::after { outline: 2px solid var(--lav); outline-offset: 2px; }
+.story:hover .headline a { text-decoration: underline; text-decoration-thickness: 1px; }
+.story figcaption a { position: relative; z-index: 2; }
 .story-lead .headline { font-size: clamp(1.5625rem, 4vw, 2.125rem); line-height: 1.06; }
 .gist { margin: 0; font: 400 0.96875rem/1.45 var(--sans); color: var(--ink-2); max-width: 64ch; }
 
