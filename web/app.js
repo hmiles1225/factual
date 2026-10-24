@@ -1628,7 +1628,6 @@ function renderStory(data) {
     for (const para of full.slice(1)) rest.append(el("p", "full-p", para.map(x => x.text).join(" ")));
     const basis = el("p", "num-basis");
     basis.append(el("strong", null, "Based on "), document.createTextNode("only the facts and splits on this page. What both sides report is stated plainly; anything one side reports names its outlets. Written by AI; every name and number checked in code against that material."));
-    rest.append(basis);
     if (full.length > 1) {
       rest.hidden = true;
       const more = el("button", "full-toggle", "Read the full story");
@@ -1646,6 +1645,7 @@ function renderStory(data) {
       rest.hidden = false;
       sf.append(rest);
     }
+    sf.append(basis);  // the basis rule: what it rests on is always in view, preview or not
     body.append(sf);
   }
 
