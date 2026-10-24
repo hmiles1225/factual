@@ -159,6 +159,9 @@ NOT_POLITICS = [
     "A football, basketball or baseball player is ejected, suspended or injured", "College football and basketball games and coaches",
     "A TV news anchor or journalist leaves a network, is suspended or apologizes for a post",
     "A pro team fires its coach or general manager", "An athlete's or celebrity's marriage, divorce or family life",
+    # Heston, 2026-10-24: a Fox News hosts' wedding party was on Today under Politics.
+    "A TV news host's wedding, engagement or party, even with a president or politicians attending",
+    "A celebrity, actress or TV personality defends an interview, a remark or their personal life",
 ]
 TOPIC_MARGIN = 0.01
 # Politics moves by the day; energy and environment, science, health and education move by the week. Politics is grouped from
@@ -256,6 +259,19 @@ def is_opinion(art):
     return bool(OPINION_PATH.search(art["url"]) or OPINION_TITLE.search(art["title"]))
 
 
+# Commerce, not news: shopping deals, coupon pages and sportsbook promo codes (Heston, 2026-10-24: a Wayfair sale
+# was on Today). By the outlets' commerce sections and by deal headlines; never the word "deal" alone, which is
+# also a ceasefire deal or a plea deal.
+COMMERCE_PATH = re.compile(r"/(deals|shopping|coupons?|cnn-underscored|forbes-personal-shopper|outkick-betting|commerce|"
+                           r"affiliate|product-reviews?|best-products|gift-guides?)(/|-|$)", re.I)
+COMMERCE_TITLE = re.compile(r"\b(promo codes?|coupon codes?|coupons|discount codes?|up to \d+% off|\d+% off|prime day|"
+                            r"black friday deals|cyber monday deals|gift guide|best deals|deals of the (day|week)|sale is (live|here))\b", re.I)
+
+
+def is_commerce(art):
+    return bool(COMMERCE_PATH.search(art["url"]) or COMMERCE_TITLE.search(art["title"]))
+
+
 def text_for(art):
     summary = art.get("summary") or ""
     return f"{art['title']}. {summary[:300]}"
@@ -307,7 +323,7 @@ def group(vectors, times, window=None):
 def main():
     scan = json.loads((ROOT / "data/articles.json").read_text())
     articles = scan["articles"]
-    news = [a for a in articles if not is_opinion(a)]
+    news = [a for a in articles if not is_opinion(a) and not is_commerce(a)]
     opinion = len(articles) - len(news)
 
     model = TextEmbedding(MODEL)
