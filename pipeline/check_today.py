@@ -305,6 +305,9 @@ reporter would, using ONLY the numbered material below. Rules:
 - Anything not marked BOTH must say who reports it, by outlet name ("Fox News and the New York Post report that ...").
 - Where coverage differs, give each version with its outlets, in the same neutral words. If fACTUAL checked it, say what
   the check found, in plain words ("fACTUAL's check found this false: ...").
+- Some material describes how outlets frame or emphasize the story rather than a fact. Write it as those outlets' own
+  framing ("The Daily Mail and the New York Post frame the charges as ..."), never as outlets reporting what other
+  outlets do ("X reports that right-leaning outlets frame ...").
 - No opinion, no judgment of anyone's motives, no words that take a side, and never these words: {loaded}.
 - Never add a fact, name, number, date or quotation that is not in the material.
 - 3 to 6 short paragraphs of 2 to 4 sentences. For every sentence, list the ids of the material it uses (F1, P1a, ...).
@@ -369,6 +372,8 @@ def full_sentence_problem(text, ids, src, loaded):
             return f"uses the loaded term '{t}'"
     if TAKES_SIDES.search(text) or PLEADING.search(text):
         return "takes a side or argues"
+    if re.search(r"\breports? that\b[^.]*\b(outlets|coverage)\b", text, re.I):
+        return "has outlets reporting what other outlets do"
     return None
 
 
@@ -975,9 +980,12 @@ def main():
         # The full story, for stories that will be on Today (facts both sides report), from the brief only.
         if any("left" in f["sides"] and "right" in f["sides"] for f in brief["agreed"]):
             sig = json.dumps(sorted((k, claims[k].get("verdict")) for k in story["checks"] if k in claims))
-            if (brief.get("full_v") != FULL_VERSION or brief.get("full_sig") != sig) and gemini_ok():
-                material, src = full_material(brief, claims)
-                loaded = [t.get("term", "") for t in brief.get("loaded", [])]
+            material, src = full_material(brief, claims)
+            loaded = [t.get("term", "") for t in brief.get("loaded", [])]
+            # A stored full story is rewritten when the brief or its checks change, or when a sentence in it fails
+            # a rule added since (so a new rule fixes only the stories it catches).
+            stale = any(full_sentence_problem(x["text"], x["sources"], src, loaded) for p in (brief.get("full_story") or []) for x in p)
+            if (brief.get("full_v") != FULL_VERSION or brief.get("full_sig") != sig or stale) and gemini_ok():
                 try:
                     out, usage = gemini_json(FULL_PROMPT.replace("{loaded}", ", ".join(f'"{t}"' for t in loaded) or "(none)")
                                              .replace("{material}", material), FULL_SCHEMA, "low")
