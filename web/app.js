@@ -329,8 +329,10 @@ const brokeAt = s => Math.min(...s.articles.map(a => Date.parse(a.published) || 
 // What the card shows: when the story was last updated, its newest article (Heston, 2026-10-24: "First reported
 // 2 days ago" on every card made live stories look stale).
 const updatedAt = s => Math.max(...s.articles.map(a => Date.parse(a.published) || -Infinity));
-function updatedAgo(s) {
-  const t = Math.min(updatedAt(s), Date.now());
+const updatedAgo = s => agoText(updatedAt(s));
+// "Updated 35 min ago", "Updated 3h ago", "Updated yesterday": every card says it the same way (Heston, 2026-10-24).
+function agoText(when) {
+  const t = Math.min(when, Date.now());
   if (!isFinite(t)) return null;
   const m = Math.max(0, Math.round((Date.now() - t) / 60000));
   if (m < 60) return `Updated ${Math.max(m, 1)} min ago`;
@@ -1506,7 +1508,7 @@ function numbersCards(nums) {
     for (const n of NUMBER_STORIES.filter(n => n.race === R.race)) {
       const li = el("li", "story story-data");
       const main = el("div", "story-main");
-      main.append(el("p", "story-when", `Updated ${stamp(nums.updated_at)}`));
+      main.append(el("p", "story-when", agoText(Date.parse(nums.updated_at))));
       const h = el("h2", "headline");
       // Card titles (Heston, 2026-10-24): "Senate race: latest polls"; the section already says Texas.
       const a = el("a", null, n.title.replace(/^Texas /, ""));
