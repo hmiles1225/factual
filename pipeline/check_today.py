@@ -462,6 +462,19 @@ def key_of(text):
 
 
 THOUGHTS = {"tokens": 0, "calls": 0}   # thinking tokens this scan, logged so effort can be tuned on data
+# Every refused AI call this scan (billing, quota, server), saved in the library as ai_errors, so a run-out
+# balance shows the same hour (Heston's Gemini credit hit -$0.05 on 2026-10-24 and we couldn't see it).
+AI_ERRORS = []
+
+
+def note_ai_error(where, e):
+    body = ""
+    if isinstance(e, urllib.error.HTTPError):
+        try:
+            body = e.read().decode("utf-8", "replace")[:200]
+        except Exception:
+            pass
+    AI_ERRORS.append({"where": where, "error": f"{type(e).__name__}: {e} {body}".strip()[:300]})
 
 
 def gemini_json(prompt, schema, thinking=None):
@@ -473,8 +486,12 @@ def gemini_json(prompt, schema, thinking=None):
         req_body["generation_config"] = {"thinking_level": thinking}
     body = json.dumps(req_body).encode()
     req = urllib.request.Request(C.GEMINI_URL, data=body, headers={"Content-Type": "application/json", "x-goog-api-key": key})
-    with urllib.request.urlopen(req, timeout=120, context=C.SSL_CTX) as r:
-        raw = json.loads(r.read())
+    try:
+        with urllib.request.urlopen(req, timeout=120, context=C.SSL_CTX) as r:
+            raw = json.loads(r.read())
+    except Exception as e:
+        note_ai_error("gemini", e)
+        raise
     texts = []
     C._walk(raw.get("steps", raw), lambda n: texts.append(n["text"]) if isinstance(n, dict) and n.get("type") == "text" and isinstance(n.get("text"), str) else None)
     u = raw.get("usage") or {}
@@ -657,6 +674,7 @@ def main():
             first = C.check(text, "gemini")
         except Exception as e:
             print(f"  check failed: {text[:60]}: {e}")
+            note_ai_error("check", e)
             return existing
         charge_pipe()
         charge_gemini(first["usage"], first.get("web_searches", 0))
@@ -1066,6 +1084,7 @@ def main():
     live = {s["sid"] for s in data["stories"]}
     lib["briefs"] = {k: v for k, v in briefs.items() if k in live}
     lib["updated_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    lib["ai_errors"] = {"at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "count": len(AI_ERRORS), "last": AI_ERRORS[-3:]}
     lib["caps"] = {"anthropic_daily_usd": ANTHROPIC_DAILY_USD, "gemini_daily_usd": GEMINI_DAILY_USD,
                    "today_gemini_cap": gemini_cap, "today_anthropic_cap": anthropic_cap, "testing_until": TESTING_UNTIL,
                    "gemini_free_searches": GEMINI_FREE_SEARCHES, "search_usd": SEARCH_USD, "new_claims_per_day": new_per_day}
