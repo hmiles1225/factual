@@ -1620,10 +1620,32 @@ function renderStory(data) {
     const sf = el("section", "block full-story");
     sf.id = "full-story";
     sf.append(el("h2", "block-title", "The full story"));
-    for (const para of full) sf.append(el("p", "full-p", para.map(x => x.text).join(" ")));
+    // A preview, then the rest on request (Heston, 2026-10-24: don't push the splits and checks down). The first
+    // paragraph is always what both sides report.
+    sf.append(el("p", "full-p", full[0].map(x => x.text).join(" ")));
+    const rest = el("div", "full-rest");
+    rest.id = "full-rest";
+    for (const para of full.slice(1)) rest.append(el("p", "full-p", para.map(x => x.text).join(" ")));
     const basis = el("p", "num-basis");
     basis.append(el("strong", null, "Based on "), document.createTextNode("only the facts and splits on this page. What both sides report is stated plainly; anything one side reports names its outlets. Written by AI; every name and number checked in code against that material."));
-    sf.append(basis);
+    rest.append(basis);
+    if (full.length > 1) {
+      rest.hidden = true;
+      const more = el("button", "full-toggle", "Read the full story");
+      more.type = "button";
+      more.setAttribute("aria-expanded", "false");
+      more.setAttribute("aria-controls", "full-rest");
+      more.addEventListener("click", () => {
+        const open = rest.hidden;
+        rest.hidden = !open;
+        more.setAttribute("aria-expanded", String(open));
+        more.textContent = open ? "Show less" : "Read the full story";
+      });
+      sf.append(rest, more);
+    } else {
+      rest.hidden = false;
+      sf.append(rest);
+    }
     body.append(sf);
   }
 

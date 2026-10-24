@@ -716,3 +716,7 @@ a.num-name:hover { text-decoration: underline; }
 /* The full story: reading text, not chrome. */
 .full-story .full-p { margin: 0 0 14px; max-width: 68ch; font: 400 1.0625rem/1.65 var(--sans); color: var(--ink); }
 .full-story .full-p:first-of-type { font-size: 1.125rem; }
+.full-toggle { display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border: 1px solid var(--line);
+  border-radius: 22px; background: var(--surf); color: var(--lav); font: 600 0.9375rem/1 var(--cond); cursor: pointer; }
+.full-toggle:hover { border-color: var(--lav); }
+.full-rest { margin-bottom: 12px; }
