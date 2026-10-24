@@ -323,18 +323,21 @@ function linkTiles(ul) {
   }
 }
 
-// When a story was first reported: its earliest article among the outlets we read. Shown on every card, since
-// Today is in this order. Not "Broke" (Heston, 2026-10-20).
+// When a story first appeared: its earliest article among the outlets we read. Today is in this order (newest
+// first), which stays put as outlets add articles.
 const brokeAt = s => Math.min(...s.articles.map(a => Date.parse(a.published) || Infinity));
-function brokeAgo(s) {
-  const t = brokeAt(s);
+// What the card shows: when the story was last updated, its newest article (Heston, 2026-10-24: "First reported
+// 2 days ago" on every card made live stories look stale).
+const updatedAt = s => Math.max(...s.articles.map(a => Date.parse(a.published) || -Infinity));
+function updatedAgo(s) {
+  const t = Math.min(updatedAt(s), Date.now());
   if (!isFinite(t)) return null;
   const m = Math.max(0, Math.round((Date.now() - t) / 60000));
-  if (m < 60) return `First reported ${Math.max(m, 1)} min ago`;
+  if (m < 60) return `Updated ${Math.max(m, 1)} min ago`;
   const h = Math.round(m / 60);
-  if (h < 24) return `First reported ${h}h ago`;
+  if (h < 24) return `Updated ${h}h ago`;
   const d = Math.round(h / 24);
-  return d === 1 ? "First reported yesterday" : `First reported ${d} days ago`;
+  return d === 1 ? "Updated yesterday" : `Updated ${d} days ago`;
 }
 
 // Photo subjects already on the home page, top to bottom. A repeat uses the story's second picture, or none.
@@ -365,7 +368,7 @@ function storyCard(story, i, data, isLead) {
   const img = (isLead || i === 0) ? photoFor(story) : null;
   if (img) li.append(figure(img, isLead ? "lead-photo" : "card-photo", storyHref(story)));
   const main = el("div", "story-main");
-  const when = brokeAgo(story);
+  const when = updatedAgo(story);
   if (when) main.append(el("p", "story-when", when));
   main.append(metricRow(story, "metrics"));
   const h = el("h2", "headline");
@@ -1921,7 +1924,7 @@ function moreStories(story, data) {
     const li = el("li");
     const a = el("a", "more-tile");
     a.href = storyHref(s, data.archiveDay);
-    const when = data.archiveDay ? null : brokeAgo(s);
+    const when = data.archiveDay ? null : updatedAgo(s);
     a.append(el("p", "more-kicker", [topicName(s.topic), when].filter(Boolean).join(" \u00b7 ")), el("p", "more-title", s.working_title), metricRow(s, "metrics"));
     li.append(a);
     ul.append(li);
