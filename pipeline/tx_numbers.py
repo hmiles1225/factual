@@ -848,13 +848,15 @@ def main():
             spend["anthropic_usd"] = round(spend["anthropic_usd"] + CT.UNDERCOUNT * CT.cost_usd(HAIKU, usage), 4)
             return out
     cross = live.get("crosstabs", {}) if live.get("crosstabs_v") == CROSS_V else {}
-    cross_left = [CROSS_PER_SCAN]
+    cross_left = {rid: CROSS_PER_SCAN // len(RACES) for rid in RACES}  # each race gets its share of the reads
+    early_error = None
     try:
         ev = early_vote(live.get("early_vote"))
         print(f"tx_numbers: early vote {ev['voted']:,} through {ev['through']} ({ev['counties']})")
     except Exception as e:
         print(f"tx_numbers: early vote not read ({e})")
         ev = live.get("early_vote")
+        early_error = f"{type(e).__name__}: {e}"[:200]
     pipes_left = [2]
     hist = history()
     pages = {}
@@ -939,9 +941,9 @@ def main():
         # Polls by group: each shown poll's release read once (both models), CROSS_PER_SCAN at most per scan.
         for p in shown:
             ck = f"{rid}|{p['url']}|{p['pop']}"
-            if ck in cross or not (ask and ask2) or cross_left[0] <= 0:
+            if ck in cross or not (ask and ask2) or cross_left[rid] <= 0:
                 continue
-            cross_left[0] -= 1
+            cross_left[rid] -= 1
             text, info = read(p["url"], pipes_left)
             if not text:
                 cross[ck] = {"rows": [], "notes": [f"could not read the release ({info})"[:120]], "at": now.isoformat(timespec="seconds")}
@@ -971,7 +973,7 @@ def main():
         print(f"tx_numbers {rid}: {len(shown)} polls shown, {len(unconfirmed)} not confirmed, {len(averages)} averages, {len(cited)} cited")
     out["confirmed"] = {k: v for k, v in cache.items() if v.get("ok") or (v.get("at") or "") >= (now - timedelta(days=2)).isoformat()}
     out["crosstabs"], out["crosstabs_v"], out["groups_live"] = cross, CROSS_V, GROUPS_LIVE
-    out["early_vote"] = ev
+    out["early_vote"], out["early_vote_error"] = ev, early_error
     OUT.write_text(json.dumps(out, indent=1))
     # The investors' time capsule freezes these with the rest of the edition (see check_today.write_capsule).
     key = os.environ.get("CAPSULE_KEY", "").strip()
