@@ -1218,50 +1218,62 @@ function forecastBlock(f, cands) {
   return box;
 }
 
+// A poll as two shares, not a gap (Heston, 2026-10-26: the gap charts were hard to read). The Democrat's share
+// runs from the left and the Republican's from the right, each labeled with name and number; the space between is
+// undecided or other. Same colour for both: the labels say who is who.
+function splitBar(shares, cands) {
+  const wrap = el("div", "split");
+  const [r, d] = [shares[0], shares[1]];
+  const lab = el("div", "split-labels");
+  const left = el("span", d > r ? "split-lead" : null, `${surname(cands[1])} ${pts(d)}%`);
+  const right = el("span", r > d ? "split-lead" : null, `${surname(cands[0])} ${pts(r)}%`);
+  lab.append(left, right);
+  const bar = el("div", "split-bar");
+  bar.setAttribute("aria-hidden", "true");
+  const L = el("i", "split-l"); L.style.width = `${Math.min(d, 100)}%`;
+  const R = el("i", "split-r"); R.style.width = `${Math.min(r, 100)}%`;
+  bar.append(L, R);
+  wrap.append(lab, bar);
+  return wrap;
+}
+// Within the margin of error, in words.
+function closeness(p, cands) {
+  const gap = gapOf(p.shares);
+  if (!p.lead_moe) return { cls: "", text: "No margin of error stated" };
+  if (Math.abs(gap) < 0.05) return { cls: "is-close", text: "Tied" };
+  if (Math.abs(gap) <= p.lead_moe) return { cls: "is-close", text: `Too close to call \u00b7 ${pts(Math.abs(gap))}-point lead` };
+  return { cls: "is-clear", text: `${surname(cands[gap > 0 ? 0 : 1])} leads by ${pts(Math.abs(gap))}, beyond the margin of error` };
+}
+
 function pollsBlock(r, cands, recentDays) {
   const box = el("div", "num-polls");
-  box.append(el("h2", "num-h", `Polls · last ${recentDays} days`));
+  box.append(el("h2", "num-h", `Polls \u00b7 last ${recentDays} days`));
   const polls = r.polls;
   if (!polls.length) {
     box.append(el("p", "num-note", "No poll from the last 30 days is confirmed against its pollster's release yet. Checking continues every hour."));
   } else {
-    const inside = polls.filter(p => p.lead_moe && Math.abs(gapOf(p.shares)) <= p.lead_moe).length;
-    const measured = polls.filter(p => p.lead_moe).length;
-    box.append(el("p", "num-lede", measured === inside
-      ? `In all ${plural(measured, "poll", "polls")} with a stated margin of error, the gap is inside that margin, so no single poll shows a clear leader.`
-      : (() => {
-        const out = polls.filter(p => p.lead_moe && Math.abs(gapOf(p.shares)) > p.lead_moe);
-        const named = out.length <= 3 ? ` (${out.map(p => `${p.pollster}, ${gapText(gapOf(p.shares), cands)}`).join("; ")})` : "";
-        return `In ${inside} of ${plural(measured, "poll", "polls")} with a stated margin of error, the gap is inside that margin. In ${out.length}${named}, the lead is bigger than the margin.`;
-      })()));
-  }
-  const all = [...polls.map(p => Math.abs(gapOf(p.shares)) + (p.lead_moe || 0)), ...r.averages.map(a => Math.abs(gapOf(a.shares)))];
-  const max = Math.max(10, Math.ceil(Math.max(0, ...all) / 10) * 10);  // ticks at the ends and halfway: whole numbers
-  if (polls.length) {
-    box.append(trackAxis(max, cands));
-    const ul = el("ul", "num-rows");
+    const measured = polls.filter(p => p.lead_moe);
+    const close = measured.filter(p => Math.abs(gapOf(p.shares)) <= p.lead_moe);
+    const clear = measured.filter(p => Math.abs(gapOf(p.shares)) > p.lead_moe);
+    box.append(el("p", "num-lede", !clear.length
+      ? `Every poll with a stated margin of error is too close to call: the lead in each is within its margin of error.`
+      : `${close.length} of ${plural(measured.length, "poll", "polls")} are too close to call. In ${clear.length} (${clear.slice(0, 3).map(p => `${p.pollster}, ${gapText(gapOf(p.shares), cands)}`).join("; ")}${clear.length > 3 ? " and more" : ""}), the lead is bigger than the margin of error.`));
+    const ul = el("ul", "poll-list");
     for (const p of polls) {
-      const li = el("li", `num-row${p.one_side ? " is-side" : ""}`);
+      const li = el("li", "poll-row");
       const who = el("div", "num-who");
       const name = p.url ? el("a", "num-name", p.pollster) : el("span", "num-name", p.pollster);
       if (p.url) { name.href = p.url; name.rel = "noopener"; }
       const meta = [p.dates.replace(/, \d{4}$/, ""), p.n ? `${p.n.toLocaleString()} ${p.pop === "RV" ? "registered" : p.pop === "LV" ? "likely" : ""} voters`.replace("  ", " ") : (p.pop === "RV" ? "registered voters" : p.pop === "LV" ? "likely voters" : "")].filter(Boolean);
       if (p.affiliation === "R" || p.affiliation === "D") meta.push(`${p.affiliation === "R" ? "Republican" : "Democratic"}-affiliated pollster`);
-      who.append(name, el("span", "num-meta", meta.join(" · ")));
-      if (p.client) who.append(el("span", `num-client${p.one_side ? " is-side" : ""}`, p.client));
-      const val = el("div", "num-val");
-      val.append(el("span", "num-gap", gapText(gapOf(p.shares), cands)),
-        el("span", "num-moe", p.lead_moe ? `±${pts(p.lead_moe)} on the gap` : "margin not stated"));
-      li.append(who, track(gapOf(p.shares), p.lead_moe, max, p.one_side ? "hollow" : ""), val);
+      who.append(name, el("span", "num-meta", meta.join(" \u00b7 ")));
+      if (p.client) who.append(el("span", `num-client${p.one_side ? " is-side" : ""}`, p.one_side ? `${p.client}: paid for by one side` : p.client));
+      const c = closeness(p, cands);
+      li.append(who, splitBar(p.shares, cands), el("p", `poll-tag ${c.cls}`, c.text));
       ul.append(li);
     }
     box.append(ul);
-    const key = el("div", "spectrum-legend");
-    for (const [cls, t] of [["fill", "Independent poll"], ["hollow", "Paid for by a campaign or a group backing one"], ["bar", "Margin of error on the gap"]]) {
-      const k = el("span", "key"); k.append(el("i", cls === "bar" ? "num-key-bar" : `dot ${cls}`), el("span", null, t)); key.append(k);
-    }
-    box.append(key);
-    box.append(basedOn(`polls listed on Wikipedia, each shown only when our own read of the pollster's release finds the same numbers. A poll's stated margin of error applies to each candidate; on the gap between them it is about twice as large, computed from the poll's own numbers.`,
+    box.append(basedOn(`polls listed on Wikipedia, each shown only when our own read of the pollster's release finds the same numbers. "Too close to call" means the lead is smaller than the poll's margin of error on the lead, which is about twice the margin pollsters state for each candidate.`,
       "Wikipedia's list", r.wiki));
   }
   if (r.unconfirmed.length) {
@@ -1270,13 +1282,12 @@ function pollsBlock(r, cands, recentDays) {
     const ul = el("ul", "num-unconf");
     for (const u of r.unconfirmed) {
       const li = el("li");
-      li.append(el("span", "num-name", u.pollster), el("span", "num-meta", `${u.dates} · ${u.why}`));
+      li.append(el("span", "num-name", u.pollster), el("span", "num-meta", `${u.dates} \u00b7 ${u.why}`));
       ul.append(li);
     }
     det.append(ul);
     box.append(det);
   }
-  // The published averages, on the same scale.
   if (r.averages.length) {
     const ab = el("div", "num-avgs");
     ab.append(el("h2", "num-h", "Published averages"));
@@ -1285,17 +1296,14 @@ function pollsBlock(r, cands, recentDays) {
     ab.append(el("p", "num-lede", lo * hi > 0
       ? `All ${r.averages.length} put ${surname(cands[hi > 0 ? 0 : 1])} ahead, by ${pts(Math.min(Math.abs(lo), Math.abs(hi)))} to ${pts(Math.max(Math.abs(lo), Math.abs(hi)))} points.`
       : `They disagree on who is ahead: from ${gapText(lo, cands)} to ${gapText(hi, cands)}.`));
-    ab.append(trackAxis(max, cands));
-    const ul = el("ul", "num-rows");
+    const ul = el("ul", "poll-list");
     for (const a of r.averages) {
-      const li = el("li", "num-row");
+      const li = el("li", "poll-row");
       const who = el("div", "num-who");
       const name = a.url ? el("a", "num-name", a.source) : el("span", "num-name", a.source);
       if (a.url) { name.href = a.url; name.rel = "noopener"; }
       who.append(name, el("span", "num-meta", `Updated ${a.updated.replace(/, \d{4}$/, "")}`));
-      const val = el("div", "num-val");
-      val.append(el("span", "num-gap", gapText(gapOf(a.shares), cands)), el("span", "num-moe", `${pts(a.shares[0])} to ${pts(a.shares[1])}`));
-      li.append(who, track(gapOf(a.shares), null, max, "avg"), val);
+      li.append(who, splitBar(a.shares, cands));
       ul.append(li);
     }
     ab.append(ul);

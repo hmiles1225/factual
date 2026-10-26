@@ -745,3 +745,20 @@ a.num-name:hover { text-decoration: underline; }
   .pair-row { grid-template-columns: minmax(0, 1fr) auto; }
   .pair-row .pair-bar { grid-column: 1 / -1; grid-row: 2; }
 }
+
+/* Polls as two shares (split bars), with "too close to call" in words */
+.poll-list { list-style: none; margin: 0; padding: 0; }
+.poll-row { display: grid; grid-template-columns: minmax(0, 15rem) minmax(0, 1fr); gap: 6px 20px; align-items: center; padding: 12px 0; border-top: 1px solid var(--line); }
+.poll-row .poll-tag { grid-column: 2; }
+.split-labels { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 4px; font: 600 0.875rem/1.2 var(--cond); color: var(--ink-2); }
+.split-labels .split-lead { color: var(--ink); font-weight: 700; }
+.split-bar { position: relative; height: 12px; border-radius: 6px; background: var(--surf-2); overflow: hidden; }
+.split-bar i { position: absolute; top: 0; bottom: 0; background: var(--lav); }
+.split-l { left: 0; border-right: 2px solid var(--bg); }
+.split-r { right: 0; border-left: 2px solid var(--bg); }
+.poll-tag { margin: 0; font: 400 0.8125rem/1.4 var(--sans); color: var(--ink-3); }
+.poll-tag.is-clear { color: var(--ink); font-weight: 500; }
+@media (max-width: 639px) {
+  .poll-row { grid-template-columns: minmax(0, 1fr); }
+  .poll-row .poll-tag { grid-column: 1; }
+}
