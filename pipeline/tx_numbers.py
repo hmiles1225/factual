@@ -16,6 +16,7 @@ import math
 import os
 import re
 import sys
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
@@ -700,10 +701,58 @@ def crosstabs(text, race, cands, poll, ask, charge, ask2):
 TUSA = "https://turnout.transparencyusa.org/{election}/"
 
 
+def tusa_text(text, url):
+    """The same numbers from the page's visible text, for when the page can only be read through Anthropic's fetch
+    tool (the tracker refuses GitHub's servers: 403, 2026-10-26; the checker already reads refusing primary sources
+    this way). Each group reads "LABEL 22.8% Voters who ... voted (2,263,322) ... not voted (7,643,853)"."""
+    t = C.norm(text)
+    blocks = re.findall(r"([a-z0-9+\- ]{1,20}?) \d+(?:\.\d+)?% (voters [^.]{0,160}\.).{0,80}?voted \(([\d,]+)\).{0,60}?not voted \(([\d,]+)\)", t)
+    n = lambda x: int(x.replace(",", ""))
+    def section(labels, where=None):
+        out = {"labels": [], "voted": [], "notVoted": []}
+        for raw, desc, v, nv in blocks:
+            label = next((l for l in labels if raw.strip().endswith(l)), None)  # the text runs on: "...active voters 25-34"
+            if label and (where is None or where in desc) and label not in out["labels"]:
+                out["labels"].append(label); out["voted"].append(n(v)); out["notVoted"].append(n(nv))
+        order = [l for l in labels if l in out["labels"]]
+        idx = [out["labels"].index(l) for l in order]
+        return {k: [out[k][i] for i in idx] for k in out} | {"labels": order}
+    title = lambda xs: [x.title().replace("Dem ", "DEM ").replace("Gop ", "GOP ") for x in xs]
+    gender = section(["female", "male"])
+    age = section(["18-24", "25-34", "35-44", "45-54", "55-64", "65+"])
+    prim = section(["dem only", "dem mixed", "gop only", "gop mixed", "general only", "no history"])
+    four = ["1 of 4", "2 of 4", "3 of 4", "4 of 4"]
+    gen, dem, rep = section(four, "general election"), section(four, "democratic primar"), section(four, "republican primar")
+    rate = lambda d: [100 * v / (v + nv) for v, nv in zip(d["voted"], d["notVoted"])]
+    days = [(f"{m.title()} {d}", n(v)) for m, d, v in re.findall(r"\b(?:mon|tue|wed|thu|fri|sat|sun) (oct|nov) (\d+)(?: peak)? ([\d,]+) voters", t) if n(v) > 0]
+    charts = {"gender": dict(gender, labels=["Female", "Male"][:len(gender["labels"])]), "ageBands": age,
+              "previousHistory": dict(prim, labels=title(prim["labels"])), "generalHistory": gen,
+              "democratic": dict(dem, rates=rate(dem)), "republican": dict(rep, rates=rate(rep)),
+              "earlyVoting": {"labels": [d for d, _ in days], "votes": [v for _, v in days]}}
+    if len(age["labels"]) != 6 or len(gender["labels"]) != 2 or len(prim["labels"]) != 6 or len(gen["labels"]) != 4:
+        raise ValueError("the page's text did not have every group")
+    m = re.search(r"(\d+) of (\d+) counties reporting", t)
+    through = re.search(r"statewide snapshot .*? through (\w+day, \w+ \d+, \d{4})", t)
+    asof = re.search(r"as of (\w+ \d+, \d{4}, [\d:]+ [ap]\.m\. ct)", t)
+    num = lambda label: (lambda mm: n(mm.group(1)) if mm else None)(re.search(label + r" ([\d,]+)", t))
+    return {"charts": charts, "counties": [int(m.group(1)), int(m.group(2))] if m else None,
+            "through": through.group(1).title() if through else None, "as_of": asof.group(1)[:1].upper() + asof.group(1)[1:].replace(" ct", " CT") if asof else None,
+            "url": url, "votes_cast": num("votes cast"), "registered": num("registered"), "via": "Anthropic fetch tool"}
+
+
 def tusa(election):
-    req = urllib.request.Request(TUSA.format(election=election), headers={"User-Agent": C.UA})
-    with urllib.request.urlopen(req, timeout=60, context=C.SSL_CTX) as r:
-        page = r.read().decode("utf-8", "replace")
+    url = TUSA.format(election=election)
+    req = urllib.request.Request(url, headers={"User-Agent": C.UA})
+    try:
+        with urllib.request.urlopen(req, timeout=60, context=C.SSL_CTX) as r:
+            page = r.read().decode("utf-8", "replace")
+    except urllib.error.HTTPError as e:
+        if e.code not in (401, 403, 429) or not os.environ.get("ANTHROPIC_API_KEY"):
+            raise
+        text, info = C.fetch_via_anthropic(url)
+        if not text:
+            raise RuntimeError(f"refused directly ({e.code}) and through the fetch tool ({info})")
+        return tusa_text(text, url)
     i = page.find("window.evElection = ")
     j, depth, k = page.find("{", i), 0, page.find("{", i)
     while True:
@@ -981,6 +1030,9 @@ def main():
         (ROOT / "data/capsule" / key).mkdir(parents=True, exist_ok=True)
         (ROOT / "data/capsule" / key / "tx-numbers.json").write_text(json.dumps({k: v for k, v in out.items() if k != "confirmed"}))
     if lib is not None and ask:
+        for u in C.PIPE_USAGE:  # Anthropic's fetch tool (refusing pages), charged like everything else
+            spend["anthropic_usd"] = round(spend["anthropic_usd"] + CT.UNDERCOUNT * CT.cost_usd(u["model"], u), 4)
+        C.PIPE_USAGE.clear()
         lib_path.write_text(json.dumps(lib, indent=1))
     return 0
 
