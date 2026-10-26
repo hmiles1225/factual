@@ -693,6 +693,113 @@ def crosstabs(text, race, cands, poll, ask, charge, ask2):
     return rows, notes
 
 
+# ---------- the early vote (who has voted so far) ----------
+# Heston, 2026-10-26. Transparency USA and JPM Strategies publish the Texas Secretary of State's voter-history
+# counts for everyone who has voted early: by age band, gender, past primary voting and general-election habit, by
+# day. Read as published (the page carries its data as JSON); no AI. Race is not in it: Texas does not record race.
+TUSA = "https://turnout.transparencyusa.org/{election}/"
+
+
+def tusa(election):
+    req = urllib.request.Request(TUSA.format(election=election), headers={"User-Agent": C.UA})
+    with urllib.request.urlopen(req, timeout=60, context=C.SSL_CTX) as r:
+        page = r.read().decode("utf-8", "replace")
+    i = page.find("window.evElection = ")
+    j, depth, k = page.find("{", i), 0, page.find("{", i)
+    while True:
+        depth += {"{": 1, "}": -1}.get(page[k], 0)
+        if depth == 0:
+            break
+        k += 1
+    charts = json.loads(page[j:k + 1])["charts"]
+    text = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", page))
+    m = re.search(r"(\d+) of (\d+) counties reporting", text)
+    through = re.search(r"Statewide snapshot .*? through (\w+day, \w+ \d+, \d{4})", text)
+    asof = re.search(r"As of (\w+ \d+, \d{4}, [\d:]+ [ap]\.m\. CT)", text)
+    num = lambda label: (lambda m: int(m.group(1).replace(",", "")) if m else None)(re.search(label + r" ([\d,]+)", text))
+    return {"charts": charts, "counties": [int(m.group(1)), int(m.group(2))] if m else None,
+            "through": through.group(1) if through else None, "as_of": asof.group(1) if asof else None,
+            "url": TUSA.format(election=election), "votes_cast": num("Votes cast"), "registered": num("Registered")}
+
+
+def early_vote(prev):
+    now26 = tusa("2026-general")
+    c = now26["charts"]
+    daily24 = prev.get("daily_2024") if prev and prev.get("daily_2024") else None
+    if not daily24:
+        try:
+            daily24 = tusa("2024-general")["charts"]["earlyVoting"]
+        except Exception as e:
+            print(f"  early vote: 2024 not read ({e})")
+    pair = lambda d: {l: [v, n] for l, v, n in zip(d["labels"], d["voted"], d["notVoted"])}
+    return {"source": "Transparency USA and JPM Strategies, from the Texas Secretary of State's voter rolls", "url": now26["url"],
+            "as_of": now26["as_of"], "through": now26["through"], "counties": now26["counties"],
+            "voted": now26["votes_cast"], "registered": now26["registered"],
+            "age": pair(c["ageBands"]), "gender": pair(c["gender"]),
+            "habit": pair(c["generalHistory"]), "primary": pair(c["previousHistory"]),
+            "new_primary_rate": {"D": c["democratic"]["rates"][0], "R": c["republican"]["rates"][0]},
+            "dem_primaries": pair(c["democratic"]), "gop_primaries": pair(c["republican"]),  # by how many of the last 4 primaries
+            "daily": c["earlyVoting"], "daily_2024": daily24}
+
+
+def _age_span(label):
+    """(first, last) year of age for a group label: '18\u201329', '65+', 'Under 30', '50+'."""
+    m = re.match(r"(\d+)\u2013(\d+)", label)
+    if m:
+        return int(m.group(1)), int(m.group(2))
+    if label.endswith("+"):
+        return int(label[:-1]), 90
+    m = re.match(r"Under (\d+)", label)
+    return (18, int(m.group(1)) - 1) if m else None
+
+
+def as_polled(groups, ev):
+    """The votes already cast, if each group voted the way polls say that group is voting: one estimate per lens.
+    Margin = first candidate minus second (Republican first, ballot order). Each group's margin is the middle
+    (median) of the polls that report it. Age bands that differ are matched year by year."""
+    med = lambda xs: sorted(xs)[len(xs) // 2] if len(xs) % 2 else (sorted(xs)[len(xs) // 2 - 1] + sorted(xs)[len(xs) // 2]) / 2
+    margin = lambda rows: med([r["shares"][0] - r["shares"][1] for r in rows])
+    out = []
+    g = groups.get("gender", {})
+    if g.get("Men") and g.get("Women"):
+        w, m = ev["gender"]["Female"][0], ev["gender"]["Male"][0]
+        out.append({"lens": "gender", "margin": round((w * margin(g["Women"]) + m * margin(g["Men"])) / (w + m), 1),
+                    "polls": len({r["pollster"] for r in g["Women"] + g["Men"]})})
+    p = groups.get("party", {})
+    if p.get("Democrats") and p.get("Republicans") and p.get("Independents"):
+        pr = ev["primary"]
+        d = pr["DEM Only"][0] + pr["DEM Mixed"][0]
+        r_ = pr["GOP Only"][0] + pr["GOP Mixed"][0]
+        o = pr["General Only"][0] + pr["No History"][0]
+        out.append({"lens": "primary", "margin": round((d * margin(p["Democrats"]) + r_ * margin(p["Republicans"]) + o * margin(p["Independents"])) / (d + r_ + o), 1),
+                    "polls": len({x["pollster"] for x in p["Democrats"] + p["Republicans"] + p["Independents"]})})
+    a = groups.get("age", {})
+    if a:
+        # Each poll's own age bands give a margin for every year of age; a voter-roll band takes the middle of the
+        # polls' margins averaged over its years. Every year from 18 to 90 must be covered by at least one poll.
+        per_poll = {}
+        for label, rows in a.items():
+            span = _age_span(label)
+            if span:
+                for r in rows:
+                    per_poll.setdefault(r["pollster"] + r["end"], []).append((span, r["shares"][0] - r["shares"][1]))
+        def at(age):
+            vals = [mm for bands in per_poll.values() for (lo, hi), mm in bands if lo <= age <= hi]
+            return med(vals) if vals else None
+        total = num = 0.0
+        for label, (voted, _) in ev["age"].items():
+            lo, hi = (65, 90) if label.endswith("+") else map(int, label.split("-"))
+            vals = [at(x) for x in range(lo, hi + 1)]
+            if None in vals:
+                total = None
+                break
+            num += voted * sum(vals) / len(vals)
+            total += voted
+        if total:
+            out.append({"lens": "age", "margin": round(num / total, 1), "polls": len(per_poll)})
+    return out
+
+
 # ---------- the run ----------
 
 def load_live():
@@ -742,6 +849,12 @@ def main():
             return out
     cross = live.get("crosstabs", {}) if live.get("crosstabs_v") == CROSS_V else {}
     cross_left = [CROSS_PER_SCAN]
+    try:
+        ev = early_vote(live.get("early_vote"))
+        print(f"tx_numbers: early vote {ev['voted']:,} through {ev['through']} ({ev['counties']})")
+    except Exception as e:
+        print(f"tx_numbers: early vote not read ({e})")
+        ev = live.get("early_vote")
     pipes_left = [2]
     hist = history()
     pages = {}
@@ -844,15 +957,21 @@ def main():
             for r in (cross.get(f"{rid}|{p['url']}|{p['pop']}") or {}).get("rows", []):
                 groups.setdefault(r["category"], {}).setdefault(r["group"], []).append(
                     {"pollster": p["pollster"], "end": p["end"], "url": p["url"], "shares": r["shares"], "one_side": p.get("one_side")})
+        try:
+            ap = as_polled(groups, ev) if ev else []
+        except Exception as e:
+            print(f"  {rid}: as polled not computed ({e})")
+            ap = []
         out["races"][rid] = {
             "name": race["name"], "candidates": [{"name": c["name"], "party": c["party"]} for c in cands],
             "wiki": f"https://en.wikipedia.org/wiki/{race['wiki']}", "wiki_rev": rev,
             "polls": shown, "unconfirmed": unconfirmed, "averages": averages, "cited": cited, "money": money,
-            "forecast": forecast(averages, cands, hist), "groups": groups,
+            "forecast": forecast(averages, cands, hist), "groups": groups, "as_polled": ap,
         }
         print(f"tx_numbers {rid}: {len(shown)} polls shown, {len(unconfirmed)} not confirmed, {len(averages)} averages, {len(cited)} cited")
     out["confirmed"] = {k: v for k, v in cache.items() if v.get("ok") or (v.get("at") or "") >= (now - timedelta(days=2)).isoformat()}
     out["crosstabs"], out["crosstabs_v"], out["groups_live"] = cross, CROSS_V, GROUPS_LIVE
+    out["early_vote"] = ev
     OUT.write_text(json.dumps(out, indent=1))
     # The investors' time capsule freezes these with the rest of the edition (see check_today.write_capsule).
     key = os.environ.get("CAPSULE_KEY", "").strip()

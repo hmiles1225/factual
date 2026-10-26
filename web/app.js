@@ -1399,6 +1399,115 @@ function groupsBlock(r, cands, nums) {
   return box;
 }
 
+// Bars: a filled share against an outlined one (this year against 2024; votes against registered voters).
+function pairBar(filled, outline, max) {
+  const t = el("div", "pair-bar");
+  t.setAttribute("aria-hidden", "true");
+  const o = el("i", "pair-outline"); o.style.width = `${100 * outline / max}%`;
+  const f = el("i", "pair-fill"); f.style.width = `${100 * filled / max}%`;
+  t.append(o, f);
+  return t;
+}
+function pairRows(rows, max) {
+  const ul = el("ul", "pair-list");
+  for (const [label, filled, outline, text] of rows) {
+    const li = el("li", "pair-row");
+    li.append(el("span", "pair-label", label), pairBar(filled, outline, max), el("span", "pair-text", text));
+    ul.append(li);
+  }
+  return ul;
+}
+
+function earlyBlock(ev) {
+  const box = el("div", "num-early");
+  const thru = (ev.through || "").replace(/^\w+day, /, "").replace(/, \d{4}$/, "");
+  box.append(el("h2", "num-h", "So far"));
+  box.append(el("p", "num-lede", `${fmtN(ev.voted)} Texans have voted, ${pct(ev.voted, ev.registered).toFixed(1)}% of the ${fmtN(ev.registered)} registered, through ${thru}${ev.counties ? ` (${ev.counties[0]} of ${ev.counties[1]} counties reporting)` : ""}.`));
+  // Pace, day by day, against the same day of early voting in 2024 (a presidential year).
+  const d = ev.daily, p = ev.daily_2024;
+  if (d && p && p.votes) {
+    const n = Math.min(d.votes.length, p.votes.length);
+    const ratios = d.votes.slice(0, n).map((v, i) => v / p.votes[i]);
+    const lo = Math.round(100 * Math.min(...ratios)), hi = Math.round(100 * Math.max(...ratios));
+    const s2 = el("div", "num-early-part");
+    s2.append(el("h2", "num-h", "Pace against 2024"));
+    s2.append(el("p", "num-lede", `Each day of early voting has drawn ${lo === hi ? lo : `${lo} to ${hi}`}% as many voters as the same day of early voting in 2024, a presidential election year.`));
+    const max = Math.max(...p.votes.slice(0, n), ...d.votes.slice(0, n));
+    s2.append(pairRows(d.votes.slice(0, n).map((v, i) => [`Day ${i + 1} \u00b7 ${d.labels[i]}`, v, p.votes[i], `${fmtN(v)} \u00b7 ${Math.round(100 * ratios[i])}% of 2024`]), max));
+    s2.append(keyRow([["pair-fill", "2026"], ["pair-outline", "Same day of early voting, 2024"]]));
+    box.append(s2);
+  }
+  // Who has voted against who is registered.
+  const s3 = el("div", "num-early-part");
+  s3.append(el("h2", "num-h", "Who has voted, against who is registered"));
+  const ages = Object.entries(ev.age), votedA = ages.reduce((t, [, x]) => t + x[0], 0), regA = ages.reduce((t, [, x]) => t + x[0] + x[1], 0);
+  const old = ev.age["65+"], young = ["18-24", "25-34"].map(k => ev.age[k]);
+  s3.append(el("p", "num-lede", `People 65 and over cast ${Math.round(pct(old[0], votedA))}% of the votes so far but are ${Math.round(pct(old[0] + old[1], regA))}% of registered voters. Voters under 35 cast ${Math.round(pct(young[0][0] + young[1][0], votedA))}% of the votes and are ${Math.round(pct(young[0][0] + young[0][1] + young[1][0] + young[1][1], regA))}% of the rolls.`));
+  const rows = ages.map(([l, x]) => [l === "65+" ? "65 and over" : l, pct(x[0], votedA), pct(x[0] + x[1], regA), `${Math.round(pct(x[0], votedA))}% of votes \u00b7 ${Math.round(pct(x[0] + x[1], regA))}% of registered`]);
+  const gs = Object.entries(ev.gender), votedG = gs.reduce((t, [, x]) => t + x[0], 0), regG = gs.reduce((t, [, x]) => t + x[0] + x[1], 0);
+  rows.push(...gs.map(([l, x]) => [l === "Female" ? "Women" : l === "Male" ? "Men" : l, pct(x[0], votedG), pct(x[0] + x[1], regG), `${Math.round(pct(x[0], votedG))}% of votes \u00b7 ${Math.round(pct(x[0] + x[1], regG))}% of registered`]));
+  s3.append(pairRows(rows, Math.max(...rows.map(r => Math.max(r[1], r[2])))));
+  s3.append(keyRow([["pair-fill", "Share of votes so far"], ["pair-outline", "Share of registered voters"]]));
+  box.append(s3);
+  // Habit, and who hasn't voted yet.
+  const s4 = el("div", "num-early-part");
+  s4.append(el("h2", "num-h", "Who hasn\u2019t voted yet"));
+  const hb = ev.habit, hv = Object.values(hb).reduce((t, x) => t + x[0], 0);
+  const notYet = ages.reduce((t, [, x]) => t + x[1], 0), youngNot = young[0][1] + young[1][1];
+  s4.append(el("p", "num-lede", `${Math.round(pct(hb["4 of 4"][0], hv))}% of the votes so far came from people who voted in all four of the last four general elections. Of the ${fmtN(notYet)} registered voters who haven\u2019t voted yet, ${Math.round(pct(youngNot, notYet))}% are under 35, against ${Math.round(pct(young[0][0] + young[1][0], votedA))}% of those who have. Election Day voters are likely to look different from the early vote.`));
+  box.append(s4);
+  // Past primary voting, both parties the same way.
+  const pr = ev.primary, s5 = el("div", "num-early-part");
+  s5.append(el("h2", "num-h", "Turnout by past primary voting"));
+  const noP = pct(pr["General Only"][0] + pr["No History"][0], pr["General Only"][0] + pr["General Only"][1] + pr["No History"][0] + pr["No History"][1]);
+  const dRate = pct(pr["DEM Only"][0] + pr["DEM Mixed"][0], pr["DEM Only"][0] + pr["DEM Only"][1] + pr["DEM Mixed"][0] + pr["DEM Mixed"][1]);
+  const rRate = pct(pr["GOP Only"][0] + pr["GOP Mixed"][0], pr["GOP Only"][0] + pr["GOP Only"][1] + pr["GOP Mixed"][0] + pr["GOP Mixed"][1]);
+  s5.append(el("p", "num-lede", `So far ${dRate.toFixed(1)}% of Texans who have voted in Democratic primaries have voted, and ${rRate.toFixed(1)}% of those who have voted in Republican primaries. Among people who voted in just one of the last four primaries: ${ev.new_primary_rate.D.toFixed(1)}% on the Democratic side, ${ev.new_primary_rate.R.toFixed(1)}% on the Republican side.`));
+  if (ev.dem_primaries && ev.gop_primaries) {
+    const dn = ev.dem_primaries["1 of 4"], rn = ev.gop_primaries["1 of 4"];
+    s5.append(el("p", "num-note", `For context: ${fmtN(dn[0] + dn[1])} registered Texans have voted in just one of the last four Democratic primaries, against ${fmtN(rn[0] + rn[1])} for Republican primaries, so the Democratic group includes more newer primary voters. Past primary voting is not party membership: Texas does not register voters by party.`));
+  }
+  s5.append(pairRows([["Democratic primary voters", dRate, 100, `${dRate.toFixed(1)}% have voted`], ["Republican primary voters", rRate, 100, `${rRate.toFixed(1)}% have voted`],
+    ["No primary history", noP, 100, `${noP.toFixed(1)}% have voted`]], 100));
+  box.append(s5);
+  box.append(basedOn(`${ev.source}, as of ${ev.as_of || "the latest update"}. Ages and genders are as recorded on voter registration. Texas does not record race or party, so neither is shown here.`, "Transparency USA", ev.url));
+  return box;
+}
+function keyRow(items) {
+  const k = el("div", "spectrum-legend");
+  for (const [cls, t] of items) { const s = el("span", "key"); s.append(el("i", `key-${cls}`), el("span", null, t)); k.append(s); }
+  return k;
+}
+
+// The votes already cast, if each group voted the way polls say it is voting: one estimate per lens. Not a
+// projection of the result (Election Day voters differ), and not the forecast.
+const LENS_NAME = { age: "By age", gender: "By gender", primary: "By past primary voting" };
+function asPolledBlock(r, cands, ev) {
+  const box = el("div", "num-aspolled");
+  box.append(el("h2", "num-h", "The votes already cast, as polled"));
+  const ap = r.as_polled;
+  const same = ap.every(x => Math.sign(x.margin) === Math.sign(ap[0].margin) && Math.abs(x.margin) >= 0.5);
+  box.append(el("p", "num-lede", `If the ${fmtN(ev.voted)} Texans who have voted split the way polls say their groups are splitting, the early vote so far would be about ${ap.map(x => `${gapText(x.margin, cands)} ${LENS_NAME[x.lens].toLowerCase()}`).join(", ")}. `
+    + (ap.every(x => Math.abs(x.margin) < 3) ? `Every way of counting comes out close to even.`
+      : ap.length > 1 ? (same ? `Each way of counting points the same direction.` : `The ways of counting disagree: too close to read.`) : "")));
+  const max = Math.max(10, Math.ceil(Math.max(...ap.map(x => Math.abs(x.margin))) / 10) * 10);
+  box.append(trackAxis(max, cands));
+  const ul = el("ul", "num-rows");
+  for (const x of ap) {
+    const li = el("li", "num-row");
+    const who = el("div", "num-who");
+    who.append(el("span", "num-name", LENS_NAME[x.lens]), el("span", "num-meta", `group numbers from ${plural(x.polls, "poll", "polls")}`));
+    const val = el("div", "num-val");
+    val.append(el("span", "num-gap", gapText(x.margin, cands)));
+    li.append(who, track(x.margin, null, max), val);
+    ul.append(li);
+  }
+  box.append(ul);
+  box.append(el("p", "num-note", "This describes ballots already cast, not the result: the people still to vote are younger and vote less often. It is separate from the forecast."));
+  box.append(basedOn("who has voted (Transparency USA, from the Texas voter rolls) and each group\u2019s margin as the middle of the confirmed polls that report it. Age bands that differ are matched year by year; voters with no primary history are counted with independents.", "Who has voted", ev.url));
+  return box;
+}
+
 function historyBlock(h, leads) {
   // leads: [{name, lead}] for each race today (from the forecast's center), so the miss is read against them.
   const box = el("div", "num-history");
@@ -1505,8 +1614,14 @@ const NUMBER_STORIES = NUMBER_RACES.flatMap(r => {
     { key: `${r.slug}-funding`, race: r.race, kind: "funding", title: `${name}: campaign funding` },
   ];
 });
+// The early vote is statewide: the same voters decide both races (Heston, 2026-10-26).
+const EARLY_STORY = { key: "early-vote", kind: "early", title: "Texas early vote: who has voted so far" };
+NUMBER_STORIES.unshift(EARLY_STORY);
 // A number story is shown when it has something to show: polls by group only once switched on and read.
-const numberShown = (n, nums) => !!nums.races[n.race] && (n.kind !== "groups" || (nums.groups_live && Object.keys(nums.races[n.race].groups || {}).length > 0));
+const numberShown = (n, nums) => n.kind === "early" ? !!(nums.early_vote && nums.early_vote.voted)
+  : !!nums.races[n.race] && (n.kind !== "groups" || (nums.groups_live && Object.keys(nums.races[n.race].groups || {}).length > 0));
+const pct = (a, b) => b ? 100 * a / b : 0;
+const fmtN = n => n.toLocaleString("en-US");
 const OLD_NUMBER_KEYS = { senate: "senate-polls", governor: "governor-polls" };  // links shared before the split
 let TXNUM = null;  // data/tx-numbers.json, once loaded
 // The Texas Election section's header picture: the Capitol, with the Texas flag (Commons, CC BY 3.0, credited).
@@ -1525,6 +1640,11 @@ function sideSpending(m) {
 
 // One sentence per card, computed from the numbers.
 function numbersGist(n, nums) {
+  if (n.kind === "early") {
+    const ev = nums.early_vote;
+    const old = ev.age["65+"][0], all = Object.values(ev.age).reduce((t, x) => t + x[0], 0);
+    return `${fmtN(ev.voted)} Texans have voted, ${pct(ev.voted, ev.registered).toFixed(1)}% of registered voters. People 65 and over cast ${Math.round(pct(old, all))}% of the votes so far.`;
+  }
   const r = nums.races[n.race];
   if (!r) return "";
   const c = r.candidates;
@@ -1558,6 +1678,24 @@ function numbersGist(n, nums) {
 function numbersCards(nums) {
   const box = el("div", "numbers-group");
   box.append(el("h3", "numbers-group-h", "By the numbers"));
+  if (numberShown(EARLY_STORY, nums)) {
+    const g = el("div", "numbers-race");
+    g.append(el("h4", "numbers-race-h", "Statewide \u00b7 early voting"));
+    const ol = el("ol", "stories numbers-pair");
+    ol.setAttribute("aria-label", "Early voting numbers");
+    const li = el("li", "story story-data");
+    const main = el("div", "story-main");
+    main.append(el("p", "story-when", agoText(Date.parse(nums.updated_at))));
+    const h = el("h2", "headline");
+    const a = el("a", null, "Early vote: who has voted so far");
+    a.href = `numbers.html?n=${EARLY_STORY.key}`;
+    h.append(a);
+    main.append(h, el("p", "gist", numbersGist(EARLY_STORY, nums)));
+    li.append(main);
+    ol.append(li);
+    g.append(ol);
+    box.append(g);
+  }
   for (const R of NUMBER_RACES) {
     const r = nums.races[R.race];
     if (!r) continue;
@@ -1600,6 +1738,7 @@ function renderNumbers(nums) {
   $("story-meta").before(tools);
   const sec = el("section", "block numbers");
   const r = n.race && nums.races[n.race];
+  if (n.kind === "early") sec.append(earlyBlock(nums.early_vote));
   if (r) {
     const c = r.candidates;
     $("story-sub").append(el("p", "byline", c.map(x => `${x.name} (${x.party})`).join(" vs. ")));
@@ -1609,6 +1748,7 @@ function renderNumbers(nums) {
       if (nums.history) sec.append(historyBlock(nums.history, [{ name: "this race", lead: raceLead(r) }]));
       sec.append(citedBlock(r, c));
     } else if (n.kind === "groups") {
+      if ((r.as_polled || []).length && nums.early_vote) sec.append(asPolledBlock(r, c, nums.early_vote));
       sec.append(groupsBlock(r, c, nums));
     } else {
       sec.append(moneyBlock(r.money, c));
