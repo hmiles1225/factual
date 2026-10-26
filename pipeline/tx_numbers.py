@@ -592,12 +592,12 @@ def forecast(averages, cands, hist):
 # only when two models reading the release on their own agree (Gemini and Claude Haiku), the quoted passage is in
 # the release with both numbers, the two shares add up like a vote (60 to 101), and the headline result sits
 # between a category's groups (men and women bracket the total). Every poll's number is shown, never a blend.
-GROUPS_LIVE = False      # on the site only after Claude has checked the first batch against the releases by hand
+GROUPS_LIVE = True       # 2026-10-26: first batch (5 releases, 18 numbers) checked by hand against the releases: all correct
 CROSS_V = "1"
 CROSS_PER_SCAN = 6
 HAIKU = "claude-haiku-5-5"
 CANON = [  # (category, label, pattern on the group's name as printed); first match wins
-    ("gender", "Men", r"^(men|male|males)\b"), ("gender", "Women", r"^(women|female|females)\b"),
+    ("gender", "Men", r"^(men|male|males|m)$|^(men|male|males)\b"), ("gender", "Women", r"^(women|female|females|f)$|^(women|female|females)\b"),
     ("race", "White", r"^(white|anglo)"), ("race", "Black", r"^(black|african)"), ("race", "Hispanic", r"^(hispanic|latin)"),
     ("party", "Republicans", r"^republican"), ("party", "Democrats", r"^democrat"), ("party", "Independents", r"^independent"),
     ("education", "No college degree", r"(no college|non-college|without a (college|4-year)|high school|less than (a )?college|no degree)"),
