@@ -586,6 +586,113 @@ def forecast(averages, cands, hist):
                       f"in both directions. Wider tails than a bell curve, because {len(hist['races'])} races is a small sample."}
 
 
+# ---------- polls by group (crosstabs) ----------
+# Heston, 2026-10-26: demographic numbers for both races, as their own story. Crosstab tables are where reading a
+# number goes wrong (a flattened PDF table puts every column's number in one line), so a group's numbers are kept
+# only when two models reading the release on their own agree (Gemini and Claude Haiku), the quoted passage is in
+# the release with both numbers, the two shares add up like a vote (60 to 101), and the headline result sits
+# between a category's groups (men and women bracket the total). Every poll's number is shown, never a blend.
+GROUPS_LIVE = False      # on the site only after Claude has checked the first batch against the releases by hand
+CROSS_V = "1"
+CROSS_PER_SCAN = 6
+HAIKU = "claude-haiku-5-5"
+CANON = [  # (category, label, pattern on the group's name as printed); first match wins
+    ("gender", "Men", r"^(men|male|males)\b"), ("gender", "Women", r"^(women|female|females)\b"),
+    ("race", "White", r"^(white|anglo)"), ("race", "Black", r"^(black|african)"), ("race", "Hispanic", r"^(hispanic|latin)"),
+    ("party", "Republicans", r"^republican"), ("party", "Democrats", r"^democrat"), ("party", "Independents", r"^independent"),
+    ("education", "No college degree", r"(no college|non-college|without a (college|4-year)|high school|less than (a )?college|no degree)"),
+    ("education", "College degree", r"(college (grad|degree|educated)|bachelor|4-year degree|postgrad|graduate degree)"),
+    ("area", "Urban", r"^urban"), ("area", "Suburban", r"^suburban"), ("area", "Rural", r"^rural"),
+]
+AGE = re.compile(r"(\d{2})\s*(?:-|to|\u2013)\s*(\d{2})|(\d{2})\s*\+|(\d{2})\s+and\s+(?:older|over|up)|under\s+(\d{2})", re.I)
+CROSS_SCHEMA = {"type": "object", "additionalProperties": False, "required": ["groups"], "properties": {"groups": {"type": "array", "items": {
+    "type": "object", "additionalProperties": False, "required": ["group", "a_pct", "b_pct", "quote"],
+    "properties": {"group": {"type": "string"}, "a_pct": {"type": "number"}, "b_pct": {"type": "number"}, "quote": {"type": "string"}}}}}}
+CROSS_PROMPT = """Below is the text of a poll release. Find this poll's head-to-head result in the Texas {office} race between
+{a} and {b}{pop}, broken down by group: gender, age, race or ethnicity, party, education, urban/suburban/rural.
+For each group give {a}'s and {b}'s percentages exactly as printed (a_pct, b_pct) and copy the passage that shows them,
+word for word. Only the vote-choice question for this race: never the share of the sample a group makes up, never
+another question or race. If the release has no breakdown for this race, return an empty list.{json}
+
+Release:
+{text}"""
+
+
+WORD_SETS = [{"men", "women", "male", "female", "males", "females"}, {"white", "black", "hispanic", "latino", "latina", "latinos", "asian", "anglo"},
+             {"republican", "republicans", "democrat", "democrats", "democratic", "independent", "independents"},
+             {"college", "degree", "degrees", "graduate", "graduates", "bachelor", "postgrad"}, {"urban", "suburban", "rural"}]
+SUBSET_WORDS = {"evangelical", "evangelicals", "catholic", "catholics", "christian", "christians", "protestant", "veterans",
+                "parents", "married", "single", "union", "suburban women", "trump", "biden", "harris", "voters who"}
+
+
+def canon(name):
+    n = re.sub(r"\s+", " ", (name or "").strip().lower())
+    words = set(re.findall(r"[a-z]+", n))
+    # A compound group ("white men without a college degree", "white evangelical Christians") is a different
+    # group from "White": never filed under one of its parts.
+    if sum(bool(words & ws) for ws in WORD_SETS) > 1 or any(w in n for w in SUBSET_WORDS) or (AGE.search(n) and words & set().union(*WORD_SETS)):
+        return None
+    m = AGE.search(n)
+    if m:
+        lo, hi, plus, older, under = m.groups()
+        return "age", (f"{lo}\u2013{hi}" if lo else f"{plus or older}+" if (plus or older) else f"Under {under}")
+    for cat, label, pat in CANON:
+        if re.search(pat, n):
+            return cat, label
+    return None
+
+
+def haiku_json(prompt):
+    import anthropic
+    resp = anthropic.Anthropic(max_retries=3).messages.create(model=HAIKU, max_tokens=3000, messages=[{"role": "user", "content": prompt}])
+    text = "".join(b.text for b in resp.content if getattr(b, "type", "") == "text")
+    return json.loads(text[text.find("{"): text.rfind("}") + 1]), {"input_tokens": resp.usage.input_tokens, "output_tokens": resp.usage.output_tokens}
+
+
+def crosstabs(text, race, cands, poll, ask, charge, ask2):
+    """Groups both readers agree on, held to the release and to sense. Returns (rows, notes)."""
+    pop = {"LV": " among likely voters", "RV": " among registered voters"}.get(poll["pop"], "")
+    base = (CROSS_PROMPT.replace("{office}", race["name"]).replace("{a}", cands[0]["name"]).replace("{b}", cands[1]["name"])
+            .replace("{pop}", pop).replace("{text}", text[:150000]))
+    g, usage = ask(base.replace("{json}", ""), CROSS_SCHEMA)
+    charge(usage)
+    h = ask2(base.replace("{json}", '\nReply with JSON only: {"groups": [{"group": "...", "a_pct": 0, "b_pct": 0, "quote": "..."}]}'))
+    theirs = {}
+    for r in h.get("groups", []):
+        k = canon(r.get("group"))
+        if k and isinstance(r.get("a_pct"), (int, float)) and isinstance(r.get("b_pct"), (int, float)):
+            theirs[k] = (float(r["a_pct"]), float(r["b_pct"]))
+    page, rows, notes = squash(text), [], []
+    for r in g.get("groups", []):
+        k = canon(r.get("group"))
+        a, b = r.get("a_pct"), r.get("b_pct")
+        if not k or not isinstance(a, (int, float)) or not isinstance(b, (int, float)):
+            continue
+        why = None
+        if k not in theirs or abs(theirs[k][0] - a) > 0.51 or abs(theirs[k][1] - b) > 0.51:
+            why = "the two readings disagree"
+        elif not (60 <= a + b <= 101):
+            why = "the shares don't add up like a vote"
+        else:
+            q = squash(r.get("quote", ""))
+            nums = [float(x) for x in NUMBER.findall(q)]
+            if len(q) < 8 or q not in page:
+                why = "the passage is not in the release"
+            elif not all(any(abs(x - v) < 0.051 for x in nums) for v in (a, b)):
+                why = "the passage does not show both numbers"
+        if why:
+            notes.append(f"{r.get('group')}: {why}")
+        else:
+            rows.append({"category": k[0], "group": k[1], "shares": [round(a, 1), round(b, 1)]})
+    # The headline result sits between a category's groups (men and women bracket the total). Party is exempt.
+    for cat in {r["category"] for r in rows} - {"party", "age"}:
+        these = [r for r in rows if r["category"] == cat]
+        if len(these) >= 2 and not all(min(r["shares"][i] for r in these) - 1.5 <= poll["shares"][i] <= max(r["shares"][i] for r in these) + 1.5 for i in (0, 1)):
+            notes.append(f"{cat}: the groups don't bracket the headline result; all dropped")
+            rows = [r for r in rows if r["category"] != cat]
+    return rows, notes
+
+
 # ---------- the run ----------
 
 def load_live():
@@ -623,6 +730,18 @@ def main():
 
         def charge(usage):
             spend["gemini_usd"] = round(spend["gemini_usd"] + CT.UNDERCOUNT * CT.cost_usd(C.GEMINI_MODEL, usage), 4)
+    ask2 = None
+    if lib is not None and os.environ.get("ANTHROPIC_API_KEY") and ask:
+        acap = (lib.get("caps") or {}).get("today_anthropic_cap", 1.10)
+
+        def ask2(prompt):
+            if spend["anthropic_usd"] + 0.02 > acap:
+                raise RuntimeError("today's Claude cap is spent")
+            out, usage = haiku_json(prompt)
+            spend["anthropic_usd"] = round(spend["anthropic_usd"] + CT.UNDERCOUNT * CT.cost_usd(HAIKU, usage), 4)
+            return out
+    cross = live.get("crosstabs", {}) if live.get("crosstabs_v") == CROSS_V else {}
+    cross_left = [CROSS_PER_SCAN]
     pipes_left = [2]
     hist = history()
     pages = {}
@@ -704,14 +823,36 @@ def main():
                 # Written to the file so a failure can be read without the Actions log (never the key itself).
                 money = dict(money or {}, error=f"{type(e).__name__}: {e}"[:200], error_at=now.isoformat(timespec="seconds"),
                              fec_key_set=bool(os.environ.get("FEC_API_KEY")))
+        # Polls by group: each shown poll's release read once (both models), CROSS_PER_SCAN at most per scan.
+        for p in shown:
+            ck = f"{rid}|{p['url']}|{p['pop']}"
+            if ck in cross or not (ask and ask2) or cross_left[0] <= 0:
+                continue
+            cross_left[0] -= 1
+            text, info = read(p["url"], pipes_left)
+            if not text:
+                cross[ck] = {"rows": [], "notes": [f"could not read the release ({info})"[:120]], "at": now.isoformat(timespec="seconds")}
+                continue
+            try:
+                rows, notes = crosstabs(text, race, cands, p, ask, charge, ask2)
+                cross[ck] = {"rows": rows, "notes": notes[:12], "at": now.isoformat(timespec="seconds")}
+                print(f"  {rid} {p['pollster']}: {len(rows)} groups kept, {len(notes)} dropped")
+            except Exception as e:
+                print(f"  {rid} {p['pollster']}: crosstabs not read ({e})")
+        groups = {}
+        for p in shown:
+            for r in (cross.get(f"{rid}|{p['url']}|{p['pop']}") or {}).get("rows", []):
+                groups.setdefault(r["category"], {}).setdefault(r["group"], []).append(
+                    {"pollster": p["pollster"], "end": p["end"], "url": p["url"], "shares": r["shares"], "one_side": p.get("one_side")})
         out["races"][rid] = {
             "name": race["name"], "candidates": [{"name": c["name"], "party": c["party"]} for c in cands],
             "wiki": f"https://en.wikipedia.org/wiki/{race['wiki']}", "wiki_rev": rev,
             "polls": shown, "unconfirmed": unconfirmed, "averages": averages, "cited": cited, "money": money,
-            "forecast": forecast(averages, cands, hist),
+            "forecast": forecast(averages, cands, hist), "groups": groups,
         }
         print(f"tx_numbers {rid}: {len(shown)} polls shown, {len(unconfirmed)} not confirmed, {len(averages)} averages, {len(cited)} cited")
     out["confirmed"] = {k: v for k, v in cache.items() if v.get("ok") or (v.get("at") or "") >= (now - timedelta(days=2)).isoformat()}
+    out["crosstabs"], out["crosstabs_v"], out["groups_live"] = cross, CROSS_V, GROUPS_LIVE
     OUT.write_text(json.dumps(out, indent=1))
     # The investors' time capsule freezes these with the rest of the edition (see check_today.write_capsule).
     key = os.environ.get("CAPSULE_KEY", "").strip()
