@@ -1351,6 +1351,54 @@ function citedBlock(r, cands) {
   return box;
 }
 
+// Polls by group: each group a row, each poll a dot at its gap, and every poll's number written under the row.
+// No blend of our own: readers see whether the pollsters agree. A group is a small slice of a poll, so its number
+// is far less certain than the headline; that is said first, not in a footnote.
+const GROUP_CATS = [["gender", "Gender"], ["race", "Race and ethnicity"], ["age", "Age"], ["party", "Party"], ["education", "Education"], ["area", "Where they live"]];
+const GROUP_ORDER = { Men: 1, Women: 2, White: 1, Black: 2, Hispanic: 3, Republicans: 1, Democrats: 2, Independents: 3, "No college degree": 1, "College degree": 2, Urban: 1, Suburban: 2, Rural: 3 };
+const ageStart = l => /^Under/.test(l) ? 0 : parseInt(l, 10) || 0;
+function groupsBlock(r, cands, nums) {
+  const box = el("div", "num-groups");
+  const g = r.groups || {};
+  box.append(el("h2", "num-h", "How each group leans"));
+  box.append(el("p", "num-lede", "Each dot is one poll. A group is only a slice of a poll's sample, so its number is much less certain than the poll's headline result: read these for whether the polls agree, not for exact margins."));
+  for (const [cat, label] of GROUP_CATS) {
+    if (!g[cat]) continue;
+    const sub = el("div", "num-group-cat");
+    sub.append(el("h3", "num-group-h", label));
+    const names = Object.keys(g[cat]).sort((a, b) => cat === "age" ? ageStart(a) - ageStart(b) : (GROUP_ORDER[a] || 9) - (GROUP_ORDER[b] || 9));
+    const max = Math.max(10, Math.ceil(Math.max(...names.flatMap(n => g[cat][n].map(p => Math.abs(gapOf(p.shares))))) / 10) * 10);
+    sub.append(trackAxis(max, cands));
+    const ul = el("ul", "num-rows");
+    for (const name of names) {
+      const polls = g[cat][name];
+      const gaps = polls.map(p => gapOf(p.shares));
+      const lead = [0, 1].map(i => gaps.filter(x => (i === 0 ? x > 0.05 : x < -0.05)).length);
+      const li = el("li", "num-row");
+      const who = el("div", "num-who");
+      who.append(el("span", "num-name", name), el("span", "num-meta", polls.map(p => `${p.pollster.split("/")[0]} ${gapText(gapOf(p.shares), cands)}`).join(" \u00b7 ")));
+      const t = el("div", "num-track");
+      t.setAttribute("aria-hidden", "true");
+      t.append(el("i", "num-tie"));
+      for (const p of polls) {
+        const d = el("i", p.one_side ? "num-dot is-hollow" : "num-dot");
+        d.style.left = `${50 + 50 * Math.max(-1, Math.min(1, gapOf(p.shares) / max))}%`;
+        t.append(d);
+      }
+      const val = el("div", "num-val");
+      const all = lead[0] === polls.length || lead[1] === polls.length;
+      val.append(el("span", "num-gap", polls.length === 1 ? gapText(gaps[0], cands) : all ? `${surname(cands[lead[0] ? 0 : 1])} in all ${polls.length}` : "Polls differ"),
+        el("span", "num-moe", polls.length === 1 ? "1 poll" : `${surname(cands[1])} ${lead[1]} \u00b7 ${surname(cands[0])} ${lead[0]}`));
+      li.append(who, t, val);
+      ul.append(li);
+    }
+    sub.append(ul);
+    box.append(sub);
+  }
+  box.append(basedOn("the group results in each confirmed poll's own release. Two AI models read each release separately; a number is shown only when they agree, the passage is in the release, and the groups make sense together (men and women bracket the headline result). Groups that mix two traits, like \u201cwhite men without a degree,\u201d are left out."));
+  return box;
+}
+
 function historyBlock(h, leads) {
   // leads: [{name, lead}] for each race today (from the forecast's center), so the miss is read against them.
   const box = el("div", "num-history");
@@ -1449,10 +1497,16 @@ function moneyBlock(m, cands) {
 // (Heston, 2026-10-23): latest polls (forecast, polls, published averages, past misses, which polls each side
 // reported) and campaign funding. They lead the Texas Election section, then come the stories.
 const NUMBER_RACES = [{ race: "tx-senate", office: "U.S. Senate", slug: "senate" }, { race: "tx-governor", office: "Governor", slug: "governor" }];
-const NUMBER_STORIES = NUMBER_RACES.flatMap(r => [
-  { key: `${r.slug}-polls`, race: r.race, kind: "polls", title: `Texas ${r.office === "U.S. Senate" ? "Senate" : r.office} race: latest polls` },
-  { key: `${r.slug}-funding`, race: r.race, kind: "funding", title: `Texas ${r.office === "U.S. Senate" ? "Senate" : r.office} race: campaign funding` },
-]);
+const NUMBER_STORIES = NUMBER_RACES.flatMap(r => {
+  const name = `Texas ${r.office === "U.S. Senate" ? "Senate" : r.office} race`;
+  return [
+    { key: `${r.slug}-polls`, race: r.race, kind: "polls", title: `${name}: latest polls` },
+    { key: `${r.slug}-groups`, race: r.race, kind: "groups", title: `${name}: polls by group` },  // Heston, 2026-10-26
+    { key: `${r.slug}-funding`, race: r.race, kind: "funding", title: `${name}: campaign funding` },
+  ];
+});
+// A number story is shown when it has something to show: polls by group only once switched on and read.
+const numberShown = (n, nums) => !!nums.races[n.race] && (n.kind !== "groups" || (nums.groups_live && Object.keys(nums.races[n.race].groups || {}).length > 0));
 const OLD_NUMBER_KEYS = { senate: "senate-polls", governor: "governor-polls" };  // links shared before the split
 let TXNUM = null;  // data/tx-numbers.json, once loaded
 // The Texas Election section's header picture: the Capitol, with the Texas flag (Commons, CC BY 3.0, credited).
@@ -1485,6 +1539,12 @@ function numbersGist(n, nums) {
     const fc = f ? `${f.chance[0] > f.chance[1] ? c[0].name : c[1].name}, ${Math.max(...f.chance)}% chance to win.` : "";
     return `${fc}${avg}`.trim();
   }
+  if (n.kind === "groups") {
+    const g = r.groups || {};
+    const polls = new Set(Object.values(g).flatMap(x => Object.values(x).flat().map(p => p.pollster + p.end)));
+    const cats = GROUP_CATS.filter(([k]) => g[k]).map(([, label]) => label.toLowerCase());
+    return `How each group leans, poll by poll: ${listNames(cats, 6)}, from ${plural(polls.size, "poll", "polls")}.`;
+  }
   const m = r.money;
   if (!m || !m.candidates || !m.candidates.length) return "Campaign finance reports, as filed.";
   const sides = sideSpending(m);
@@ -1505,7 +1565,7 @@ function numbersCards(nums) {
     g.append(el("h4", "numbers-race-h", `${R.office} \u00b7 ${r.candidates.map(x => `${x.name} (${x.party})`).join(" vs. ")}`));
     const ol = el("ol", "stories numbers-pair");
     ol.setAttribute("aria-label", `${R.office} numbers`);
-    for (const n of NUMBER_STORIES.filter(n => n.race === R.race)) {
+    for (const n of NUMBER_STORIES.filter(n => n.race === R.race && numberShown(n, nums))) {
       const li = el("li", "story story-data");
       const main = el("div", "story-main");
       main.append(el("p", "story-when", agoText(Date.parse(nums.updated_at))));
@@ -1548,13 +1608,15 @@ function renderNumbers(nums) {
       sec.append(pollsBlock(r, c, nums.recent_days || 30));
       if (nums.history) sec.append(historyBlock(nums.history, [{ name: "this race", lead: raceLead(r) }]));
       sec.append(citedBlock(r, c));
+    } else if (n.kind === "groups") {
+      sec.append(groupsBlock(r, c, nums));
     } else {
       sec.append(moneyBlock(r.money, c));
     }
   }
   // The other number stories, so each is one tap away.
   const more = el("ul", "num-next");
-  for (const o of NUMBER_STORIES.filter(o => o !== n)) {
+  for (const o of NUMBER_STORIES.filter(o => o !== n && numberShown(o, nums))) {
     const li = el("li"); const a = el("a", null, `${o.title} \u2192`); a.href = `numbers.html?n=${o.key}`; li.append(a); more.append(li);
   }
   sec.append(more);

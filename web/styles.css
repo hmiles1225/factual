@@ -721,3 +721,9 @@ a.num-name:hover { text-decoration: underline; }
 .full-toggle:hover { border-color: var(--lav); }
 .full-rest { margin-bottom: 12px; }
 .full-story .full-toggle + .num-basis { margin-top: 12px; }
+
+/* Polls by group */
+.num-group-cat + .num-group-cat { margin-top: 22px; }
+.num-group-h { margin: 0 0 6px; font: 700 0.8125rem/1.2 var(--cond); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
+.num-dot.is-hollow { background: var(--bg); border: 2px solid var(--lav); }
+.numbers-pair { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
