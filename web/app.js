@@ -1584,22 +1584,23 @@ function moneyBlock(m, cands) {
     box.append(el("p", "num-note", "We could not load the campaign finance reports this time. Each scan tries again."));
     return box;
   }
-  // Totals first (Heston, 2026-10-27): what both campaigns raised, and what outside groups spent. Kept apart,
-  // never added: one is money raised, the other money spent.
-  if (m.source === "FEC") {
-    const sum = k => m.candidates.reduce((t, c) => t + (c[k] || 0), 0);
-    const tiles = [["Raised by both campaigns", sum("raised"), m.candidates.every(c => c.raised != null)]];
-    if (m.outside_ok) tiles.push(["Spent by outside groups", sum("outside_support") + sum("outside_oppose"), true]);
+  // Totals first, one per candidate (Heston, 2026-10-27): what the campaign raised plus what outside groups
+  // spent on that candidate's side (for them, or against the opponent), with the two parts shown under it.
+  const M = v => `$${(v / 1e6).toFixed(1)} million`;
+  if (m.source === "FEC" && m.candidates.every(c => c.raised != null)) {
+    const sideOf = new Map((sideSpending(m) || []).map(([c, v]) => [c, v]));
     const strip = el("dl", "money-totals");
-    for (const [label, v, ok] of tiles.filter(t => t[2])) {
+    for (const c of m.candidates) {
+      const out = sideOf.has(c) ? sideOf.get(c) : null;
       const d = el("div", "money-total");
-      d.append(el("dt", null, label), el("dd", null, `$${(v / 1e6).toFixed(1)} million`));
+      d.append(el("dt", null, `${c.name}, in all`), el("dd", null, M(c.raised + (out || 0))),
+        el("dd", "money-total-parts", out == null ? "Raised by the campaign" : `${M(c.raised)} raised by the campaign + ${M(out)} from outside groups`));
       strip.append(d);
     }
-    if (strip.children.length) box.append(strip);
+    box.append(strip);
   }
   const sides = sideSpending(m);
-  if (sides) box.append(el("p", "num-lede", `Counting what outside groups spent for a candidate and against the opponent: ${sides.map(([x, v]) => `${usd(v)} on ${x.name}\u2019s side`).join(", ")}, in the general election.`));
+  if (sides) box.append(el("p", "num-lede", "Outside money on a candidate\u2019s side is what outside groups spent for that candidate plus what they spent against the opponent, in the general election. The campaign\u2019s money is what it raised over the whole 2026 cycle."));
   const rows = [["Raised by the campaign", "raised"], ["Cash on hand", "cash"]];
   // Outside spending is shown only once the scan marks it checked (m.outside_ok): FEC raw filings can list the same
   // spending twice, in a 24/48-hour notice and again in the regular report (caught 2026-10-20).
