@@ -779,8 +779,9 @@ COUNTY_2024 = Path(__file__).resolve().parent / "tx_county_2024.json"
 # The pace by kind of county compares like with like (Heston, 2026-10-27: two charts "saying the same thing with
 # different numbers"): 2026 in-person early votes against 2024's over the same number of days, county by county.
 COUNTY_EARLY_2024 = Path(__file__).resolve().parent / "tx_county_early_2024.json"
-BY_2024 = [("Counties Harris won", None, 0), ("Trump won by under 20 points", 0, 20),
-           ("Trump won by 20 to 50 points", 20, 50), ("Trump won by 50 points or more", 50, None)]
+# Named by party, not candidate (Heston, 2026-10-27): "Harris won" beside Harris County confused.
+BY_2024 = [("Counties Democrats won", None, 0), ("Counties Republicans won by under 20 points", 0, 20),
+           ("Counties Republicans won by 20 to 50 points", 20, 50), ("Counties Republicans won by 50 points or more", 50, None)]
 
 
 def by_2024_result(rows, days):

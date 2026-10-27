@@ -1413,6 +1413,13 @@ function rateRows(rows) {
   return ul;
 }
 
+// The four kinds of county, most Democratic to most Republican, by the 2024 vote for president. Named by party,
+// not candidate (Heston, 2026-10-27: "Harris won" beside Harris County confused). By position, so older data
+// with candidate labels reads the same.
+const COUNTY_GROUPS = ["Counties Democrats won", "Counties Republicans won by under 20 points", "Counties Republicans won by 20 to 50 points", "Counties Republicans won by 50 points or more"];
+const COUNTY_SHORT = ["Counties Democrats won", "Counties Republicans won by under 20 pts", "Counties Republicans won by 20 to 50 pts", "Counties Republicans won by 50+ pts"];
+const countyName = (g, x) => (COUNTY_GROUPS[g.indexOf(x)] || x.group).replace(/^Counties/, "counties");
+
 // "What's happening": a plain summary above a number story's numbers (Heston, 2026-10-27). Every point is
 // written by code from numbers shown further down the same page, so it can't drift from them.
 function summaryBox(points) {
@@ -1534,7 +1541,7 @@ function earlySummary(ev) {
       + (tp ? ` For scale: in 2022, the last midterm, ${(tp["2022"] / 1e6).toFixed(1)} million Texans voted in all, ${Math.round(pct(tp["2022"], tp["2024"]))}% as many as the ${(tp["2024"] / 1e6).toFixed(1)} million in 2024.` : ""));
     const pace = x => pct(x.in_person, x.in_person_2024);
     const s = [...g].sort((a, b) => pace(b) - pace(a)), hi = s[0], lo = s[s.length - 1];
-    const name = x => x.group.startsWith("Trump") ? `counties ${x.group}` : x.group.replace(/^Counties/, "counties");
+    const name = x => countyName(g, x);
     pts.push(`The pace is highest in ${name(hi)} (${Math.round(pace(hi))}% of 2024) and lowest in ${name(lo)} (${Math.round(pace(lo))}%).`);
   }
   const d = ev.daily, p = ev.daily_2024;
@@ -1663,13 +1670,13 @@ function countyBlock(ev) {
   const pace = x => pct(x.in_person, x.in_person_2024);
   const all = pct(g.reduce((t, x) => t + x.in_person, 0), g.reduce((t, x) => t + x.in_person_2024, 0));
   const days = (ev.early_2024_by_county || {}).days;
-  const name = x => x.group.startsWith("Trump") ? `counties ${x.group}` : x.group.replace(/^Counties/, "counties");
+  const name = x => countyName(g, x);
   const byPace = [...g].sort((a, b) => pace(b) - pace(a));
   const hi = byPace[0], lo = byPace[byPace.length - 1];
   box.append(el("h2", "num-h", "By how each county voted in 2024"));
   box.append(el("p", "num-lede", `Early voting is closest to its 2024 level in ${name(hi)} (${Math.round(pace(hi))}% of 2024 at this point) and furthest behind in ${name(lo)} (${Math.round(pace(lo))}%). Statewide it is at ${Math.round(all)}%.`));
   box.append(el("h3", "num-h3", `Early votes so far, as a share of 2024 over the same ${days ? `${days} days` : "days"}`));
-  const SHORT = ["Counties Harris won", "Counties Trump won by under 20 pts", "Counties Trump won by 20 to 50 pts", "Counties Trump won by 50+ pts"];
+  const SHORT = COUNTY_SHORT;
   const chart = el("div", "cc"); chart.setAttribute("aria-hidden", "true");
   chart.append(el("span", "cc-ref", "2024 level"));
   const labels = el("div", "cd-labels"); labels.setAttribute("aria-hidden", "true");
@@ -1690,15 +1697,15 @@ function countyBlock(ev) {
   more.append(el("summary", null, "Show the numbers"));
   more.append(numTable("In-person early votes so far, by the county\u2019s 2024 result for president",
     [["Counties", "c-group"], ["2026 so far", "c-num"], ["2024, same days", "c-num"], ["Pace", "c-num"]],
-    g.map(x => [`${x.group} (${x.counties})`, fmtN(x.in_person), fmtN(x.in_person_2024), `${pace(x).toFixed(1)}%`])));
+    g.map((x, i) => [`${COUNTY_GROUPS[i] || x.group} (${x.counties})`, fmtN(x.in_person), fmtN(x.in_person_2024), `${pace(x).toFixed(1)}%`])));
   box.append(more);
   const harris = (ev.largest || []).find(c => c.county === "Harris");
-  box.append(el("p", "num-note", `A county’s 2024 result says nothing certain about who in it is voting now. Texas does not register voters by party, and every county has voters of both parties${harris ? `: Harris County, which Harris won, is also where Trump got more votes than in any other Texas county` : ""}.`));
+  box.append(el("p", "num-note", `A county’s 2024 result says nothing certain about who in it is voting now. Texas does not register voters by party, and every county has voters of both parties${harris ? `: Harris County (Houston), which Democrats won, also cast more Republican votes than any other Texas county` : ""}.`));
   if (ev.largest) {
     box.append(el("h3", "num-h3", "The 10 largest counties"));
-    box.append(numTable("Early vote so far in the 10 counties with the most registered voters",
-      [["County", "c-group"], ["2024 result", "c-num"], ["Voted so far", "c-num"], ["Turnout", "c-num"]],
-      ev.largest.map(c => [c.county, `${c.margin_2024 > 0 ? "Trump" : "Harris"} +${Math.round(Math.abs(c.margin_2024))}`, fmtN(c.voted), `${pct(c.voted, c.registered).toFixed(1)}%`])));
+    box.append(numTable("Early vote so far in the 10 counties with the most registered voters. 2024 margin: how far the Republican (R) or Democrat (D) won the county for president, in points",
+      [["County", "c-group"], ["2024 margin", "c-num"], ["Voted so far", "c-num"], ["Turnout", "c-num"]],
+      ev.largest.map(c => [c.county, `${c.margin_2024 > 0 ? "R" : "D"} +${Math.round(Math.abs(c.margin_2024))}`, fmtN(c.voted), `${pct(c.voted, c.registered).toFixed(1)}%`])));
   }
   box.append(basedOn(`${ev.source} for 2026. 2024 early votes by county: ${(ev.early_2024_by_county || {}).source || "Transparency USA"} (the Secretary of State\u2019s own 2024 daily figures are not open to automated reading). 2024 results: ${ev.results_2024.source}, summed by county (within 200 votes of the official statewide count for each candidate).`, "2024 results", ev.results_2024.url));
   return box;
