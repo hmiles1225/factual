@@ -1416,7 +1416,9 @@ function earlyBlock(ev) {
   const box = el("div", "num-early");
   const thru = (ev.through || "").replace(/^\w+day, /, "").replace(/, \d{4}$/, "");
   box.append(el("h2", "num-h", "So far"));
-  box.append(el("p", "num-lede", `${fmtN(ev.voted)} Texans have voted, ${pct(ev.voted, ev.registered).toFixed(1)}% of the ${fmtN(ev.registered)} registered, through ${thru}${ev.counties ? ` (${ev.counties[0]} of ${ev.counties[1]} counties reporting)` : ""}.`));
+  const how = ev.in_person != null && ev.mail != null ? `: ${fmtN(ev.in_person)} in person and ${fmtN(ev.mail)} by mail` : "";
+  box.append(el("p", "num-lede", `${fmtN(ev.voted)} Texans have voted, ${pct(ev.voted, ev.registered).toFixed(1)}% of the ${fmtN(ev.registered)} registered, through ${thru}${how}${ev.counties ? ` (${ev.counties[0]} of ${ev.counties[1]} counties reporting)` : ""}.`));
+  if (ev.mail != null) box.append(basedOn(`${ev.source}, as of ${ev.as_of || "the latest update"}. Mail ballots are those received so far.`, "Secretary of State", ev.url));
   // Pace: each day as a share of the same day of early voting in 2024, against a marked 100% line.
   const d = ev.daily, p = ev.daily_2024;
   if (d && p && p.votes) {
@@ -1436,9 +1438,13 @@ function earlyBlock(ev) {
       li.append(el("span", "rate-label", `Day ${i + 1} · ${d.labels[i]}`), el("span", "rate-text", `${fmtN(d.votes[i])} votes · ${Math.round(100 * ratios[i])}% of 2024`), bar);
       ul.append(li);
     }
-    s2.append(ul, el("p", "num-note", "The tick on each bar marks 2024’s level for that day."));
+    s2.append(ul, el("p", "num-note", "The tick on each bar marks 2024’s level for that day. In-person votes only, both years."));
+    if (p.source) s2.append(basedOn(`the Secretary of State’s daily counts for 2026. For 2024, ${p.source}: the Secretary of State’s own 2024 daily figures are not open to automated reading. For 2026’s first week the two sources were within 1.6% of each other every day.`, "2024 figures", p.url));
     box.append(s2);
   }
+  // Who has voted, by group: only when Transparency USA's tracker could be read (it refuses GitHub's servers).
+  if (!ev.age) return box;
+  const gf = ev.groups_from || ev;
   // Who has voted against who is registered: a table, with the difference in points.
   const s3 = el("div", "num-early-part");
   s3.append(el("h2", "num-h", "Who has voted, against who is registered"));
@@ -1484,7 +1490,7 @@ function earlyBlock(ev) {
     s5.append(el("p", "num-note", `For context: ${fmtN(dn[0] + dn[1])} registered Texans have voted in just one of the last four Democratic primaries, against ${fmtN(rn[0] + rn[1])} for Republican primaries, so the Democratic group includes more newer primary voters. Past primary voting is not party membership: Texas does not register voters by party.`));
   }
   box.append(s5);
-  box.append(basedOn(`${ev.source}, as of ${ev.as_of || "the latest update"}. Ages and genders are as recorded on voter registration. Texas does not record race or party, so neither is shown here.`, "Transparency USA", ev.url));
+  box.append(basedOn(`${gf.source}, as of ${gf.as_of || "the latest update"}. Ages and genders are as recorded on voter registration. Texas does not record race or party, so neither is shown here.`, "Transparency USA", gf.url));
   return box;
 }
 
@@ -1625,6 +1631,9 @@ const NUMBER_STORIES = NUMBER_RACES.flatMap(r => {
 });
 // The early vote is statewide: the same voters decide both races (Heston, 2026-10-26).
 const EARLY_STORY = { key: "early-vote", kind: "early", title: "Texas early vote: who has voted so far" };
+// Without the voter groups (age, gender, past voting) the story is the count alone, and says so.
+const earlyTitle = ev => ev && ev.age ? EARLY_STORY.title : "Texas early vote: turnout so far";
+const numberTitle = (n, nums) => n.kind === "early" ? earlyTitle(nums && nums.early_vote) : n.title;
 NUMBER_STORIES.unshift(EARLY_STORY);
 // A number story is shown when it has something to show: polls by group only once switched on and read.
 const numberShown = (n, nums) => n.kind === "early" ? !!(nums.early_vote && nums.early_vote.voted)
@@ -1651,8 +1660,10 @@ function sideSpending(m) {
 function numbersGist(n, nums) {
   if (n.kind === "early") {
     const ev = nums.early_vote;
+    const first = `${fmtN(ev.voted)} Texans have voted, ${pct(ev.voted, ev.registered).toFixed(1)}% of registered voters.`;
+    if (!ev.age) return ev.mail != null ? `${first} ${fmtN(ev.mail)} of the votes came by mail.` : first;
     const old = ev.age["65+"][0], all = Object.values(ev.age).reduce((t, x) => t + x[0], 0);
-    return `${fmtN(ev.voted)} Texans have voted, ${pct(ev.voted, ev.registered).toFixed(1)}% of registered voters. People 65 and over cast ${Math.round(pct(old, all))}% of the votes so far.`;
+    return `${first} People 65 and over cast ${Math.round(pct(old, all))}% of the votes so far.`;
   }
   const r = nums.races[n.race];
   if (!r) return "";
@@ -1696,7 +1707,7 @@ function numbersCards(nums) {
     const main = el("div", "story-main");
     main.append(el("p", "story-when", agoText(Date.parse(nums.updated_at))));
     const h = el("h2", "headline");
-    const a = el("a", null, "Early vote: who has voted so far");
+    const a = el("a", null, earlyTitle(nums.early_vote).replace(/^Texas e/, "E"));
     a.href = `numbers.html?n=${EARLY_STORY.key}`;
     h.append(a);
     main.append(h, el("p", "gist", numbersGist(EARLY_STORY, nums)));
@@ -1735,8 +1746,8 @@ function renderNumbers(nums) {
   const q = new URLSearchParams(location.search).get("n");
   const n = NUMBER_STORIES.find(x => x.key === (OLD_NUMBER_KEYS[q] || q)) || NUMBER_STORIES[0];
   const body = $("story-body");
-  document.title = `${n.title} · fACTUAL`;
-  $("story-title").textContent = n.title;
+  document.title = `${numberTitle(n, nums)} · fACTUAL`;
+  $("story-title").textContent = numberTitle(n, nums);
   $("story-meta").textContent = `Texas Election \u00b7 By the numbers \u00b7 Updated ${stamp(nums.updated_at)}`;
   const tools = el("div", "story-tools");
   const back = el("a", "back-link");
@@ -1766,7 +1777,7 @@ function renderNumbers(nums) {
   // The other number stories, so each is one tap away.
   const more = el("ul", "num-next");
   for (const o of NUMBER_STORIES.filter(o => o !== n && numberShown(o, nums))) {
-    const li = el("li"); const a = el("a", null, `${o.title} \u2192`); a.href = `numbers.html?n=${o.key}`; li.append(a); more.append(li);
+    const li = el("li"); const a = el("a", null, `${numberTitle(o, nums)} \u2192`); a.href = `numbers.html?n=${o.key}`; li.append(a); more.append(li);
   }
   sec.append(more);
   body.append(sec);
@@ -2169,14 +2180,16 @@ async function load() {
   initSettings();
   initHeader();
   initToTop();
-  // Share sits top right on every page: a story shares itself (renderStory adds that one); any other
-  // page shares its own address, without fragment or query, except a number story's own key (?n=), which
-  // says which story it is. The capsule key and state never travel.
+  // Share sits top right on every page: a story shares itself (renderStory adds that one); a number story
+  // shares its preview page (s/n-<key>.html, written by each scan, so messages show its own card); any other
+  // page shares its own address, without query or fragment. The capsule key and state never travel.
   if (page !== "story") {
     const shareTo = () => {
-      const n = new URLSearchParams(location.search).get("n");
       const here = location.origin + location.pathname.replace(/index\.html$/, "");
-      return page === "numbers" && n ? `${here}?n=${encodeURIComponent(n)}` : here;
+      if (page !== "numbers") return here;
+      const q = new URLSearchParams(location.search).get("n");
+      const n = NUMBER_STORIES.find(x => x.key === (OLD_NUMBER_KEYS[q] || q)) || NUMBER_STORIES[0];
+      return `${new URL("./", location.href).href}s/n-${n.key}.html`;
     };
     const b = makeShare(() => document.title, shareTo, "Share");
     b.classList.add("share-top");

@@ -123,7 +123,7 @@ jobs:
             put "$f" "data/$(basename "$f")"
           done
           for f in data/archive/*.json; do if [ -f "$f" ]; then put "$f" "data/archive/$(basename "$f")"; fi; done
-          # Link-preview pages, one per story on Today (written by check_today.py), at s/<sid>.html.
+          # Link-preview pages: one per story on Today (check_today.py, s/<sid>.html) and per number story (tx_numbers.py, s/n-<key>.html).
           for f in data/share/*.html; do if [ -f "$f" ]; then put "$f" "s/$(basename "$f")"; fi; done
           # The Texas time capsule (written only until the edition's cutoff; after it, the server keeps the last).
           if [ -d data/capsule ]; then find data/capsule -type f | while read -r f; do put "$f" "$f"; done; fi

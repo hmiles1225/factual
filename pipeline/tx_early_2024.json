@@ -1,0 +1,33 @@
+{
+ "_rule": "In-person early votes on each day of early voting in Texas's November 5 2024 general election (Oct 21 to Nov 1, 12 days), the baseline for the 2026 pace. The Secretary of State's own 2024 daily figures sit behind a robot check we do not get around, and its new feed starts in 2025, so these are Transparency USA's (with JPM Strategies), built from the Secretary of State's daily rosters. Read once by Claude 2026-10-26. Check: for the first seven days of 2026, the same tracker's daily counts were within 1.6% of the Secretary of State's (Oct 23: 686,119 against 696,897; every other day within 0.4%).",
+ "source": "Transparency USA and JPM Strategies, from the Texas Secretary of State's daily rosters",
+ "url": "https://turnout.transparencyusa.org/2024-general/",
+ "labels": [
+  "Oct 21",
+  "Oct 22",
+  "Oct 23",
+  "Oct 24",
+  "Oct 25",
+  "Oct 26",
+  "Oct 27",
+  "Oct 28",
+  "Oct 29",
+  "Oct 30",
+  "Oct 31",
+  "Nov 1"
+ ],
+ "votes": [
+  925852,
+  867761,
+  831455,
+  777001,
+  845150,
+  635697,
+  318568,
+  733400,
+  668483,
+  621773,
+  589806,
+  881633
+ ]
+}

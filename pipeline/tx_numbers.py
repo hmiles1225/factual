@@ -11,16 +11,20 @@ pollster's own release, read by us, has both candidates' numbers near their name
 named, never drawn. What was confirmed is read back from the live file, so each release is fetched once.
 A failure here never blocks the scan: the site keeps the last file.
 """
+import base64
 import json
 import math
 import os
 import re
+import subprocess
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import check as C  # noqa: E402
@@ -695,64 +699,78 @@ def crosstabs(text, race, cands, poll, ask, charge, ask2):
 
 
 # ---------- the early vote (who has voted so far) ----------
-# Heston, 2026-10-26. Transparency USA and JPM Strategies publish the Texas Secretary of State's voter-history
-# counts for everyone who has voted early: by age band, gender, past primary voting and general-election habit, by
-# day. Read as published (the page carries its data as JSON); no AI. Race is not in it: Texas does not record race.
+# Heston, 2026-10-26. The count is the Texas Secretary of State's own: its early-voting feed (the data behind
+# goelect.txelections.civixapps.com/ivis-evr-ui/evr) gives every county's registered voters, in-person votes on
+# each day and mail ballots so far, as published; no AI. Its older site sits behind a robot check, which we never
+# get around. Who has voted (age, gender, past voting) comes only from Transparency USA and JPM Strategies, built
+# from the Secretary of State's rolls; their tracker refuses GitHub's servers (403, 2026-10-26; Anthropic's fetch
+# tool is refused too), so those groups appear only when a direct read works. Texas does not record race or party.
+SOS_API = "https://goelect.txelections.civixapps.com/api-ivis-system/api/v1/getFile"
+SOS_PAGE = "https://goelect.txelections.civixapps.com/ivis-evr-ui/evr"
+SOS_ELECTION = "2026 NOVEMBER GENERAL ELECTION"
+TEXAS = ZoneInfo("America/Chicago")  # most of Texas; a day is over when it is over in Austin
+EARLY_2024 = Path(__file__).resolve().parent / "tx_early_2024.json"
 TUSA = "https://turnout.transparencyusa.org/{election}/"
 
 
-def tusa_text(text, url):
-    """The same numbers from the page's visible text, for when the page can only be read through Anthropic's fetch
-    tool (the tracker refuses GitHub's servers: 403, 2026-10-26; the checker already reads refusing primary sources
-    this way). Each group reads "LABEL 22.8% Voters who ... voted (2,263,322) ... not voted (7,643,853)"."""
-    t = C.norm(text)
-    blocks = re.findall(r"([a-z0-9+\- ]{1,20}?) \d+(?:\.\d+)?% (voters [^.]{0,160}\.).{0,80}?voted \(([\d,]+)\).{0,60}?not voted \(([\d,]+)\)", t)
-    n = lambda x: int(x.replace(",", ""))
-    def section(labels, where=None):
-        out = {"labels": [], "voted": [], "notVoted": []}
-        for raw, desc, v, nv in blocks:
-            label = next((l for l in labels if raw.strip().endswith(l)), None)  # the text runs on: "...active voters 25-34"
-            if label and (where is None or where in desc) and label not in out["labels"]:
-                out["labels"].append(label); out["voted"].append(n(v)); out["notVoted"].append(n(nv))
-        order = [l for l in labels if l in out["labels"]]
-        idx = [out["labels"].index(l) for l in order]
-        return {k: [out[k][i] for i in idx] for k in out} | {"labels": order}
-    title = lambda xs: [x.title().replace("Dem ", "DEM ").replace("Gop ", "GOP ") for x in xs]
-    gender = section(["female", "male"])
-    age = section(["18-24", "25-34", "35-44", "45-54", "55-64", "65+"])
-    prim = section(["dem only", "dem mixed", "gop only", "gop mixed", "general only", "no history"])
-    four = ["1 of 4", "2 of 4", "3 of 4", "4 of 4"]
-    gen, dem, rep = section(four, "general election"), section(four, "democratic primar"), section(four, "republican primar")
-    rate = lambda d: [100 * v / (v + nv) for v, nv in zip(d["voted"], d["notVoted"])]
-    days = [(f"{m.title()} {d}", n(v)) for m, d, v in re.findall(r"\b(?:mon|tue|wed|thu|fri|sat|sun) (oct|nov) (\d+)(?: peak)? ([\d,]+) voters", t) if n(v) > 0]
-    charts = {"gender": dict(gender, labels=["Female", "Male"][:len(gender["labels"])]), "ageBands": age,
-              "previousHistory": dict(prim, labels=title(prim["labels"])), "generalHistory": gen,
-              "democratic": dict(dem, rates=rate(dem)), "republican": dict(rep, rates=rate(rep)),
-              "earlyVoting": {"labels": [d for d, _ in days], "votes": [v for _, v in days]}}
-    if len(age["labels"]) != 6 or len(gender["labels"]) != 2 or len(prim["labels"]) != 6 or len(gen["labels"]) != 4:
-        raise ValueError("the page's text did not have every group")
-    m = re.search(r"(\d+) of (\d+) counties reporting", t)
-    through = re.search(r"statewide snapshot .*? through (\w+day, \w+ \d+, \d{4})", t)
-    asof = re.search(r"as of (\w+ \d+, \d{4}, [\d:]+ [ap]\.m\. ct)", t)
-    num = lambda label: (lambda mm: n(mm.group(1)) if mm else None)(re.search(label + r" ([\d,]+)", t))
-    return {"charts": charts, "counties": [int(m.group(1)), int(m.group(2))] if m else None,
-            "through": through.group(1).title() if through else None, "as_of": asof.group(1)[:1].upper() + asof.group(1)[1:].replace(" ct", " CT") if asof else None,
-            "url": url, "votes_cast": num("votes cast"), "registered": num("registered"), "via": "Anthropic fetch tool"}
+def sos(**params):
+    """One file from the Secretary of State's feed: JSON carrying base64 JSON. The feed answers 502 or an empty
+    body now and then; three tries, a few seconds apart. Read with the real curl program, as itself: the feed's
+    filter refuses Python's and our own user agent (403) but serves curl. Nothing is disguised."""
+    url = SOS_API + "?" + urllib.parse.urlencode(params)
+    last = None
+    for attempt in range(3):
+        try:
+            r = subprocess.run(["curl", "-sS", "--fail", "--max-time", "60", "-H", "Accept: application/json", url],
+                               capture_output=True, timeout=90)
+            if r.returncode:
+                raise RuntimeError(r.stderr.decode("utf-8", "replace").strip()[:120])
+            body = r.stdout
+            if body.strip():
+                return json.loads(base64.b64decode(json.loads(body)["upload"]))
+            last = "empty reply"
+        except Exception as e:
+            last = e
+        time.sleep(4 * (attempt + 1))
+    raise RuntimeError(f"Secretary of State feed: {params.get('type')} {params.get('electionDate', '')} not read ({last})")
+
+
+def sos_early():
+    """Statewide early vote through the last full day: every day already over in Texas (a day still being
+    counted is left out), in-person votes that day, plus mail ballots received so far."""
+    els = sos(type="EVR_ELECTION")["elections"]
+    el_ = next(e for e in els if e["election_name"].strip().upper() == SOS_ELECTION)
+    today = datetime.now(TEXAS).date()
+    days = [datetime.strptime(d["date"], "%m/%d/%Y").date() for d in el_["early_voting_dates"]]
+    done = [d for d in days if d < today]
+    if not done:
+        raise RuntimeError("early voting has not finished a day yet")
+    daily, last = [], None
+    for d in done:
+        f = sos(type="EVR_EARLYVOTING", electionId=el_["id"], electionDate=d.strftime("%m/%d/%Y"))
+        rows = f["turnout_by_county"]
+        daily.append((d, sum(r.get("in_person_votes_on_date") or 0 for r in rows)))
+        last = f
+    while daily and daily[0][1] < 1000:  # the feed lists dates before early voting opened (Oct 14 to 18: 0 or 1 vote)
+        daily.pop(0)
+    rows = last["turnout_by_county"]
+    in_person = sum(r.get("total_in_person_votes_for_election") or 0 for r in rows)
+    mail = sum(r.get("total_mail_votes_for_election") or 0 for r in rows)
+    reporting = sum(1 for r in rows if (r.get("total_in_person_votes_for_election") or 0) + (r.get("total_mail_votes_for_election") or 0) > 0)
+    return {"source": "Texas Secretary of State, early voting turnout by county", "url": SOS_PAGE,
+            "as_of": datetime.strptime(last["date_updated"], "%Y-%m-%d").strftime("%B %-d, %Y"),
+            "through": done[-1].strftime("%A, %B %-d, %Y"), "counties": [reporting, len(rows)],
+            "voted": in_person + mail, "in_person": in_person, "mail": mail,
+            "registered": sum(r.get("registered_voters") or 0 for r in rows),
+            "daily": {"labels": [d.strftime("%b %-d") for d, _ in daily], "votes": [v for _, v in daily]}}
 
 
 def tusa(election):
+    """Transparency USA's page for an election, read directly (the page carries its data as JSON)."""
     url = TUSA.format(election=election)
     req = urllib.request.Request(url, headers={"User-Agent": C.UA})
-    try:
-        with urllib.request.urlopen(req, timeout=60, context=C.SSL_CTX) as r:
-            page = r.read().decode("utf-8", "replace")
-    except urllib.error.HTTPError as e:
-        if e.code not in (401, 403, 429) or not os.environ.get("ANTHROPIC_API_KEY"):
-            raise
-        text, info = C.fetch_via_anthropic(url)
-        if not text:
-            raise RuntimeError(f"refused directly ({e.code}) and through the fetch tool ({info})")
-        return tusa_text(text, url)
+    with urllib.request.urlopen(req, timeout=60, context=C.SSL_CTX) as r:
+        page = r.read().decode("utf-8", "replace")
     i = page.find("window.evElection = ")
     j, depth, k = page.find("{", i), 0, page.find("{", i)
     while True:
@@ -762,33 +780,28 @@ def tusa(election):
         k += 1
     charts = json.loads(page[j:k + 1])["charts"]
     text = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", page))
-    m = re.search(r"(\d+) of (\d+) counties reporting", text)
     through = re.search(r"Statewide snapshot .*? through (\w+day, \w+ \d+, \d{4})", text)
     asof = re.search(r"As of (\w+ \d+, \d{4}, [\d:]+ [ap]\.m\. CT)", text)
-    num = lambda label: (lambda m: int(m.group(1).replace(",", "")) if m else None)(re.search(label + r" ([\d,]+)", text))
-    return {"charts": charts, "counties": [int(m.group(1)), int(m.group(2))] if m else None,
-            "through": through.group(1) if through else None, "as_of": asof.group(1) if asof else None,
-            "url": TUSA.format(election=election), "votes_cast": num("Votes cast"), "registered": num("Registered")}
+    return {"charts": charts, "through": through.group(1) if through else None, "as_of": asof.group(1) if asof else None, "url": url}
 
 
 def early_vote(prev):
-    now26 = tusa("2026-general")
-    c = now26["charts"]
-    daily24 = prev.get("daily_2024") if prev and prev.get("daily_2024") else None
-    if not daily24:
-        try:
-            daily24 = tusa("2024-general")["charts"]["earlyVoting"]
-        except Exception as e:
-            print(f"  early vote: 2024 not read ({e})")
-    pair = lambda d: {l: [v, n] for l, v, n in zip(d["labels"], d["voted"], d["notVoted"])}
-    return {"source": "Transparency USA and JPM Strategies, from the Texas Secretary of State's voter rolls", "url": now26["url"],
-            "as_of": now26["as_of"], "through": now26["through"], "counties": now26["counties"],
-            "voted": now26["votes_cast"], "registered": now26["registered"],
-            "age": pair(c["ageBands"]), "gender": pair(c["gender"]),
-            "habit": pair(c["generalHistory"]), "primary": pair(c["previousHistory"]),
-            "new_primary_rate": {"D": c["democratic"]["rates"][0], "R": c["republican"]["rates"][0]},
-            "dem_primaries": pair(c["democratic"]), "gop_primaries": pair(c["republican"]),  # by how many of the last 4 primaries
-            "daily": c["earlyVoting"], "daily_2024": daily24}
+    ev = sos_early()
+    base = json.loads(EARLY_2024.read_text())
+    ev["daily_2024"] = {"labels": base["labels"], "votes": base["votes"], "source": base["source"], "url": base["url"]}
+    try:
+        t = tusa("2026-general")
+        c = t["charts"]
+        pair = lambda d: {l: [v, n] for l, v, n in zip(d["labels"], d["voted"], d["notVoted"])}
+        ev["groups_from"] = {"source": "Transparency USA and JPM Strategies, from the Texas Secretary of State's voter rolls",
+                             "url": t["url"], "as_of": t["as_of"], "through": t["through"]}
+        ev.update({"age": pair(c["ageBands"]), "gender": pair(c["gender"]),
+                   "habit": pair(c["generalHistory"]), "primary": pair(c["previousHistory"]),
+                   "new_primary_rate": {"D": c["democratic"]["rates"][0], "R": c["republican"]["rates"][0]},
+                   "dem_primaries": pair(c["democratic"]), "gop_primaries": pair(c["republican"])})
+    except Exception as e:
+        print(f"  early vote: groups not read ({type(e).__name__}: {e})")
+    return ev
 
 
 def _age_span(label):
@@ -847,6 +860,85 @@ def as_polled(groups, ev):
         if total:
             out.append({"lens": "age", "margin": round(num / total, 1), "polls": len(per_poll)})
     return out
+
+
+# ---------- link previews: one small page per number story ----------
+# Heston, 2026-10-27: every story gets its own card when shared. Like Today's (check_today.write_share_pages):
+# s/n-<key>.html carries the story's title, one line of its numbers and the Capitol picture, then goes on to the
+# story. Written every scan for the stories that have something to show.
+SITE_URL = "https://hestonmiles.com/factual/"
+SHARE_IMAGE = SITE_URL + "img/texas-capitol-v1.jpg"
+SLUG = {"tx-senate": ("senate", "Senate"), "tx-governor": ("governor", "Governor")}
+
+
+def _usd(v):
+    return f"${v / 1e6:.1f} million" if v >= 1e6 else f"${v:,.0f}"
+
+
+def number_cards(out):
+    cards = []
+    ev = out.get("early_vote")
+    if ev and ev.get("voted"):
+        title = "Texas early vote: who has voted so far" if ev.get("age") else "Texas early vote: turnout so far"
+        thru = re.sub(r"^\w+day, |, \d{4}$", "", ev.get("through") or "")
+        cards.append(("early-vote", title, f"{ev['voted']:,} Texans have voted, {100 * ev['voted'] / ev['registered']:.1f}% of registered "
+                      f"voters, through {thru}. From the Texas Secretary of State's count."))
+    for rid, r in out["races"].items():
+        slug, office = SLUG[rid]
+        name = f"Texas {office} race"
+        sur = [c["name"].split()[-1] for c in r["candidates"]]
+        f, avgs = r.get("forecast"), r.get("averages") or []
+        bits = []
+        if f:
+            i = 0 if f["chance"][0] >= f["chance"][1] else 1
+            bits.append(f"{r['candidates'][i]['name']}, {max(f['chance'])}% chance to win, from the published polling averages.")
+        if avgs:
+            gaps = [a["shares"][0] - a["shares"][1] for a in avgs]
+            if all(g > 0 for g in gaps) or all(g < 0 for g in gaps):
+                lo, hi = min(map(abs, gaps)), max(map(abs, gaps))
+                rng = f"{lo:g}" if lo == hi else f"{lo:g} to {hi:g}"
+                bits.append(f"{sur[0 if gaps[0] > 0 else 1]} ahead by {rng} points in {len(gaps)} published average{'s' if len(gaps) != 1 else ''}.")
+        cards.append((f"{slug}-polls", f"{name}: latest polls", " ".join(bits) or "The latest polls, each checked against its pollster's release."))
+        g = r.get("groups") or {}
+        if out.get("groups_live") and g:
+            polls = {p["pollster"] + p["end"] for cat in g.values() for rows in cat.values() for p in rows}
+            cards.append((f"{slug}-groups", f"{name}: polls by group",
+                          f"How each group leans, poll by poll: {', '.join(sorted(g))}, from {len(polls)} poll{'s' if len(polls) != 1 else ''}."))
+        m = r.get("money") or {}
+        cs = m.get("candidates") or []
+        if m.get("source") == "FEC" and any(c.get("raised") is not None for c in cs):
+            line = "Raised: " + ", ".join(f"{c['name'].split()[-1]} {_usd(c['raised'])}" for c in sorted(cs, key=lambda c: -(c.get("raised") or 0)) if c.get("raised") is not None) + ". From FEC filings."
+        elif any(c.get("cash") is not None for c in cs):
+            line = "Cash on hand: " + ", ".join(f"{c['name'].split()[-1]} {_usd(c['cash'])}" for c in sorted(cs, key=lambda c: -(c.get("cash") or 0)) if c.get("cash") is not None) + ". From Texas Ethics Commission filings."
+        else:
+            line = "Campaign finance reports, as filed."
+        cards.append((f"{slug}-funding", f"{name}: campaign funding", line))
+    return cards
+
+
+def write_number_share_pages(out):
+    from html import escape
+    e = lambda t: escape(t, quote=True)
+    folder = ROOT / "data/share"
+    folder.mkdir(parents=True, exist_ok=True)
+    cards = number_cards(out)
+    for key, title, desc in cards:
+        url = f"{SITE_URL}numbers.html?n={key}"
+        (folder / f"n-{key}.html").write_text(f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>{e(title)} \u00b7 fACTUAL</title>
+<meta name="description" content="{e(desc)}">
+<meta name="robots" content="noindex">
+<link rel="canonical" href="{e(url)}">
+<meta property="og:type" content="article"><meta property="og:site_name" content="fACTUAL">
+<meta property="og:title" content="{e(title)}"><meta property="og:description" content="{e(desc)}">
+<meta property="og:url" content="{SITE_URL}s/n-{key}.html"><meta property="og:image" content="{SHARE_IMAGE}">
+<meta name="twitter:card" content="summary_large_image">
+<meta http-equiv="refresh" content="0; url={e(url)}">
+<script>location.replace({json.dumps(url)})</script>
+</head><body><p><a href="{e(url)}">{e(title)}</a></p></body></html>
+""")
+    print(f"tx_numbers: share pages {len(cards)}")
 
 
 # ---------- the run ----------
@@ -1024,6 +1116,10 @@ def main():
     out["crosstabs"], out["crosstabs_v"], out["groups_live"] = cross, CROSS_V, GROUPS_LIVE
     out["early_vote"], out["early_vote_error"] = ev, early_error
     OUT.write_text(json.dumps(out, indent=1))
+    try:
+        write_number_share_pages(out)
+    except Exception as e:
+        print(f"tx_numbers: share pages not written ({e})")
     # The investors' time capsule freezes these with the rest of the edition (see check_today.write_capsule).
     key = os.environ.get("CAPSULE_KEY", "").strip()
     if re.fullmatch(r"[A-Za-z0-9_-]{16,64}", key):
