@@ -1514,20 +1514,49 @@ function numTable(caption, cols, rows) {
   return wrap;
 }
 function countyBlock(ev) {
+  // One question (Heston, 2026-10-27, "not sure what that table is telling me"): compared with 2024, which kind of
+  // county is casting more of the vote? The chart answers it; turnout follows as plain bars; the table sits behind
+  // "Show the numbers".
   const box = el("div", "num-early-part");
   const g = ev.by_2024;
   const allV = g.reduce((t, x) => t + x.voted, 0), all24 = g.reduce((t, x) => t + x.votes_2024, 0);
   const rate = x => pct(x.voted, x.registered);
-  const byRate = [...g].sort((a, b) => rate(b) - rate(a));
-  const hi = byRate[0], lo = byRate[byRate.length - 1];
+  const now = x => pct(x.voted, allV), then = x => pct(x.votes_2024, all24);
+  const shift = x => Math.round(10 * (now(x) - then(x))) / 10;
   const name = x => x.group.startsWith("Trump") ? `counties ${x.group}` : x.group.replace(/^Counties/, "counties");
-  const h = g[0];
+  const up = g.filter(x => shift(x) >= 0.5), down = g.filter(x => shift(x) <= -0.5);
   box.append(el("h2", "num-h", "By how each county voted in 2024"));
-  box.append(el("p", "num-lede", `Turnout so far is highest in ${name(hi)} (${rate(hi).toFixed(1)}% of registered voters) and lowest in ${name(lo)} (${rate(lo).toFixed(1)}%). `
-    + `Counties Harris won have cast ${pct(h.voted, allV).toFixed(1)}% of the votes so far; in 2024 they cast ${pct(h.votes_2024, all24).toFixed(1)}% of the state’s vote.`));
-  box.append(numTable("Early vote so far, by the county’s 2024 result for president",
+  box.append(el("p", "num-lede", up.length && down.length
+    ? `Compared with 2024, more of the vote so far is coming from ${listNames(up.map(name), 3)}, and less from ${listNames(down.map(name), 3)}.`
+    : "So far each kind of county is casting about the same share of the vote as in 2024."));
+  // The shift: each group's share of the votes so far minus its share of the 2024 vote, in points, from a center line.
+  box.append(el("h3", "num-h3", "Share of the vote, against 2024"));
+  const max = Math.max(2, Math.ceil(Math.max(...g.map(x => Math.abs(shift(x))))));
+  const ul = el("ul", "shift-list");
+  for (const x of g) {
+    const d = shift(x);
+    const li = el("li", "rate-row");
+    const bar = el("div", "shift-bar"); bar.setAttribute("aria-hidden", "true");
+    const f = el("i", d < 0 ? "is-less" : null);
+    f.style.width = `${50 * Math.min(1, Math.abs(d) / max)}%`;
+    bar.append(f);
+    li.append(el("span", "rate-label", `${x.group} (${x.counties})`),
+      el("span", "rate-text", `${d > 0 ? "+" : d < 0 ? "\u2212" : ""}${Math.abs(d).toFixed(1)} pts · ${now(x).toFixed(1)}% now, ${then(x).toFixed(1)}% in 2024`), bar);
+    ul.append(li);
+  }
+  box.append(ul);
+  const axis = el("p", "shift-axis"); axis.setAttribute("aria-hidden", "true");
+  axis.append(el("span", null, "\u2190 Less of the vote than in 2024"), el("span", null, "More than in 2024 \u2192"));
+  box.append(axis);
+  // Turnout so far in each kind of county, on a true 0 to 100 scale.
+  box.append(el("h3", "num-h3", "Turnout so far"));
+  box.append(rateRows(g.map(x => [x.group, rate(x), `${rate(x).toFixed(1)}% of registered voters`])));
+  const more = el("details", "num-more");
+  more.append(el("summary", null, "Show the numbers"));
+  more.append(numTable("Early vote so far, by the county’s 2024 result for president",
     [["Counties", "c-group"], ["Turnout", "c-num"], ["Share of votes", "c-num"], ["Share in 2024", "c-num"]],
-    g.map(x => [`${x.group} (${x.counties})`, `${rate(x).toFixed(1)}%`, `${pct(x.voted, allV).toFixed(1)}%`, `${pct(x.votes_2024, all24).toFixed(1)}%`])));
+    g.map(x => [`${x.group} (${x.counties})`, `${rate(x).toFixed(1)}%`, `${now(x).toFixed(1)}%`, `${then(x).toFixed(1)}%`])));
+  box.append(more);
   const harris = (ev.largest || []).find(c => c.county === "Harris");
   box.append(el("p", "num-note", `A county’s 2024 result says nothing certain about who in it is voting now. Texas does not register voters by party, and every county has voters of both parties${harris ? `: Harris County, which Harris won, is also where Trump got more votes than in any other Texas county` : ""}.`));
   if (ev.largest) {
