@@ -1584,6 +1584,20 @@ function moneyBlock(m, cands) {
     box.append(el("p", "num-note", "We could not load the campaign finance reports this time. Each scan tries again."));
     return box;
   }
+  // Totals first (Heston, 2026-10-27): what both campaigns raised, and what outside groups spent. Kept apart,
+  // never added: one is money raised, the other money spent.
+  if (m.source === "FEC") {
+    const sum = k => m.candidates.reduce((t, c) => t + (c[k] || 0), 0);
+    const tiles = [["Raised by both campaigns", sum("raised"), m.candidates.every(c => c.raised != null)]];
+    if (m.outside_ok) tiles.push(["Spent by outside groups", sum("outside_support") + sum("outside_oppose"), true]);
+    const strip = el("dl", "money-totals");
+    for (const [label, v, ok] of tiles.filter(t => t[2])) {
+      const d = el("div", "money-total");
+      d.append(el("dt", null, label), el("dd", null, `$${(v / 1e6).toFixed(1)} million`));
+      strip.append(d);
+    }
+    if (strip.children.length) box.append(strip);
+  }
   const sides = sideSpending(m);
   if (sides) box.append(el("p", "num-lede", `Counting what outside groups spent for a candidate and against the opponent: ${sides.map(([x, v]) => `${usd(v)} on ${x.name}\u2019s side`).join(", ")}, in the general election.`));
   const rows = [["Raised by the campaign", "raised"], ["Cash on hand", "cash"]];

@@ -668,6 +668,10 @@ a.num-name:hover { text-decoration: underline; }
 
 /* Money */
 .money-list { list-style: none; margin: 0; padding: 0; }
+.money-totals { display: flex; flex-wrap: wrap; gap: 12px 32px; margin: 0 0 16px; }
+.money-total { margin: 0; }
+.money-total dt { margin: 0 0 2px; font: 600 0.875rem/1.3 var(--cond); color: var(--ink-2); }
+.money-total dd { margin: 0; font: 700 1.5rem/1.2 var(--mono); color: var(--ink); }
 .money-row { padding: 10px 0; border-top: 1px solid var(--line); }
 .money-label { margin: 0 0 6px; font: 600 0.875rem/1.3 var(--cond); color: var(--ink-2); }
 .money-line { display: grid; grid-template-columns: 6.5rem minmax(0, 1fr) 4.5rem; gap: 12px; align-items: center; padding: 3px 0; }
