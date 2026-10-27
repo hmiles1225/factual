@@ -708,6 +708,10 @@ def crosstabs(text, race, cands, poll, ask, charge, ask2):
 SOS_API = "https://goelect.txelections.civixapps.com/api-ivis-system/api/v1/getFile"
 SOS_PAGE = "https://goelect.txelections.civixapps.com/ivis-evr-ui/evr"
 SOS_ELECTION = "2026 NOVEMBER GENERAL ELECTION"
+# For scale in the early-vote summary (Heston, 2026-10-27): total turnout in the last midterm and the last
+# presidential election, the Secretary of State's official figures (checked by Claude 2026-10-27).
+TURNOUT_PAST = {"2022": 8102908, "2024": 11388674, "source": "Texas Secretary of State, Turnout and Voter Registration Figures",
+                "url": "https://www.sos.texas.gov/elections/historical/70-92.shtml"}
 TEXAS = ZoneInfo("America/Chicago")  # most of Texas; a day is over when it is over in Austin
 EARLY_2024 = Path(__file__).resolve().parent / "tx_early_2024.json"
 TUSA = "https://turnout.transparencyusa.org/{election}/"
@@ -758,7 +762,9 @@ def sos_early():
     mail = sum(r.get("total_mail_votes_for_election") or 0 for r in rows)
     reporting = sum(1 for r in rows if (r.get("total_in_person_votes_for_election") or 0) + (r.get("total_mail_votes_for_election") or 0) > 0)
     counties = by_2024_result(rows, len(daily))
-    return {**counties, "source": "Texas Secretary of State, early voting turnout by county", "url": SOS_PAGE,
+    return {**counties, "early_ends": days[-1].isoformat(),
+            "election_date": datetime.strptime(el_["election_date"], "%m/%d/%Y").date().isoformat(),
+            "turnout_past": TURNOUT_PAST, "source": "Texas Secretary of State, early voting turnout by county", "url": SOS_PAGE,
             "as_of": datetime.strptime(last["date_updated"], "%Y-%m-%d").strftime("%B %-d, %Y"),
             "through": done[-1].strftime("%A, %B %-d, %Y"), "counties": [reporting, len(rows)],
             "voted": in_person + mail, "in_person": in_person, "mail": mail,

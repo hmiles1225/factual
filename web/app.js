@@ -1412,13 +1412,49 @@ function rateRows(rows) {
   return ul;
 }
 
+// A plain summary above the numbers (Heston, 2026-10-27: "explaining what's going on"). Written by code from the
+// same numbers as the charts below, so it can't drift from them; each point is a fact shown further down.
+function earlySummary(ev) {
+  const pts = [];
+  const day = iso => new Date(`${iso}T12:00:00`).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
+  const thru = (ev.through || "").replace(/, \d{4}$/, "");
+  pts.push(`${fmtN(ev.voted)} Texans have voted early through ${thru}, ${pct(ev.voted, ev.registered).toFixed(1)}% of the ${fmtN(ev.registered)} registered: ${fmtN(ev.in_person)} in person and ${fmtN(ev.mail)} by mail${ev.counties ? ` (${ev.counties[0]} of ${ev.counties[1]} counties reporting)` : ""}.`);
+  const g = ev.by_2024 || [];
+  if (g.length && g[0].in_person_2024) {
+    const all = pct(g.reduce((t, x) => t + x.in_person, 0), g.reduce((t, x) => t + x.in_person_2024, 0));
+    const tp = ev.turnout_past;
+    pts.push(`In-person early voting is at ${Math.round(all)}% of its level at the same point in 2024, a presidential election.`
+      + (tp ? ` For scale: in 2022, the last midterm, ${(tp["2022"] / 1e6).toFixed(1)} million Texans voted in all, ${Math.round(pct(tp["2022"], tp["2024"]))}% as many as the ${(tp["2024"] / 1e6).toFixed(1)} million in 2024.` : ""));
+    const pace = x => pct(x.in_person, x.in_person_2024);
+    const s = [...g].sort((a, b) => pace(b) - pace(a)), hi = s[0], lo = s[s.length - 1];
+    const name = x => x.group.startsWith("Trump") ? `counties ${x.group}` : x.group.replace(/^Counties/, "counties");
+    pts.push(`The pace is highest in ${name(hi)} (${Math.round(pace(hi))}% of 2024) and lowest in ${name(lo)} (${Math.round(pace(lo))}%).`);
+  }
+  const d = ev.daily, p = ev.daily_2024;
+  if (d && p && d.votes.length >= 2) {
+    const i = d.votes.length - 1, r = Math.round(100 * d.votes[i] / p.votes[i]);
+    pts.push(`The latest day, ${d.labels[i]}, drew ${fmtN(d.votes[i])} in-person votes, ${r}% of the same day in 2024.`);
+  }
+  if (ev.early_ends && ev.election_date) pts.push(`Early voting runs through ${day(ev.early_ends)}. Election Day is ${day(ev.election_date)}. Early votes are not results: none are released until polls close that day, and Election Day voters can differ from early voters.`);
+  const box = el("div", "num-summary");
+  box.append(el("h2", "num-h", "What\u2019s happening"));
+  const ul = el("ul", "num-summary-list");
+  pts.forEach(t => ul.append(el("li", null, t)));
+  box.append(ul);
+  box.append(basedOn(`${ev.source}, as of ${ev.as_of || "the latest update"} (mail ballots are those received so far), and the charts below${ev.turnout_past ? `. 2022 and 2024 turnout: ${ev.turnout_past.source}` : ""}.`, "Secretary of State", ev.url));
+  return box;
+}
+
 function earlyBlock(ev) {
   const box = el("div", "num-early");
+  // The Secretary of State's count gets the summary, which states the count; older data keeps "So far".
+  if (ev.mail != null && ev.in_person != null) box.append(earlySummary(ev));
+  else {
   const thru = (ev.through || "").replace(/^\w+day, /, "").replace(/, \d{4}$/, "");
   box.append(el("h2", "num-h", "So far"));
   const how = ev.in_person != null && ev.mail != null ? `: ${fmtN(ev.in_person)} in person and ${fmtN(ev.mail)} by mail` : "";
   box.append(el("p", "num-lede", `${fmtN(ev.voted)} Texans have voted, ${pct(ev.voted, ev.registered).toFixed(1)}% of the ${fmtN(ev.registered)} registered, through ${thru}${how}${ev.counties ? ` (${ev.counties[0]} of ${ev.counties[1]} counties reporting)` : ""}.`));
-  if (ev.mail != null) box.append(basedOn(`${ev.source}, as of ${ev.as_of || "the latest update"}. Mail ballots are those received so far.`, "Secretary of State", ev.url));
+  }
   // Pace: each day as a share of the same day of early voting in 2024, against a marked 100% line.
   const d = ev.daily, p = ev.daily_2024;
   if (d && p && p.votes) {
