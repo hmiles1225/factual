@@ -1547,7 +1547,7 @@ function countyBlock(ev) {
     cell.append(bar, v); chart.append(cell);
     const l = el("div");
     l.append(el("b", null, `${SHORT[i] || x.group} (${x.counties})`),
-      el("span", null, `Early vote: ${now(x).toFixed(1)}%`), el("span", null, `2024 vote: ${then(x).toFixed(1)}%`));
+      el("span", null, `2026 so far: ${now(x).toFixed(1)}%`), el("span", null, `2024 vote: ${then(x).toFixed(1)}%`));
     labels.append(l);
   });
   box.append(chart, el("p", "cd-axis", "How each county voted for president in 2024"), labels);
