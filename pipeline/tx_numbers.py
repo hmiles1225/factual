@@ -757,12 +757,41 @@ def sos_early():
     in_person = sum(r.get("total_in_person_votes_for_election") or 0 for r in rows)
     mail = sum(r.get("total_mail_votes_for_election") or 0 for r in rows)
     reporting = sum(1 for r in rows if (r.get("total_in_person_votes_for_election") or 0) + (r.get("total_mail_votes_for_election") or 0) > 0)
-    return {"source": "Texas Secretary of State, early voting turnout by county", "url": SOS_PAGE,
+    counties = by_2024_result(rows)
+    return {**counties, "source": "Texas Secretary of State, early voting turnout by county", "url": SOS_PAGE,
             "as_of": datetime.strptime(last["date_updated"], "%Y-%m-%d").strftime("%B %-d, %Y"),
             "through": done[-1].strftime("%A, %B %-d, %Y"), "counties": [reporting, len(rows)],
             "voted": in_person + mail, "in_person": in_person, "mail": mail,
             "registered": sum(r.get("registered_voters") or 0 for r in rows),
             "daily": {"labels": [d.strftime("%b %-d") for d, _ in daily], "votes": [v for _, v in daily]}}
+
+
+# Heston, 2026-10-27: Texas has no party registration, so no count of Republicans or Democrats who have voted
+# exists. What official data allows: turnout in counties grouped by how they voted for president in 2024, and
+# the largest counties. A county's result says nothing certain about who in it is voting now; the page says so.
+COUNTY_2024 = Path(__file__).resolve().parent / "tx_county_2024.json"
+BY_2024 = [("Counties Harris won", None, 0), ("Trump won by under 20 points", 0, 20),
+           ("Trump won by 20 to 50 points", 20, 50), ("Trump won by 50 points or more", 50, None)]
+
+
+def by_2024_result(rows):
+    ref = json.loads(COUNTY_2024.read_text())
+    res = ref["counties"]
+    if {r["name"] for r in rows} != set(res):
+        raise ValueError("the feed's counties don't match the 2024 results file")
+    voted = lambda r: (r.get("total_in_person_votes_for_election") or 0) + (r.get("total_mail_votes_for_election") or 0)
+    margin = lambda n: 100 * (res[n]["R"] - res[n]["D"]) / (res[n]["R"] + res[n]["D"] + res[n]["O"])
+    groups = []
+    for label, lo, hi in BY_2024:
+        sel = [r for r in rows if (lo is None or margin(r["name"]) >= lo) and (hi is None or margin(r["name"]) < hi)]
+        groups.append({"group": label, "counties": len(sel), "registered": sum(r.get("registered_voters") or 0 for r in sel),
+                       "voted": sum(voted(r) for r in sel), "votes_2024": sum(sum(res[r["name"]].values()) for r in sel)})
+    if sum(g["counties"] for g in groups) != len(rows):
+        raise ValueError("a county fell outside every group")
+    big = sorted(rows, key=lambda r: -(r.get("registered_voters") or 0))[:10]
+    largest = [{"county": r["name"].title(), "margin_2024": round(margin(r["name"]), 1), "registered": r["registered_voters"],
+                "voted": voted(r)} for r in big]
+    return {"by_2024": groups, "largest": largest, "results_2024": {"source": ref["source"], "url": ref["url"]}}
 
 
 def tusa(election):

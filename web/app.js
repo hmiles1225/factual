@@ -1442,6 +1442,7 @@ function earlyBlock(ev) {
     if (p.source) s2.append(basedOn(`the Secretary of State’s daily counts for 2026. For 2024, ${p.source}: the Secretary of State’s own 2024 daily figures are not open to automated reading. For 2026’s first week the two sources were within 1.6% of each other every day.`, "2024 figures", p.url));
     box.append(s2);
   }
+  if (ev.by_2024) box.append(countyBlock(ev));
   // Who has voted, by group: only when Transparency USA's tracker could be read (it refuses GitHub's servers).
   if (!ev.age) return box;
   const gf = ev.groups_from || ev;
@@ -1491,6 +1492,51 @@ function earlyBlock(ev) {
   }
   box.append(s5);
   box.append(basedOn(`${gf.source}, as of ${gf.as_of || "the latest update"}. Ages and genders are as recorded on voter registration. Texas does not record race or party, so neither is shown here.`, "Transparency USA", gf.url));
+  return box;
+}
+
+// Turnout by how each county voted for president in 2024, and the largest counties (Heston, 2026-10-27). Texas
+// has no party registration, so this is as close as official numbers come; the caveat sits beside it.
+function numTable(caption, cols, rows) {
+  const wrap = el("div", "num-table-wrap");
+  const t = el("table", "num-table");
+  t.append(el("caption", null, caption));
+  const head = el("tr");
+  cols.forEach(([txt, cls]) => { const th = el("th", cls, txt); th.scope = "col"; head.append(th); });
+  const thead = el("thead"); thead.append(head); t.append(thead);
+  const tb = el("tbody");
+  for (const r of rows) {
+    const tr = el("tr");
+    r.forEach((v, i) => { const c = el(i ? "td" : "th", cols[i][1], v); if (!i) c.scope = "row"; tr.append(c); });
+    tb.append(tr);
+  }
+  t.append(tb); wrap.append(t);
+  return wrap;
+}
+function countyBlock(ev) {
+  const box = el("div", "num-early-part");
+  const g = ev.by_2024;
+  const allV = g.reduce((t, x) => t + x.voted, 0), all24 = g.reduce((t, x) => t + x.votes_2024, 0);
+  const rate = x => pct(x.voted, x.registered);
+  const byRate = [...g].sort((a, b) => rate(b) - rate(a));
+  const hi = byRate[0], lo = byRate[byRate.length - 1];
+  const name = x => x.group.startsWith("Trump") ? `counties ${x.group}` : x.group.replace(/^Counties/, "counties");
+  const h = g[0];
+  box.append(el("h2", "num-h", "By how each county voted in 2024"));
+  box.append(el("p", "num-lede", `Turnout so far is highest in ${name(hi)} (${rate(hi).toFixed(1)}% of registered voters) and lowest in ${name(lo)} (${rate(lo).toFixed(1)}%). `
+    + `Counties Harris won have cast ${pct(h.voted, allV).toFixed(1)}% of the votes so far; in 2024 they cast ${pct(h.votes_2024, all24).toFixed(1)}% of the state’s vote.`));
+  box.append(numTable("Early vote so far, by the county’s 2024 result for president",
+    [["Counties", "c-group"], ["Turnout", "c-num"], ["Share of votes", "c-num"], ["Share in 2024", "c-num"]],
+    g.map(x => [`${x.group} (${x.counties})`, `${rate(x).toFixed(1)}%`, `${pct(x.voted, allV).toFixed(1)}%`, `${pct(x.votes_2024, all24).toFixed(1)}%`])));
+  const harris = (ev.largest || []).find(c => c.county === "Harris");
+  box.append(el("p", "num-note", `A county’s 2024 result says nothing certain about who in it is voting now. Texas does not register voters by party, and every county has voters of both parties${harris ? `: Harris County, which Harris won, is also where Trump got more votes than in any other Texas county` : ""}.`));
+  if (ev.largest) {
+    box.append(el("h3", "num-h3", "The 10 largest counties"));
+    box.append(numTable("Early vote so far in the 10 counties with the most registered voters",
+      [["County", "c-group"], ["2024 result", "c-num"], ["Voted so far", "c-num"], ["Turnout", "c-num"]],
+      ev.largest.map(c => [c.county, `${c.margin_2024 > 0 ? "Trump" : "Harris"} +${Math.round(Math.abs(c.margin_2024))}`, fmtN(c.voted), `${pct(c.voted, c.registered).toFixed(1)}%`])));
+  }
+  box.append(basedOn(`${ev.source} for 2026 turnout. 2024 results: ${ev.results_2024.source}, summed by county (within 200 votes of the official statewide count for each candidate).`, "2024 results", ev.results_2024.url));
   return box;
 }
 
