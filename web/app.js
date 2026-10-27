@@ -1148,6 +1148,7 @@ function loadedItem(t, side) {
    as on the outlet spectrum). Every number is text in the page; the tracks only draw it. */
 const surname = c => c.name.split(" ").pop();
 const pts = x => { const r = Math.round(Math.abs(x) * 10) / 10; return Number.isInteger(r) ? String(r) : r.toFixed(1); };
+const pts_ = pts;  // the summaries keep a local list named pts
 // shares are [first candidate (Republican, ballot order), second]; a positive gap is the first one ahead.
 const gapOf = sh => sh[0] - sh[1];
 function gapText(gap, cands) {
@@ -1412,6 +1413,112 @@ function rateRows(rows) {
   return ul;
 }
 
+// "What's happening": a plain summary above a number story's numbers (Heston, 2026-10-27). Every point is
+// written by code from numbers shown further down the same page, so it can't drift from them.
+function summaryBox(points) {
+  const box = el("div", "num-summary");
+  box.append(el("h2", "num-h", "What\u2019s happening"));
+  const ul = el("ul", "num-summary-list");
+  points.filter(Boolean).forEach(t => ul.append(el("li", null, t)));
+  box.append(ul);
+  return box;
+}
+const summaryBasis = () => basedOn("the figures on this page, each shown below with its own source.");
+
+function pollsSummary(r, c, nums) {
+  const pts = [];
+  const f = r.forecast;
+  if (f) {
+    const i = f.chance[0] >= f.chance[1] ? 0 : 1;
+    pts.push(`${c[i].name} has a ${f.chance[i]}% chance to win and ${c[1 - i].name} ${f.chance[1 - i]}%, by our arithmetic on the published polling averages and how far Texas polls have missed before.`);
+  }
+  const gaps = r.averages.map(a => gapOf(a.shares));
+  if (gaps.length) {
+    const same = gaps.every(x => Math.sign(x) === Math.sign(gaps[0]) && Math.abs(x) >= 0.05);
+    const abs = gaps.map(Math.abs);
+    pts.push(same ? `${surname(c[gaps[0] > 0 ? 0 : 1])} leads in all ${plural(gaps.length, "published average", "published averages")}, by ${pts_(Math.min(...abs))} to ${pts_(Math.max(...abs))} points.`
+      : `The ${gaps.length} published averages disagree on who is ahead.`);
+  }
+  const polls = r.polls || [];
+  if (polls.length) {
+    const ahead = i => polls.filter(p => (i === 0 ? 1 : -1) * gapOf(p.shares) >= 0.05).length;
+    const tied = polls.length - ahead(0) - ahead(1);
+    const order = ahead(0) >= ahead(1) ? [0, 1] : [1, 0];
+    const has = (n, i) => `${n} ${n === 1 ? "has" : "have"} ${surname(c[i])} ahead`;
+    const measured = polls.filter(p => p.lead_moe), inside = measured.filter(p => Math.abs(gapOf(p.shares)) <= p.lead_moe).length;
+    pts.push(`Of the ${plural(polls.length, "poll", "polls")} from the last ${nums.recent_days || 30} days that we confirmed against the pollster\u2019s own release, ${has(ahead(order[0]), order[0])}, ${tied ? "" : "and "}${has(ahead(order[1]), order[1])}${tied ? `, and ${tied} ${tied === 1 ? "is" : "are"} tied` : ""}.`
+      + (measured.length ? ` In ${inside} of the ${measured.length} that publish a margin of error, the lead is smaller than that margin, so ${inside === 1 ? "that poll can\u2019t" : "those polls can\u2019t"} say for sure who is ahead.` : ""));
+  }
+  const h = nums.history, lead = raceLead(r);
+  if (h && h.races && lead != null) {
+    const races = h.races, last = races[races.length - 1];
+    let run = 0;
+    for (let i = races.length - 1; i >= 0 && Math.sign(races[i].miss) === Math.sign(last.miss); i--) run++;
+    pts.push(`Since 2016, Texas\u2019s final polling averages missed the result by ${pts_(h.typical_miss)} points on average, ${lead < h.typical_miss ? "more than" : "less than"} this race\u2019s ${pts_(lead)}-point lead. `
+      + `The Republican did ${last.miss > 0 ? "better" : "worse"} than the polls in the last ${run} of ${races.length} races, every one since ${races[races.length - run].year}.`);
+  }
+  return pts;
+}
+
+function groupsSummary(r, c) {
+  const g = r.groups || {};
+  const word = (cat, n) => cat === "race" ? `${n} voters` : cat === "area" ? `${n.toLowerCase()} voters` : cat === "party" ? (n === "Independents" ? "independents" : n)
+    : cat === "gender" ? n.toLowerCase() : cat === "education" ? (n === "College degree" ? "voters with a college degree" : "voters without a college degree")
+    : cat === "age" ? (n.endsWith("+") ? `voters ${n.slice(0, -1)} and over` : /^Under/.test(n) ? `voters ${n.toLowerCase()}` : `voters ${n}`) : n;
+  const polls = new Set(Object.values(g).flatMap(x => Object.values(x).flat().map(p => p.pollster + p.end)));
+  const agree = [[], []], split = [];
+  for (const [cat] of GROUP_CATS) for (const [n, rows] of Object.entries(g[cat] || {})) {
+    if (rows.length < 2) continue;
+    const gaps = rows.map(p => gapOf(p.shares));
+    if (gaps.every(x => x >= 0.05)) agree[0].push(word(cat, n));
+    else if (gaps.every(x => x <= -0.05)) agree[1].push(word(cat, n));
+    else split.push(word(cat, n));
+  }
+  const pts = [`${plural(polls.size, "poll", "polls")} so far ${polls.size === 1 ? "reports" : "report"} numbers by group, confirmed against the release.`];
+  if (!agree[0].length && !agree[1].length && !split.length) {
+    pts.push("No group is in more than one poll yet, so there is nothing to compare across polls. More releases are read every hour.");
+    return pts;
+  }
+  for (const i of [1, 0]) if (agree[i].length) pts.push(`Every poll that reports them has ${surname(c[i])} ahead among ${listNames(agree[i], 8)}.`);
+  if (split.length) pts.push(`The polls disagree on who leads among ${listNames(split, 8)}.`);
+  pts.push("A group is a small slice of a poll\u2019s sample, so its numbers are far less certain than the headline result. Read them for whether the polls agree, not for exact margins.");
+  return pts;
+}
+
+function moneySummary(m, c) {
+  if (!m || !m.candidates || !m.candidates.length) return [];
+  const pts = [];
+  const by = name => m.candidates.find(x => x.name === name.name) || {};
+  const M = v => `$${(v / 1e6).toFixed(1)} million`;
+  if (m.source === "FEC" && m.candidates.every(x => x.raised != null)) {
+    const [a, b] = [...m.candidates].sort((x, y) => y.raised - x.raised);
+    pts.push(`${surname(a)}\u2019s campaign has raised ${(a.raised / b.raised).toFixed(1)} times as much as ${surname(b)}\u2019s: ${M(a.raised)} to ${M(b.raised)}.`);
+    const sides = sideSpending(m);
+    if (sides) {
+      const [x, y] = [...sides].sort((p, q) => q[1] - p[1]);
+      const xc = by(x[0]), yc = by(y[0]);
+      pts.push(`Outside groups have put more on ${surname(x[0])}\u2019s side: ${M(x[1])}, against ${M(y[1])} on ${surname(y[0])}\u2019s. Most of it is spending against ${surname(y[0])} (${M(yc.outside_oppose || 0)}).`);
+      const both = new Map();
+      for (const cand of m.candidates) for (const [list, other] of [[cand.top_support || [], cand], [cand.top_oppose || [], m.candidates.find(o => o !== cand)]])
+        for (const gr of list) { const e = both.get(gr.group) || { usd: 0 }; e.usd += gr.usd; both.set(gr.group, e); }
+      const top = [...both.entries()].sort((p, q) => q[1].usd - p[1].usd)[0];
+      if (top) {
+        const parts = m.candidates.flatMap(cand => [...(cand.top_support || []).filter(gr => gr.group === top[0]).map(gr => `${M(gr.usd)} for ${surname(cand)}`), ...(cand.top_oppose || []).filter(gr => gr.group === top[0]).map(gr => `${M(gr.usd)} against ${surname(cand)}`)]);
+        pts.push(`The biggest single outside spender is ${top[0]}: ${M(top[1].usd)} in all${parts.length > 1 ? `, ${listNames(parts, 2)}` : ""}.`);
+      }
+      const totals = m.candidates.map(cand => [cand, cand.raised + (new Map(sides.map(([k, v]) => [k.name, v])).get(cand.name) || 0)]).sort((p, q) => q[1] - p[1]);
+      pts.push(`In all, counting the campaigns and outside groups, ${listNames(totals.map(([cand, v]) => `${M(v)} is on ${surname(cand)}\u2019s side`), 2)}.`);
+    }
+  } else if (m.candidates.every(x => x.cash != null)) {
+    const [a, b] = [...m.candidates].sort((x, y) => y.cash - x.cash);
+    const thru = m.candidates.map(x => x.through).filter(Boolean).sort().pop();
+    const when = thru && thru.length === 8 ? shortDate(`${thru.slice(0, 4)}-${thru.slice(4, 6)}-${thru.slice(6)}`) : null;
+    pts.push(`${surname(a)} has ${(a.cash / b.cash).toFixed(1)} times as much cash on hand as ${surname(b)}: ${M(a.cash)} to ${M(b.cash)}${when ? `, in reports through ${when}` : ""}.`);
+    pts.push("Texas reports show cash on hand here, not money raised: one campaign moves money between its accounts, so adding up what each account raised would count it twice.");
+  }
+  return pts;
+}
+
 // A plain summary above the numbers (Heston, 2026-10-27: "explaining what's going on"). Written by code from the
 // same numbers as the charts below, so it can't drift from them; each point is a fact shown further down.
 function earlySummary(ev) {
@@ -1436,11 +1543,7 @@ function earlySummary(ev) {
     pts.push(`The latest day, ${d.labels[i]}, drew ${fmtN(d.votes[i])} in-person votes, ${r}% of the same day in 2024.`);
   }
   if (ev.early_ends && ev.election_date) pts.push(`Early voting runs through ${day(ev.early_ends)}. Election Day is ${day(ev.election_date)}. Early votes are not results: none are released until polls close that day, and Election Day voters can differ from early voters.`);
-  const box = el("div", "num-summary");
-  box.append(el("h2", "num-h", "What\u2019s happening"));
-  const ul = el("ul", "num-summary-list");
-  pts.forEach(t => ul.append(el("li", null, t)));
-  box.append(ul);
+  const box = summaryBox(pts);
   box.append(basedOn(`${ev.source}, as of ${ev.as_of || "the latest update"} (mail ballots are those received so far), and the charts below${ev.turnout_past ? `. 2022 and 2024 turnout: ${ev.turnout_past.source}` : ""}.`, "Secretary of State", ev.url));
   return box;
 }
@@ -1730,7 +1833,9 @@ function moneyBlock(m, cands) {
   }
   box.append(ul);
   if (m.source === "FEC" && m.outside_ok) {
-    const groups = m.candidates.flatMap(c => [...(c.top_support || []).map(g => `${g.group} (${usd(g.usd)} for ${surname(c)})`), ...(c.top_oppose || []).map(g => `${g.group} (${usd(g.usd)} against ${surname(c)})`)]);
+    // Largest first, so the biggest spending (often against a candidate) is never hidden in "and N more".
+    const groups = m.candidates.flatMap(c => [...(c.top_support || []).map(g => [g.usd, `${g.group} (${usd(g.usd)} for ${surname(c)})`]), ...(c.top_oppose || []).map(g => [g.usd, `${g.group} (${usd(g.usd)} against ${surname(c)})`])])
+      .sort((a, b) => b[0] - a[0]).map(([, t]) => t);
     if (groups.length) box.append(el("p", "num-note", `Biggest outside spenders: ${listNames(groups, 6)}.`));
   }
   const through = m.candidates.map(c => c.through).filter(Boolean).sort().pop();
@@ -1884,6 +1989,8 @@ function renderNumbers(nums) {
   if (r) {
     const c = r.candidates;
     $("story-sub").append(el("p", "byline", c.map(x => `${x.name} (${x.party})`).join(" vs. ")));
+    const sum = n.kind === "polls" ? pollsSummary(r, c, nums) : n.kind === "groups" ? groupsSummary(r, c) : moneySummary(r.money, c);
+    if (sum.length) { const b = summaryBox(sum); b.append(summaryBasis()); sec.append(b); }
     if (n.kind === "polls") {
       if (r.forecast) sec.append(forecastBlock(r.forecast, c));
       sec.append(pollsBlock(r, c, nums.recent_days || 30));
