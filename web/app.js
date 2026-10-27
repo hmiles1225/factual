@@ -1529,25 +1529,27 @@ function countyBlock(ev) {
   box.append(el("p", "num-lede", up.length && down.length
     ? `Compared with 2024, more of the vote so far is coming from ${listNames(up.map(name), 3)}, and less from ${listNames(down.map(name), 3)}.`
     : "So far each kind of county is casting about the same share of the vote as in 2024."));
-  // The shift: each group's share of the votes so far minus its share of the 2024 vote, in points, from a center line.
-  box.append(el("h3", "num-h3", "Share of the vote, against 2024"));
+  // The change, as columns up or down from a zero line (Heston, 2026-10-27, "vertical bar graph?"): each group's
+  // share of the votes so far minus its share of the 2024 vote, in points. Groups run from Harris-won counties to
+  // the reddest, so the pattern reads left to right. Every column carries its number; the table is the text view.
+  box.append(el("h3", "num-h3", "Change in share of the vote since 2024"));
+  const SHORT = ["Harris won", "Trump by under 20", "Trump by 20 to 50", "Trump by 50+"];
   const max = Math.max(2, Math.ceil(Math.max(...g.map(x => Math.abs(shift(x))))));
-  const ul = el("ul", "shift-list");
-  for (const x of g) {
-    const d = shift(x);
-    const li = el("li", "rate-row");
-    const bar = el("div", "shift-bar"); bar.setAttribute("aria-hidden", "true");
-    const f = el("i", d < 0 ? "is-less" : null);
-    f.style.width = `${50 * Math.min(1, Math.abs(d) / max)}%`;
-    bar.append(f);
-    li.append(el("span", "rate-label", `${x.group} (${x.counties})`),
-      el("span", "rate-text", `${d > 0 ? "+" : d < 0 ? "\u2212" : ""}${Math.abs(d).toFixed(1)} pts · ${now(x).toFixed(1)}% now, ${then(x).toFixed(1)}% in 2024`), bar);
-    ul.append(li);
-  }
-  box.append(ul);
-  const axis = el("p", "shift-axis"); axis.setAttribute("aria-hidden", "true");
-  axis.append(el("span", null, "\u2190 Less of the vote than in 2024"), el("span", null, "More than in 2024 \u2192"));
-  box.append(axis);
+  const chart = el("div", "cd"); chart.setAttribute("aria-hidden", "true");
+  const labels = el("div", "cd-labels"); labels.setAttribute("aria-hidden", "true");
+  g.forEach((x, i) => {
+    const d = shift(x), h = 50 * Math.min(1, Math.abs(d) / max);
+    const cell = el("div", "cd-cell");
+    const bar = el("i", d < 0 ? "is-less" : null); bar.style.height = `${h}%`;
+    const v = el("span", `cd-val${d < 0 ? " is-less" : ""}`, `${d > 0 ? "+" : d < 0 ? "\u2212" : ""}${Math.abs(d).toFixed(1)} pts`);
+    v.style[d < 0 ? "top" : "bottom"] = `calc(50% + ${h}% + 4px)`;
+    cell.append(bar, v); chart.append(cell);
+    const l = el("div");
+    l.append(el("b", null, `${SHORT[i] || x.group}`), el("span", null, `${now(x).toFixed(1)}% now`), el("span", null, `${then(x).toFixed(1)}% in 2024`));
+    labels.append(l);
+  });
+  box.append(chart, labels);
+  box.append(el("p", "num-note", "Each column: the group’s share of all early votes so far, minus its share of the whole 2024 vote for president. Above the line, more of the vote than in 2024; below, less."));
   // Turnout so far in each kind of county, on a true 0 to 100 scale.
   box.append(el("h3", "num-h3", "Turnout so far"));
   box.append(rateRows(g.map(x => [x.group, rate(x), `${rate(x).toFixed(1)}% of registered voters`])));
