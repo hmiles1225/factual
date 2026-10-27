@@ -1532,10 +1532,11 @@ function countyBlock(ev) {
   // The change, as columns up or down from a zero line (Heston, 2026-10-27, "vertical bar graph?"): each group's
   // share of the votes so far minus its share of the 2024 vote, in points. Groups run from Harris-won counties to
   // the reddest, so the pattern reads left to right. Every column carries its number; the table is the text view.
-  box.append(el("h3", "num-h3", "Change in share of the vote since 2024"));
-  const SHORT = ["Harris won", "Trump by under 20", "Trump by 20 to 50", "Trump by 50+"];
+  box.append(el("h3", "num-h3", "Which counties are casting more of the vote than in 2024"));
+  const SHORT = ["Counties Harris won", "Counties Trump won by under 20 pts", "Counties Trump won by 20 to 50 pts", "Counties Trump won by 50+ pts"];
   const max = Math.max(2, Math.ceil(Math.max(...g.map(x => Math.abs(shift(x))))));
   const chart = el("div", "cd"); chart.setAttribute("aria-hidden", "true");
+  chart.append(el("span", "cd-zone is-more", "\u25B2 More of the vote than in 2024"), el("span", "cd-zone is-less", "\u25BC Less than in 2024"));
   const labels = el("div", "cd-labels"); labels.setAttribute("aria-hidden", "true");
   g.forEach((x, i) => {
     const d = shift(x), h = 50 * Math.min(1, Math.abs(d) / max);
@@ -1545,11 +1546,12 @@ function countyBlock(ev) {
     v.style[d < 0 ? "top" : "bottom"] = `calc(50% + ${h}% + 4px)`;
     cell.append(bar, v); chart.append(cell);
     const l = el("div");
-    l.append(el("b", null, `${SHORT[i] || x.group}`), el("span", null, `${now(x).toFixed(1)}% now`), el("span", null, `${then(x).toFixed(1)}% in 2024`));
+    l.append(el("b", null, `${SHORT[i] || x.group} (${x.counties})`),
+      el("span", null, `Early vote: ${now(x).toFixed(1)}%`), el("span", null, `2024 vote: ${then(x).toFixed(1)}%`));
     labels.append(l);
   });
-  box.append(chart, labels);
-  box.append(el("p", "num-note", "Each column: the group’s share of all early votes so far, minus its share of the whole 2024 vote for president. Above the line, more of the vote than in 2024; below, less."));
+  box.append(chart, el("p", "cd-axis", "How each county voted for president in 2024"), labels);
+  box.append(el("p", "num-note", "Each column is a group\u2019s share of all early votes so far minus its share of the 2024 vote for president, in percentage points (pts). The number after each label is how many counties are in the group. Example: counties Trump won by under 20 points cast 27.4% of Texas\u2019s 2024 vote and 29.4% of the early vote so far, so +2.0 pts.".replace("27.4%", `${then(g[1]).toFixed(1)}%`).replace("29.4%", `${now(g[1]).toFixed(1)}%`).replace("+2.0", `${shift(g[1]) >= 0 ? "+" : "\u2212"}${Math.abs(shift(g[1])).toFixed(1)}`)));
   // Turnout so far in each kind of county, on a true 0 to 100 scale.
   box.append(el("h3", "num-h3", "Turnout so far"));
   box.append(rateRows(g.map(x => [x.group, rate(x), `${rate(x).toFixed(1)}% of registered voters`])));
