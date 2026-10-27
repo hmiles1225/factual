@@ -2170,9 +2170,15 @@ async function load() {
   initHeader();
   initToTop();
   // Share sits top right on every page: a story shares itself (renderStory adds that one); any other
-  // page shares its own address, without query or fragment.
+  // page shares its own address, without fragment or query, except a number story's own key (?n=), which
+  // says which story it is. The capsule key and state never travel.
   if (page !== "story") {
-    const b = makeShare(() => document.title, () => location.origin + location.pathname.replace(/index\.html$/, ""), "Share");
+    const shareTo = () => {
+      const n = new URLSearchParams(location.search).get("n");
+      const here = location.origin + location.pathname.replace(/index\.html$/, "");
+      return page === "numbers" && n ? `${here}?n=${encodeURIComponent(n)}` : here;
+    };
+    const b = makeShare(() => document.title, shareTo, "Share");
     b.classList.add("share-top");
     b.setAttribute("aria-label", "Share this page");
     const right = document.querySelector(".mast-right");
