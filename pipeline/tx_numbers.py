@@ -757,7 +757,7 @@ def sos_early():
     in_person = sum(r.get("total_in_person_votes_for_election") or 0 for r in rows)
     mail = sum(r.get("total_mail_votes_for_election") or 0 for r in rows)
     reporting = sum(1 for r in rows if (r.get("total_in_person_votes_for_election") or 0) + (r.get("total_mail_votes_for_election") or 0) > 0)
-    counties = by_2024_result(rows)
+    counties = by_2024_result(rows, len(daily))
     return {**counties, "source": "Texas Secretary of State, early voting turnout by county", "url": SOS_PAGE,
             "as_of": datetime.strptime(last["date_updated"], "%Y-%m-%d").strftime("%B %-d, %Y"),
             "through": done[-1].strftime("%A, %B %-d, %Y"), "counties": [reporting, len(rows)],
@@ -770,28 +770,36 @@ def sos_early():
 # exists. What official data allows: turnout in counties grouped by how they voted for president in 2024, and
 # the largest counties. A county's result says nothing certain about who in it is voting now; the page says so.
 COUNTY_2024 = Path(__file__).resolve().parent / "tx_county_2024.json"
+# The pace by kind of county compares like with like (Heston, 2026-10-27: two charts "saying the same thing with
+# different numbers"): 2026 in-person early votes against 2024's over the same number of days, county by county.
+COUNTY_EARLY_2024 = Path(__file__).resolve().parent / "tx_county_early_2024.json"
 BY_2024 = [("Counties Harris won", None, 0), ("Trump won by under 20 points", 0, 20),
            ("Trump won by 20 to 50 points", 20, 50), ("Trump won by 50 points or more", 50, None)]
 
 
-def by_2024_result(rows):
+def by_2024_result(rows, days):
     ref = json.loads(COUNTY_2024.read_text())
     res = ref["counties"]
-    if {r["name"] for r in rows} != set(res):
-        raise ValueError("the feed's counties don't match the 2024 results file")
+    early = json.loads(COUNTY_EARLY_2024.read_text())
+    if {r["name"] for r in rows} != set(res) or set(res) != set(early["counties"]):
+        raise ValueError("the feed's counties don't match the 2024 files")
+    in_person = lambda r: r.get("total_in_person_votes_for_election") or 0
     voted = lambda r: (r.get("total_in_person_votes_for_election") or 0) + (r.get("total_mail_votes_for_election") or 0)
     margin = lambda n: 100 * (res[n]["R"] - res[n]["D"]) / (res[n]["R"] + res[n]["D"] + res[n]["O"])
     groups = []
     for label, lo, hi in BY_2024:
         sel = [r for r in rows if (lo is None or margin(r["name"]) >= lo) and (hi is None or margin(r["name"]) < hi)]
         groups.append({"group": label, "counties": len(sel), "registered": sum(r.get("registered_voters") or 0 for r in sel),
-                       "voted": sum(voted(r) for r in sel), "votes_2024": sum(sum(res[r["name"]].values()) for r in sel)})
+                       "voted": sum(voted(r) for r in sel), "votes_2024": sum(sum(res[r["name"]].values()) for r in sel),
+                       "in_person": sum(in_person(r) for r in sel),
+                       "in_person_2024": sum(sum(early["counties"][r["name"]][:days]) for r in sel)})
     if sum(g["counties"] for g in groups) != len(rows):
         raise ValueError("a county fell outside every group")
     big = sorted(rows, key=lambda r: -(r.get("registered_voters") or 0))[:10]
     largest = [{"county": r["name"].title(), "margin_2024": round(margin(r["name"]), 1), "registered": r["registered_voters"],
                 "voted": voted(r)} for r in big]
-    return {"by_2024": groups, "largest": largest, "results_2024": {"source": ref["source"], "url": ref["url"]}}
+    return {"by_2024": groups, "largest": largest, "results_2024": {"source": ref["source"], "url": ref["url"]},
+            "early_2024_by_county": {"source": early["source"], "url": early["url"], "days": days}}
 
 
 def tusa(election):

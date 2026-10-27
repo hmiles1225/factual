@@ -1514,52 +1514,44 @@ function numTable(caption, cols, rows) {
   return wrap;
 }
 function countyBlock(ev) {
-  // One question (Heston, 2026-10-27, "not sure what that table is telling me"): compared with 2024, which kind of
-  // county is casting more of the vote? The chart answers it; turnout follows as plain bars; the table sits behind
-  // "Show the numbers".
+  // One chart, one measure (Heston, 2026-10-27: a share-of-vote chart and a turnout chart were "saying the same
+  // thing with different numbers"). Pace, like the statewide pace above: each kind of county's in-person early
+  // votes so far as a share of its own in 2024 over the same days of early voting. Comparing with 2024's whole
+  // vote instead would mix in how much each kind of county votes early.
   const box = el("div", "num-early-part");
   const g = ev.by_2024;
-  const allV = g.reduce((t, x) => t + x.voted, 0), all24 = g.reduce((t, x) => t + x.votes_2024, 0);
-  const rate = x => pct(x.voted, x.registered);
-  const now = x => pct(x.voted, allV), then = x => pct(x.votes_2024, all24);
-  const shift = x => Math.round(10 * (now(x) - then(x))) / 10;
+  if (!g[0] || g[0].in_person_2024 == null) return box;
+  const pace = x => pct(x.in_person, x.in_person_2024);
+  const all = pct(g.reduce((t, x) => t + x.in_person, 0), g.reduce((t, x) => t + x.in_person_2024, 0));
+  const days = (ev.early_2024_by_county || {}).days;
   const name = x => x.group.startsWith("Trump") ? `counties ${x.group}` : x.group.replace(/^Counties/, "counties");
-  const up = g.filter(x => shift(x) >= 0.5), down = g.filter(x => shift(x) <= -0.5);
+  const byPace = [...g].sort((a, b) => pace(b) - pace(a));
+  const hi = byPace[0], lo = byPace[byPace.length - 1];
   box.append(el("h2", "num-h", "By how each county voted in 2024"));
-  box.append(el("p", "num-lede", up.length && down.length
-    ? `Compared with 2024, more of the vote so far is coming from ${listNames(up.map(name), 3)}, and less from ${listNames(down.map(name), 3)}.`
-    : "So far each kind of county is casting about the same share of the vote as in 2024."));
-  // The change, as columns up or down from a zero line (Heston, 2026-10-27, "vertical bar graph?"): each group's
-  // share of the votes so far minus its share of the 2024 vote, in points. Groups run from Harris-won counties to
-  // the reddest, so the pattern reads left to right. Every column carries its number; the table is the text view.
-  box.append(el("h3", "num-h3", "Which counties are casting more of the vote than in 2024"));
+  box.append(el("p", "num-lede", `Early voting is closest to its 2024 level in ${name(hi)} (${Math.round(pace(hi))}% of 2024 at this point) and furthest behind in ${name(lo)} (${Math.round(pace(lo))}%). Statewide it is at ${Math.round(all)}%.`));
+  box.append(el("h3", "num-h3", `Early votes so far, as a share of 2024 over the same ${days ? `${days} days` : "days"}`));
   const SHORT = ["Counties Harris won", "Counties Trump won by under 20 pts", "Counties Trump won by 20 to 50 pts", "Counties Trump won by 50+ pts"];
-  const max = Math.max(2, Math.ceil(Math.max(...g.map(x => Math.abs(shift(x))))));
-  const chart = el("div", "cd"); chart.setAttribute("aria-hidden", "true");
-  chart.append(el("span", "cd-zone is-more", "\u25B2 More of the vote than in 2024"), el("span", "cd-zone is-less", "\u25BC Less than in 2024"));
+  const chart = el("div", "cc"); chart.setAttribute("aria-hidden", "true");
+  chart.append(el("span", "cc-ref", "2024 level"));
   const labels = el("div", "cd-labels"); labels.setAttribute("aria-hidden", "true");
   g.forEach((x, i) => {
-    const d = shift(x), h = 50 * Math.min(1, Math.abs(d) / max);
-    const cell = el("div", "cd-cell");
-    const bar = el("i", d < 0 ? "is-less" : null); bar.style.height = `${h}%`;
-    const v = el("span", `cd-val${d < 0 ? " is-less" : ""}`, `${d > 0 ? "+" : d < 0 ? "\u2212" : ""}${Math.abs(d).toFixed(1)} pts`);
-    v.style[d < 0 ? "top" : "bottom"] = `calc(50% + ${h}% + 4px)`;
-    cell.append(bar, v); chart.append(cell);
+    const v = pace(x);
+    const cell = el("div", "cc-cell");
+    const bar = el("i"); bar.style.height = `${Math.min(100, v) / 1.1}%`;
+    const t = el("span", "cc-val", `${Math.round(v)}%`); t.style.bottom = `calc(${Math.min(100, v) / 1.1}% + 4px)`;
+    cell.append(bar, t); chart.append(cell);
     const l = el("div");
     l.append(el("b", null, `${SHORT[i] || x.group} (${x.counties})`),
-      el("span", null, `2026 so far: ${now(x).toFixed(1)}%`), el("span", null, `2024 vote: ${then(x).toFixed(1)}%`));
+      el("span", null, `2026: ${fmtN(x.in_person)}`), el("span", null, `2024: ${fmtN(x.in_person_2024)}`));
     labels.append(l);
   });
   box.append(chart, el("p", "cd-axis", "How each county voted for president in 2024"), labels);
-  box.append(el("p", "num-note", "Each column is a group\u2019s share of all early votes so far minus its share of the 2024 vote for president, in percentage points (pts). The number after each label is how many counties are in the group. Example: counties Trump won by under 20 points cast 27.4% of Texas\u2019s 2024 vote and 29.4% of the early vote so far, so +2.0 pts.".replace("27.4%", `${then(g[1]).toFixed(1)}%`).replace("29.4%", `${now(g[1]).toFixed(1)}%`).replace("+2.0", `${shift(g[1]) >= 0 ? "+" : "\u2212"}${Math.abs(shift(g[1])).toFixed(1)}`)));
-  // Turnout so far in each kind of county, on a true 0 to 100 scale.
-  box.append(el("h3", "num-h3", "Turnout so far"));
-  box.append(rateRows(g.map(x => [x.group, rate(x), `${rate(x).toFixed(1)}% of registered voters`])));
+  box.append(el("p", "num-note", "In-person early votes only, both years, counted over the same days of early voting. The line marks 2024\u2019s level; a column at 80% means the counties have cast 80% as many early votes as by this point in 2024. The number after each label is how many counties are in the group."));
   const more = el("details", "num-more");
   more.append(el("summary", null, "Show the numbers"));
-  more.append(numTable("Early vote so far, by the county’s 2024 result for president",
-    [["Counties", "c-group"], ["Turnout", "c-num"], ["Share of votes", "c-num"], ["Share in 2024", "c-num"]],
-    g.map(x => [`${x.group} (${x.counties})`, `${rate(x).toFixed(1)}%`, `${now(x).toFixed(1)}%`, `${then(x).toFixed(1)}%`])));
+  more.append(numTable("In-person early votes so far, by the county\u2019s 2024 result for president",
+    [["Counties", "c-group"], ["2026 so far", "c-num"], ["2024, same days", "c-num"], ["Pace", "c-num"]],
+    g.map(x => [`${x.group} (${x.counties})`, fmtN(x.in_person), fmtN(x.in_person_2024), `${pace(x).toFixed(1)}%`])));
   box.append(more);
   const harris = (ev.largest || []).find(c => c.county === "Harris");
   box.append(el("p", "num-note", `A county’s 2024 result says nothing certain about who in it is voting now. Texas does not register voters by party, and every county has voters of both parties${harris ? `: Harris County, which Harris won, is also where Trump got more votes than in any other Texas county` : ""}.`));
@@ -1569,7 +1561,7 @@ function countyBlock(ev) {
       [["County", "c-group"], ["2024 result", "c-num"], ["Voted so far", "c-num"], ["Turnout", "c-num"]],
       ev.largest.map(c => [c.county, `${c.margin_2024 > 0 ? "Trump" : "Harris"} +${Math.round(Math.abs(c.margin_2024))}`, fmtN(c.voted), `${pct(c.voted, c.registered).toFixed(1)}%`])));
   }
-  box.append(basedOn(`${ev.source} for 2026 turnout. 2024 results: ${ev.results_2024.source}, summed by county (within 200 votes of the official statewide count for each candidate).`, "2024 results", ev.results_2024.url));
+  box.append(basedOn(`${ev.source} for 2026. 2024 early votes by county: ${(ev.early_2024_by_county || {}).source || "Transparency USA"} (the Secretary of State\u2019s own 2024 daily figures are not open to automated reading). 2024 results: ${ev.results_2024.source}, summed by county (within 200 votes of the official statewide count for each candidate).`, "2024 results", ev.results_2024.url));
   return box;
 }
 
