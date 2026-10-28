@@ -246,7 +246,13 @@ def side_of(feed):
     return ALLSIDES_SIDE.get(rating, "unplaced")
 
 
-MEDIA_TITLE = re.compile(r"[\u2013\u2014|:-]\s*(video|watch|in pictures|photos?|gallery|live( updates| blog)?|podcast|audio)\s*\)?$|^(watch|video|live( updates)?|photos?|in pictures)\s*[:|]|\((video|watch|photos)\)", re.I)
+# Anything promising a stream or video we don't show (Heston, 2026-10-28: "Watch Live: Trump holds rally in
+# Lubbock" was a Texas headline): "WATCH LIVE:", "LIVE NOW:", "Live updates:", "... - video", "how to watch".
+MEDIA_LABEL = (r"(watch( live| now| again)?|live( now| updates| blog| coverage| ?stream(ing)?)?|livestream(ing)?|video|"
+               r"in pictures|photos?|gallery|podcast|audio|listen)")
+MEDIA_TITLE = re.compile(rf"[\u2013\u2014|:-]\s*{MEDIA_LABEL}\s*\)?$|^{MEDIA_LABEL}\s*[:|\u2013\u2014]|\((video|watch|photos|live)\)|"
+                         r"\b(how to watch|watch live|live ?stream(ed|ing)?|live now)\b", re.I)
+MEDIA_STRIP = re.compile(rf"^{MEDIA_LABEL}\s*[:|\u2013\u2014]\s*|\s*([\u2013\u2014|:-]\s*{MEDIA_LABEL}\s*|\((video|watch|photos|live)\))$", re.I)
 MEDIA_PATH = re.compile(r"/(video|videos|gallery|galleries|pictures|in-pictures|photos|podcasts?|audio)(/|-)|/live(/|-updates|-blog)", re.I)
 
 
@@ -383,6 +389,7 @@ def main():
         closeness = vectors[idx] @ centre
         order = [int(i) for i in np.argsort(-closeness)]
         lead = next((arts[i] for i in order if not is_media(arts[i])), arts[order[0]])
+        title = lead["title"] if not is_media(lead) else (MEDIA_STRIP.sub("", lead["title"]).strip() or lead["title"])
         coverage = {k: [src for src in sources if side.get(src, "unplaced") == k] for k in (*SIDES, "unplaced")}
         texas = span == "texas"
         r = roster_tx if texas else roster
@@ -402,7 +409,7 @@ def main():
             "sid": sid,
             "span": "day" if texas else span,
             "region": "tx" if texas else None,
-            "working_title": lead["title"],
+            "working_title": title,
             "outlets": len(sources),
             "sources": sources,
             "coverage": coverage,
