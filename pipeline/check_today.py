@@ -34,7 +34,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import check as C  # noqa: E402
-from images import image_for, image_for_title  # noqa: E402
+from images import image_for, image_for_title, rotate  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 LIBRARY_URL = "https://hestonmiles.com/factual/data/library.json"
@@ -1025,13 +1025,13 @@ def main():
             found = find_image(story, brief)
             if found:
                 brief["image"], brief["image_v"] = found, IMAGES_VERSION
-        story["image"] = brief.get("image") if brief.get("image_v") == IMAGES_VERSION else None
+        story["image"] = rotate(brief.get("image"), story["sid"]) if brief.get("image_v") == IMAGES_VERSION else None
         # A second picture of a different subject, for when the home page has already shown the first one
         # higher up (two Trump portraits in two sections). Found once, like the first.
         if story["image"] and brief.get("image_alt_v") != ALT_VERSION:
             brief["image_alt"] = find_image(story, brief, avoid={story["image"]["subject"]})
             brief["image_alt_v"] = ALT_VERSION
-        story["image_alt"] = brief.get("image_alt") if story["image"] else None
+        story["image_alt"] = rotate(brief.get("image_alt"), story["sid"]) if story["image"] else None
         shared = [f for f in brief["agreed"] if "left" in f["sides"] and "right" in f["sides"]]
         print(f"  {story['sid']} [{story['topic']}]: {len(shared)} common ground of {len(brief['agreed'])} agreed, {len(brief['differences'])} differences")
         return bool(shared)  # Today shows only what both sides report; no common ground, no slot

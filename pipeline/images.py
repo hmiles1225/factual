@@ -31,6 +31,27 @@ GRAPHIC = re.compile(r"\b(patients?|victims?|corpses?|cadavers?|dead bod(y|ies)|
                      r"died|dying|deceased|sick|case #?\d)\b", re.I)  # not "wound": "tightly wound" describes a virus filament
 ALLOWED = re.compile(r"^(public domain|pd\b|cc0|cc by(-sa)? \d(\.\d)?)", re.I)
 
+# Someone in the news most days gets a few photos in turn, so one portrait isn't on every story (Heston,
+# 2026-10-28). Each is a public-domain White House photo, cropped to the person alone so no event shows that the
+# story isn't about, and neutral in expression: no grins, nothing mid-word. Kept in web/img, keyed by Wikidata id.
+_WH = "The White House (Molly Riley)"
+ROTATION = {"Q22686": [
+    {"src": "img/trump-desk-v1.jpg", "artist": _WH, "license": "Public domain",
+     "source": "https://commons.wikimedia.org/wiki/File:P20250930MR-0974_President_Donald_Trump_signs_an_Executive_Order_to_accelerate_pediatric_cancer_research.jpg"},
+    {"src": "img/trump-podium-v1.jpg", "artist": _WH, "license": "Public domain",
+     "source": "https://commons.wikimedia.org/wiki/File:P20250908MR-0972_President_Donald_Trump_delivers_remarks_to_the_White_House_Religious_Liberty_Commission.jpg"},
+]}
+
+
+def rotate(rec, key):
+    """The photo to show for a story: the subject's own portrait or one from its rotation, chosen by the story's
+    id so a story keeps its photo from scan to scan."""
+    pool = ROTATION.get((rec or {}).get("wikidata"))
+    if not pool:
+        return rec
+    picks = [rec] + [{**rec, **p, "about": "", "caption": f"{rec['subject']}. Photo: {p['artist']} · {p['license']} · Wikimedia Commons"} for p in pool]
+    return picks[int(hashlib.sha1(key.encode()).hexdigest(), 16) % len(picks)]
+
 
 def _get(url):
     with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=20, context=C.SSL_CTX) as r:
