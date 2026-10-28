@@ -2350,18 +2350,21 @@ function pollResults(p, st) {
 
 // Back to where the reader came from: the story's section on Today (or the archive). Coming from Today,
 // it is the browser's back, so the reader lands where they were in the list.
-// Swiping back from an article goes to Today (Heston, 2026-10-28). Two cases the browser leaves out:
-// 1. Opened from the home screen (html.app): iOS gives web apps no back swipe, so we draw one from the left
-//    edge. The article follows the finger; past a third of the width, or on a quick flick, it goes back the way
-//    the back link does (to Today, at the reader's place when they came from there).
-// 2. Opened from a shared link, with nothing behind it: Today is put behind the article in history, so the
-//    browser's own back swipe and back button land there instead of leaving the site.
+// Swiping back from an article goes to Today (Heston, 2026-10-28).
+// - Came from Today in a browser: the browser's own back swipe already gets there. Left alone.
+// - Otherwise (the home-screen app, where iOS gives web apps no back swipe; a shared link with nothing behind
+//   it; Chrome and Safari skip history entries a page adds without a tap, so seeding history isn't enough): a
+//   swipe right, from anywhere on the article, slides it away and goes back the way the back link does. A swipe
+//   that starts on something that scrolls sideways (a wide table or chart) is left to scroll.
 function initSwipeBack() {
   const link = document.querySelector(".back-link");
   const target = link ? link.href : new URL("./", location.href).href;
+  const app = document.documentElement.classList.contains("app");
   let from = null;
   try { from = document.referrer && new URL(document.referrer); } catch (e) {}
-  if (!(history.state && history.state.fxSeeded) && !(from && from.origin === location.origin)) {
+  const sameSite = from && from.origin === location.origin;
+  // Shared link: also put Today behind the article, for browsers that keep the entry (back button, swipe).
+  if (!app && !sameSite && !(history.state && history.state.fxSeeded)) {
     const here = location.href;
     try {
       history.replaceState({ fxHome: target }, "", target);
@@ -2371,32 +2374,39 @@ function initSwipeBack() {
   // Back to that entry: the address is already Today's, but the page is still the article. Today's address can
   // differ from the article's only after "#", which the browser would treat as a jump within the page, so reload.
   addEventListener("popstate", e => { if (e.state && e.state.fxHome) location.reload(); });
-  if (!document.documentElement.classList.contains("app")) return;
+  if (!app && sameSite) return;
   const main = document.getElementById("main");
   if (!main) return;
   const calm = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const scrollsSideways = node => {
+    for (let n = node; n && n !== document.body; n = n.parentElement) {
+      if (n.scrollWidth > n.clientWidth + 1 && /auto|scroll/.test(getComputedStyle(n).overflowX)) return true;
+      if (/^(INPUT|SELECT|TEXTAREA)$/.test(n.tagName) || n.isContentEditable) return true;
+    }
+    return false;
+  };
   let x0 = null, y0 = 0, t0 = 0, dx = 0, axis = null;
   const reset = () => { x0 = null; main.style.transition = calm ? "none" : "transform 200ms ease-out"; main.style.transform = ""; };
   addEventListener("touchstart", e => {
+    if (e.touches.length !== 1 || scrollsSideways(e.target)) return;
     const t = e.touches[0];
-    if (e.touches.length !== 1 || t.clientX > 24) return;
     x0 = t.clientX; y0 = t.clientY; t0 = Date.now(); dx = 0; axis = null;
     main.style.transition = "none";
   }, { passive: true });
   addEventListener("touchmove", e => {
     if (x0 == null) return;
     const t = e.touches[0], mx = t.clientX - x0, my = t.clientY - y0;
-    if (!axis && (Math.abs(mx) > 8 || Math.abs(my) > 8)) axis = Math.abs(mx) > Math.abs(my) ? "x" : "y";
+    if (!axis && (Math.abs(mx) > 10 || Math.abs(my) > 10)) axis = mx > 0 && Math.abs(mx) > 1.5 * Math.abs(my) ? "x" : "y";
     if (axis === "y") { x0 = null; return; }
     if (axis !== "x") return;
-    e.preventDefault();
+    if (e.cancelable) e.preventDefault();
     dx = Math.max(0, mx);
     if (!calm) main.style.transform = `translateX(${dx}px)`;
   }, { passive: false });
   addEventListener("touchend", () => {
     if (x0 == null) return;
     x0 = null;
-    if (dx > innerWidth / 3 || (dx > 40 && dx / Math.max(1, Date.now() - t0) > 0.5)) {
+    if (axis === "x" && (dx > innerWidth / 3 || (dx > 50 && dx / Math.max(1, Date.now() - t0) > 0.5))) {
       if (!calm) { main.style.transition = "transform 180ms ease-out"; main.style.transform = `translateX(${innerWidth}px)`; }
       setTimeout(() => (link ? link.click() : location.assign(target)), calm ? 0 : 170);
     } else reset();
