@@ -74,6 +74,8 @@ RECHECK_AFTER_DAYS = 7
 DECIDED = ("Holds up", "Missing context", "Doesn't hold up")
 # One-off fresh checks, by library key, when a verdict is known to rest on thin evidence. Runs once each.
 FORCE_RECHECK = {"ff5e92501774": "court order cited never names the course; look for a filing that does (2026-10-19)"}
+# One-off fresh picture picks, by story id, when a stored picture is known to be wrong. Runs once each.
+FORCE_REPICK = {"6cbb56e0d0": "LeBron James matched on the first name in \"James Comey's daughter\" (2026-10-28)"}
 OPUS_TYPICAL_USD = 0.51          # measured mean per Opus second opinion, 2026-10-17 eval
 RESTORE_VERSION = "1"          # bump to re-run the one-time restore of dropped checked splits from the archive
 ARCHIVE_DAYS_BACK = [(datetime.now(ZoneInfo("America/New_York")).date() - timedelta(days=n)).isoformat() for n in (2, 1, 0)]
@@ -780,7 +782,11 @@ def main():
                 return images[ikey]
         # The subject has no usable photo (a golf course, say): a person named in the headline, but only one
         # already matched and verified, by full name or a surname of five letters or more, as a whole word.
+        # A surname alone never counts when the story uses that word as a first name: the facts are in sentence
+        # case, so a capital after it marks a name ("James Comey's daughter" put LeBron James on the story, 2026-10-28).
         title = story["working_title"]
+        facts_text = " ".join(f["fact"] for f in brief["agreed"] if "left" in f["sides"] and "right" in f["sides"])
+        first_name = lambda w: re.search(rf"\b{re.escape(w)}\s+[A-Z]", facts_text)
         for k, rec in images.items():
             if not (k.startswith("person:") and ok(rec)):
                 continue
@@ -788,11 +794,11 @@ def main():
             last = full.split()[-1]
             if last in avoid_last:
                 continue
-            if re.search(rf"\b{re.escape(full)}\b", title) or (len(last) >= 5 and last_count[last] == 1 and re.search(rf"\b{re.escape(last)}\b", title)):
+            if re.search(rf"\b{re.escape(full)}\b", title) or (len(last) >= 5 and last_count[last] == 1 and not first_name(last)
+                                                               and re.search(rf"\b{re.escape(last)}\b", title)):
                 return rec
         # The headline's actor: a full name from the shared facts whose surname is in the headline ("Trump
         # Says ..." -> Donald Trump). Heston: a person the headline is about beats a picture of the place.
-        facts_text = " ".join(f["fact"] for f in brief["agreed"] if "left" in f["sides"] and "right" in f["sides"])
         for name in person_names(facts_text)[:6]:
             last = name.split()[-1]
             if last not in avoid_last and len(last) >= 4 and re.search(rf"\b{re.escape(last)}\b", title) and ok(person(name)):
@@ -1011,6 +1017,10 @@ def main():
                     print(f"  full story failed: {e}")
         # A picture approved for this summary is kept: stable from scan to scan, and no lookup or check repeats
         # (so pictures don't drop when the day's budget is spent). A new summary or rule version re-picks.
+        if story["sid"] in FORCE_REPICK and brief.get("repicked") != FORCE_REPICK[story["sid"]]:
+            print(f"  repick picture: {FORCE_REPICK[story['sid']]}")
+            brief["repicked"] = FORCE_REPICK[story["sid"]]
+            brief.pop("image", None), brief.pop("image_alt_v", None)
         if brief.get("image_v") != IMAGES_VERSION or not brief.get("image"):
             found = find_image(story, brief)
             if found:
