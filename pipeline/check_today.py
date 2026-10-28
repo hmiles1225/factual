@@ -34,7 +34,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import check as C  # noqa: E402
-from images import image_for, image_for_title, rotate  # noqa: E402
+from images import ROTATION, image_for, image_for_title, rotate  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 LIBRARY_URL = "https://hestonmiles.com/factual/data/library.json"
@@ -1098,6 +1098,24 @@ def main():
 
     write_archive([s for s in data["stories"] if s.get("on_today")], data.get("feeds", []))
     write_share_pages([s for s in data["stories"] if s.get("on_today")])
+
+    # People pictured on 4+ stories on Today in 7 days, with no photo rotation yet: flagged for hand-picked photos
+    # (the rules are in images.py). Read from data/library.json, "photo_repeats".
+    reps = lib.setdefault("photo_repeats", {})
+    seen = reps.setdefault("seen", {})
+    for st in data["stories"]:
+        im = st.get("image") or {}
+        if st.get("on_today") and im.get("wikidata") and f"{im['subject']}. Photo:" in im.get("caption", ""):
+            seen.setdefault(im["wikidata"], {"subject": im["subject"], "stories": {}})["stories"].setdefault(st["sid"], today)
+    week = (datetime.now(timezone.utc) - timedelta(days=7)).date().isoformat()
+    for q in list(seen):
+        seen[q]["stories"] = {sid: d for sid, d in seen[q]["stories"].items() if d >= week}
+        if not seen[q]["stories"]:
+            del seen[q]
+    reps["wanted"] = sorted(({"subject": v["subject"], "wikidata": q, "stories_7d": len(v["stories"])} for q, v in seen.items()
+                             if len(v["stories"]) >= 4 and q not in ROTATION), key=lambda w: -w["stories_7d"])
+    for w in reps["wanted"]:
+        print(f"  photo rotation wanted: {w['subject']} on {w['stories_7d']} stories in 7 days")
 
     live = {s["sid"] for s in data["stories"]}
     lib["briefs"] = {k: v for k, v in briefs.items() if k in live}

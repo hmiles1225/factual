@@ -32,26 +32,45 @@ GRAPHIC = re.compile(r"\b(patients?|victims?|corpses?|cadavers?|dead bod(y|ies)|
 ALLOWED = re.compile(r"^(public domain|pd\b|cc0|cc by(-sa)? \d(\.\d)?)", re.I)
 
 # Someone in the news most days gets a few photos in turn, so one portrait isn't on every story (Heston,
-# 2026-10-28). Each is a public-domain White House photo, cropped to the person alone so no event shows that the
-# story isn't about, and neutral in expression: no grins, nothing mid-word. Kept in web/img, keyed by Wikidata id.
-_WH = "The White House (Molly Riley)"
-ROTATION = {"Q22686": [
-    {"src": "img/trump-desk-v1.jpg", "artist": _WH, "license": "Public domain",
-     "source": "https://commons.wikimedia.org/wiki/File:P20250930MR-0974_President_Donald_Trump_signs_an_Executive_Order_to_accelerate_pediatric_cancer_research.jpg"},
-    {"src": "img/trump-podium-v1.jpg", "artist": _WH, "license": "Public domain",
-     "source": "https://commons.wikimedia.org/wiki/File:P20250908MR-0972_President_Donald_Trump_delivers_remarks_to_the_White_House_Religious_Liberty_Commission.jpg"},
-]}
+# 2026-10-28). Each is cropped by hand to 16:9, the shape the site shows, with the whole face in frame: a tall
+# portrait in that frame showed only Trump's forehead and eyes. Rules for a photo: free license, the person alone
+# (no event, sign or other person a story might not be about), and a neutral expression (no grins, nothing
+# mid-word). Opponents get the same number (Paxton and Talarico). Kept in web/img, keyed by Wikidata id; these
+# replace the subject's Wikidata portrait. A subject on 4+ stories in 7 days without one is flagged by the scan.
+_C = "https://commons.wikimedia.org/wiki/File:"
+_WH = "The White House"
+ROTATION = {
+    "Q22686": [  # Donald Trump
+        {"src": "img/trump-official-v1.jpg", "artist": "Daniel Torok", "license": "Public domain",
+         "source": _C + "Official_Presidential_Portrait_of_President_Donald_J._Trump_(2025).jpg"},
+        {"src": "img/trump-jan-v1.jpg", "artist": "Daniel Torok", "license": "Public domain",
+         "source": _C + "January_2025_Official_Presidential_Portrait_of_Donald_J._Trump.jpg"},
+        {"src": "img/trump-desk-v1.jpg", "artist": _WH + " (Molly Riley)", "license": "Public domain",
+         "source": _C + "P20250930MR-0974_President_Donald_Trump_signs_an_Executive_Order_to_accelerate_pediatric_cancer_research.jpg"},
+        {"src": "img/trump-podium-v1.jpg", "artist": _WH + " (Molly Riley)", "license": "Public domain",
+         "source": _C + "P20250908MR-0972_President_Donald_Trump_delivers_remarks_to_the_White_House_Religious_Liberty_Commission.jpg"},
+        {"src": "img/trump-lectern-v1.jpg", "artist": _WH, "license": "Public domain",
+         "source": _C + "United_Nations_General_Assembly_2026_-_September_22,_2026_-_4_(cropped).jpg"},
+    ],
+    "Q6388290": [  # Ken Paxton
+        {"src": "img/paxton-cur-v1.jpg", "artist": "Gage Skidmore", "license": "CC BY-SA 4.0", "source": _C + "K_Paxton.jpg"},
+        {"src": "img/paxton-2024-v1.jpg", "artist": "Gage Skidmore", "license": "CC BY-SA 2.0", "source": _C + "Ken_Paxton_2024_(cropped).jpg"},
+    ],
+    "Q100742942": [  # James Talarico
+        {"src": "img/talarico-cur-v1.jpg", "artist": "Antonioaesparza", "license": "CC BY-SA 4.0", "source": _C + "James_Talarico_Press_Conference.jpg"},
+        {"src": "img/talarico-2023-v1.jpg", "artist": "Larry D. Moore", "license": "CC BY 4.0", "source": _C + "James_Talarico_Open_Congress_Austin_2023.jpg"},
+    ],
+}
 
 
 def rotate(rec, key):
-    """The photo to show for a story: the subject's own portrait or one from its rotation, chosen by the story's
-    id so a story keeps its photo from scan to scan."""
+    """The photo to show for a story: one from its subject's rotation if there is one, chosen by the story's id
+    so a story keeps its photo from scan to scan."""
     pool = ROTATION.get((rec or {}).get("wikidata"))
     if not pool:
         return rec
-    picks = [rec] + [{**rec, **p, "about": "", "caption": f"{rec['subject']}. Photo: {p['artist']} · {p['license']} · Wikimedia Commons"} for p in pool]
-    return picks[int(hashlib.sha1(key.encode()).hexdigest(), 16) % len(picks)]
-
+    p = pool[int(hashlib.sha1(key.encode()).hexdigest(), 16) % len(pool)]
+    return {**rec, **p, "about": "", "caption": f"{rec['subject']}. Photo: {p['artist']} · {p['license']} · Wikimedia Commons"}
 
 def _get(url):
     with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=20, context=C.SSL_CTX) as r:
