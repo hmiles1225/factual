@@ -2023,6 +2023,7 @@ function renderNumbers(nums) {
   m.href = "how.html";
   foot.append(m);
   body.append(foot);
+  initSwipeBack();
 }
 
 function renderStory(data) {
@@ -2034,6 +2035,7 @@ function renderStory(data) {
     const back = el("a", "read-more", "See today's stories");
     back.href = "./";
     body.append(back);
+    initSwipeBack();
     return;
   }
   document.title = `${story.working_title} · fACTUAL`;
@@ -2042,6 +2044,7 @@ function renderStory(data) {
   const tools = el("div", "story-tools");
   tools.append(backLink(story, data));
   $("story-meta").before(tools);
+  initSwipeBack();
   // Share sits top right, beside Settings: an icon the size of the gear.
   const top = shareButton(story, data, "Share");
   top.classList.add("share-top");
@@ -2347,6 +2350,61 @@ function pollResults(p, st) {
 
 // Back to where the reader came from: the story's section on Today (or the archive). Coming from Today,
 // it is the browser's back, so the reader lands where they were in the list.
+// Swiping back from an article goes to Today (Heston, 2026-10-28). Two cases the browser leaves out:
+// 1. Opened from the home screen (html.app): iOS gives web apps no back swipe, so we draw one from the left
+//    edge. The article follows the finger; past a third of the width, or on a quick flick, it goes back the way
+//    the back link does (to Today, at the reader's place when they came from there).
+// 2. Opened from a shared link, with nothing behind it: Today is put behind the article in history, so the
+//    browser's own back swipe and back button land there instead of leaving the site.
+function initSwipeBack() {
+  const link = document.querySelector(".back-link");
+  const target = link ? link.href : new URL("./", location.href).href;
+  let from = null;
+  try { from = document.referrer && new URL(document.referrer); } catch (e) {}
+  if (!(history.state && history.state.fxSeeded) && !(from && from.origin === location.origin)) {
+    const here = location.href;
+    try {
+      history.replaceState({ fxHome: target }, "", target);
+      history.pushState({ fxSeeded: true }, "", here);
+    } catch (e) {}
+  }
+  // Back to that entry: the address is already Today's, but the page is still the article. Today's address can
+  // differ from the article's only after "#", which the browser would treat as a jump within the page, so reload.
+  addEventListener("popstate", e => { if (e.state && e.state.fxHome) location.reload(); });
+  if (!document.documentElement.classList.contains("app")) return;
+  const main = document.getElementById("main");
+  if (!main) return;
+  const calm = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let x0 = null, y0 = 0, t0 = 0, dx = 0, axis = null;
+  const reset = () => { x0 = null; main.style.transition = calm ? "none" : "transform 200ms ease-out"; main.style.transform = ""; };
+  addEventListener("touchstart", e => {
+    const t = e.touches[0];
+    if (e.touches.length !== 1 || t.clientX > 24) return;
+    x0 = t.clientX; y0 = t.clientY; t0 = Date.now(); dx = 0; axis = null;
+    main.style.transition = "none";
+  }, { passive: true });
+  addEventListener("touchmove", e => {
+    if (x0 == null) return;
+    const t = e.touches[0], mx = t.clientX - x0, my = t.clientY - y0;
+    if (!axis && (Math.abs(mx) > 8 || Math.abs(my) > 8)) axis = Math.abs(mx) > Math.abs(my) ? "x" : "y";
+    if (axis === "y") { x0 = null; return; }
+    if (axis !== "x") return;
+    e.preventDefault();
+    dx = Math.max(0, mx);
+    if (!calm) main.style.transform = `translateX(${dx}px)`;
+  }, { passive: false });
+  addEventListener("touchend", () => {
+    if (x0 == null) return;
+    x0 = null;
+    if (dx > innerWidth / 3 || (dx > 40 && dx / Math.max(1, Date.now() - t0) > 0.5)) {
+      if (!calm) { main.style.transition = "transform 180ms ease-out"; main.style.transform = `translateX(${innerWidth}px)`; }
+      setTimeout(() => (link ? link.click() : location.assign(target)), calm ? 0 : 170);
+    } else reset();
+  });
+  addEventListener("touchcancel", reset);
+  addEventListener("pageshow", () => { main.style.transition = "none"; main.style.transform = ""; });  // back again from the cache
+}
+
 function backLink(story, data) {
   const a = el("a", "back-link");
   a.append(el("span", "back-arrow", "\u2190"), document.createTextNode(data.archiveDay ? " Archive" : " Today"));
