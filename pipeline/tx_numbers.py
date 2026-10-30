@@ -739,6 +739,19 @@ def sos(**params):
     raise RuntimeError(f"Secretary of State feed: {params.get('type')} {params.get('electionDate', '')} not read ({last})")
 
 
+def sos_own_name():
+    """What the feed answers our scanner under its own name, from GitHub's servers (2026-10-30: from a home
+    connection it answers 200; the early-vote read uses curl's own name because ours was once refused). Recorded
+    in tx-numbers.json "sos_own_name" so the read can move to our own name once it is shown to work. One small
+    request; nothing is retried under another name."""
+    try:
+        r = subprocess.run(["curl", "-sS", "-o", "/dev/null", "-w", "%{http_code}", "--max-time", "30", "-A", C.UA,
+                            SOS_API + "?type=EVR_ELECTION"], capture_output=True, timeout=45)
+        return {"status": r.stdout.decode().strip(), "at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+    except Exception as e:
+        return {"status": f"error: {e}"[:120]}
+
+
 def sos_early():
     """Statewide early vote through the last full day: every day already over in Texas (a day still being
     counted is left out), in-person votes that day, plus mail ballots received so far."""
@@ -920,7 +933,9 @@ def _usd(v):
 
 
 def number_cards(out):
-    cards = []
+    # Election night (Heston, 2026-10-30): the count is read live by api/results.php, so its card is fixed text.
+    cards = [("results", "Texas results: the count so far",
+              "The Texas Secretary of State's unofficial count, as the counties report it. No race is called here.")]
     ev = out.get("early_vote")
     if ev and ev.get("voted"):
         title = "Texas early vote: who has voted so far" if ev.get("age") else "Texas early vote: turnout so far"
@@ -1159,6 +1174,7 @@ def main():
     out["confirmed"] = {k: v for k, v in cache.items() if v.get("ok") or (v.get("at") or "") >= (now - timedelta(days=2)).isoformat()}
     out["crosstabs"], out["crosstabs_v"], out["groups_live"] = cross, CROSS_V, GROUPS_LIVE
     out["early_vote"], out["early_vote_error"] = ev, early_error
+    out["sos_own_name"] = sos_own_name()
     OUT.write_text(json.dumps(out, indent=1))
     try:
         write_number_share_pages(out)

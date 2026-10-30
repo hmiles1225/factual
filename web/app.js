@@ -419,6 +419,9 @@ function renderToday(data) {
   document.addEventListener("fx-topics", drawToday);
   // The Texas race numbers come in their own file; their cards join the Texas section when it arrives.
   if (LOCAL_ON) getJSON(txNumbersURL(), true).then(n => { if (n && n.races) { TXNUM = n; const y = window.scrollY; drawToday(); window.scrollTo({ top: y, behavior: "instant" }); } }).catch(() => {});
+  // Election night: the count joins the Texas numbers once counting starts, and keeps itself current.
+  const results = () => getResults().then(r => { if (r || TXRES) { TXRES = r; const y = window.scrollY; drawToday(); window.scrollTo({ top: y, behavior: "instant" }); } return r; });
+  if (LOCAL_ON) results().then(r => { if (r) setInterval(results, 120000); }).catch(() => {});
   // Coming back from a story: Today is drawn after the browser would restore the scroll, so keep the
   // position ourselves (this tab only) and put it back once the stories are on the page.
   try { history.scrollRestoration = "manual"; } catch (e) {}
@@ -456,7 +459,7 @@ function drawToday() {
     const head = el("div", "topic-head");
     head.append(el("h2", "topic-name", t.name), el("p", "topic-span", `${t.span} \u00b7 ${list.length}`));
     sec.append(head);
-    const numbers = t.key === "texas" && TXNUM && Object.keys(TXNUM.races || {}).length ? numbersCards(TXNUM) : null;
+    const numbers = t.key === "texas" && (TXRES || (TXNUM && Object.keys(TXNUM.races || {}).length)) ? numbersCards(TXNUM || { races: {} }) : null;
     // Texas Election (Heston, 2026-10-23): the Capitol as its header, the numbers first, then the stories.
     if (t.key === "texas") sec.append(figure(TX_HEADER, "section-photo"));
     if (numbers) { sec.append(numbers); sec.append(el("h3", "numbers-group-h stories-h", "Stories")); }
@@ -1889,9 +1892,83 @@ const EARLY_STORY = { key: "early-vote", kind: "early", title: "Texas early vote
 const earlyTitle = ev => ev && ev.age ? EARLY_STORY.title : "Texas early vote: turnout so far";
 const numberTitle = (n, nums) => n.kind === "early" ? earlyTitle(nums && nums.early_vote) : n.title;
 NUMBER_STORIES.unshift(EARLY_STORY);
+// Election night (Heston, 2026-10-30): the Secretary of State's unofficial count, read by our server
+// (api/results.php) and shown once counting starts. The count and the share reporting; never a call.
+const RESULTS_STORY = { key: "results", kind: "results", title: "Texas results: the count so far" };
+NUMBER_STORIES.unshift(RESULTS_STORY);
+const RESULTS_API = "api/results.php";
+let TXRES = null;  // the count, once api/results.php says counting has started
+const getResults = () => CAPSULE ? Promise.resolve(null) : getJSON(RESULTS_API, true).then(r => (r && r.live && r.counted ? r : null));
 // A number story is shown when it has something to show: polls by group only once switched on and read.
-const numberShown = (n, nums) => n.kind === "early" ? !!(nums.early_vote && nums.early_vote.voted)
+const numberShown = (n, nums) => n.kind === "results" ? !!TXRES : n.kind === "early" ? !!(nums.early_vote && nums.early_vote.voted)
   : !!nums.races[n.race] && (n.kind !== "groups" || (nums.groups_live && Object.keys(nums.races[n.race].groups || {}).length > 0));
+
+// The feed's names are in capitals: "GREG ABBOTT (I)", "R.F. \"BOB\" ACHGILL", "KEVIN MCCORMICK".
+const PARTY = { REP: "Republican", DEM: "Democrat", LIB: "Libertarian", GRE: "Green", IND: "Independent", W: "Write-in" };
+const nameCase = s => s.toLowerCase().replace(/(^|[\s\-'".(])(\p{L})/gu, (m, a, b) => a + b.toUpperCase())
+  .replace(/\bMc(\p{L})/gu, (m, a) => `Mc${a.toUpperCase()}`).replace(/\b(Ii|Iii|Iv)\b/g, m => m.toUpperCase()).replace(/\bJr\b\.?/g, "Jr.");
+const candName = c => nameCase(c.name.replace(/\s*\(I\)\s*$/, "")) + (/\(I\)\s*$/.test(c.name) ? " (incumbent)" : "");
+// Office names capitalized alike (Heston, 2026-10-20).
+const OFFICE = { "U. S. SENATOR": "U.S. Senate", "COMPTROLLER OF PUBLIC ACCOUNTS": "Comptroller",
+  "COMMISSIONER OF THE GENERAL LAND OFFICE": "Land Commissioner", "COMMISSIONER OF AGRICULTURE": "Agriculture Commissioner" };
+const officeName = o => OFFICE[o] || nameCase(o).replace(/\bOf\b/g, "of").replace(/\bThe\b/g, "the").replace(/ - Unexpired Term$/, " (unexpired term)");
+// "Nov 3, 2026 21:42:07" (the state's own clock, Central) -> "9:42 pm, Nov 3"
+const sosTime = t => { const m = /^(\w+) (\d+), \d+ (\d+):(\d+)/.exec(t || ""); if (!m) return t;
+  const h = +m[3]; return `${h % 12 || 12}:${m[4]} ${h < 12 ? "am" : "pm"}, ${m[1]} ${m[2]}`; };
+const reportingShare = res => pct(res.polling_places[0], res.polling_places[1]);
+const shareText = v => v > 0 && v < 1 ? "under 1" : v > 99 && v < 100 ? "over 99" : String(Math.round(v));
+
+function resultsGist(res) {
+  const r = res.races[0];
+  const top = [...r.candidates].sort((a, b) => b.votes - a.votes).filter(c => c.party !== "W").slice(0, 2);
+  const shares = top.map(c => `${nameCase(c.last)} ${fmtN(c.votes)} (${pct(c.votes, r.total).toFixed(1)}%)`);
+  return `${officeName(r.office)} so far: ${shares.join(", ")}. Polling places reporting: ${shareText(reportingShare(res))}%. Unofficial; no race is called here.`;
+}
+
+function resultsRace(r) {
+  const box = el("div", "num-early-part results-race");
+  box.append(el("h2", "num-h", officeName(r.office)));
+  // Write-in candidates share one row: most are not counted until the official canvass.
+  const named = r.candidates.filter(c => c.party !== "W");
+  const writeIns = r.candidates.filter(c => c.party === "W");
+  const rows = named.map(c => ({ label: `${candName(c)} · ${PARTY[c.party] || c.party}`, votes: c.votes, early: c.early, ballot: c.ballot }));
+  if (writeIns.length) rows.push({ label: `Write-in candidates (${writeIns.length})`, votes: writeIns.reduce((t, c) => t + c.votes, 0), ballot: 1e9 });
+  // Most votes first once there are votes; before that, ballot order. Order is the count, not a call.
+  rows.sort((a, b) => r.total ? b.votes - a.votes : a.ballot - b.ballot);
+  const ul = el("ul", "rate-list");
+  for (const x of rows) {
+    const li = el("li", "rate-row");
+    const bar = el("div", "rate-bar"); bar.setAttribute("aria-hidden", "true");
+    const f = el("i"); f.style.width = `${pct(x.votes, r.total)}%`; bar.append(f);
+    li.append(el("span", "rate-label", x.label), el("span", "rate-text", `${fmtN(x.votes)} · ${pct(x.votes, r.total).toFixed(1)}%`), bar);
+    ul.append(li);
+  }
+  const early = r.candidates.reduce((t, c) => t + c.early, 0);
+  box.append(ul, el("p", "num-note", `${fmtN(r.total)} votes counted in this race${r.total ? `, ${fmtN(early)} of them cast early (in person or by mail)` : ""}.`));
+  return box;
+}
+
+function resultsBlock(res) {
+  const box = el("div", "num-early");
+  if (!res) {
+    box.append(el("h2", "num-h", "No votes counted yet"));
+    box.append(el("p", "num-lede", "The count appears here once the counties start reporting, after polls close at 7 pm Central on Tuesday, November 3 (8 pm Central in El Paso and Hudspeth counties, which keep Mountain time)."));
+    return box;
+  }
+  const [pp, ppAll] = res.polling_places, [co, coAll] = res.counties;
+  box.append(el("h2", "num-h", "Reporting"));
+  box.append(el("p", "num-lede", `Polling places reporting: ${fmtN(pp)} of ${fmtN(ppAll)} (${shareText(reportingShare(res))}%). Counties reporting: ${co} of ${coAll}. These are unofficial results as the counties send them in. We show the count; we never call a race or project a winner.`));
+  box.append(basedOn(`the Texas Secretary of State’s unofficial election night results, as last updated by the state at ${sosTime(res.updated)} Central; read by us ${Math.max(1, Math.round((Date.now() - Date.parse(res.checked_at)) / 60000))} min ago. Official results come from the state canvass weeks later.`, "Secretary of State results", res.source));
+  const [first, second, ...rest] = res.races;
+  for (const r of [first, second].filter(Boolean)) box.append(resultsRace(r));
+  if (rest.length) {
+    const more = el("details", "results-more");
+    more.append(el("summary", null, `Other statewide races (${rest.length})`));
+    for (const r of rest) more.append(resultsRace(r));
+    box.append(more);
+  }
+  return box;
+}
 const pct = (a, b) => b ? 100 * a / b : 0;
 const fmtN = n => n.toLocaleString("en-US");
 const OLD_NUMBER_KEYS = { senate: "senate-polls", governor: "governor-polls" };  // links shared before the split
@@ -1952,6 +2029,24 @@ function numbersGist(n, nums) {
 function numbersCards(nums) {
   const box = el("div", "numbers-group");
   box.append(el("h3", "numbers-group-h", "By the numbers"));
+  if (TXRES) {
+    const g = el("div", "numbers-race");
+    g.append(el("h4", "numbers-race-h", "Statewide \u00b7 results"));
+    const ol = el("ol", "stories numbers-pair");
+    ol.setAttribute("aria-label", "Election results");
+    const li = el("li", "story story-data");
+    const main = el("div", "story-main");
+    main.append(el("p", "story-when", agoText(Date.parse(TXRES.checked_at))));
+    const h = el("h2", "headline");
+    const a = el("a", null, "Results: the count so far");
+    a.href = `numbers.html?n=${RESULTS_STORY.key}`;
+    h.append(a);
+    main.append(h, el("p", "gist", resultsGist(TXRES)));
+    li.append(main);
+    ol.append(li);
+    g.append(ol);
+    box.append(g);
+  }
   if (numberShown(EARLY_STORY, nums)) {
     const g = el("div", "numbers-race");
     g.append(el("h4", "numbers-race-h", "Statewide \u00b7 early voting"));
@@ -1998,11 +2093,12 @@ function numbersCards(nums) {
 
 function renderNumbers(nums) {
   const q = new URLSearchParams(location.search).get("n");
-  const n = NUMBER_STORIES.find(x => x.key === (OLD_NUMBER_KEYS[q] || q)) || NUMBER_STORIES[0];
+  const n = NUMBER_STORIES.find(x => x.key === (OLD_NUMBER_KEYS[q] || q)) || EARLY_STORY;
   const body = $("story-body");
   document.title = `${numberTitle(n, nums)} · fACTUAL`;
   $("story-title").textContent = numberTitle(n, nums);
-  $("story-meta").textContent = `Texas Election \u00b7 By the numbers \u00b7 Updated ${stamp(nums.updated_at)}`;
+  $("story-meta").textContent = n.kind === "results" ? `Texas Election \u00b7 Results${TXRES ? ` \u00b7 Read ${stamp(TXRES.checked_at)}` : ""}`
+    : `Texas Election \u00b7 By the numbers \u00b7 Updated ${stamp(nums.updated_at)}`;
   const tools = el("div", "story-tools");
   const back = el("a", "back-link");
   back.append(el("span", "back-arrow", "\u2190"), document.createTextNode(" Texas Election"));
@@ -2013,6 +2109,13 @@ function renderNumbers(nums) {
   const sec = el("section", "block numbers");
   const r = n.race && nums.races[n.race];
   if (n.kind === "early") sec.append(earlyBlock(nums.early_vote));
+  if (n.kind === "results") {
+    let block = resultsBlock(TXRES);
+    sec.append(block);
+    // The count changes through the night: read again every two minutes, in place.
+    setInterval(() => getResults().then(r => { if (!r) return; TXRES = r; const b = resultsBlock(r); block.replaceWith(b); block = b;
+      $("story-meta").textContent = `Texas Election \u00b7 Results \u00b7 Read ${stamp(r.checked_at)}`; }).catch(() => {}), 120000);
+  }
   if (r) {
     const c = r.candidates;
     $("story-sub").append(el("p", "byline", c.map(x => `${x.name} (${x.party})`).join(" vs. ")));
@@ -2038,7 +2141,8 @@ function renderNumbers(nums) {
   sec.append(more);
   body.append(sec);
   const foot = el("p", "disclosure");
-  foot.append(document.createTextNode("Gathered and checked by code, with AI reading poll releases. No human review. "));
+  foot.append(document.createTextNode(n.kind === "results" ? "Read from the Secretary of State by code. No AI, no human review. "
+    : "Gathered and checked by code, with AI reading poll releases. No human review. "));
   const m = el("a", null, "Method \u2192");
   m.href = "how.html";
   foot.append(m);
@@ -2512,7 +2616,7 @@ async function load() {
       const here = location.origin + location.pathname.replace(/index\.html$/, "");
       if (page !== "numbers") return here;
       const q = new URLSearchParams(location.search).get("n");
-      const n = NUMBER_STORIES.find(x => x.key === (OLD_NUMBER_KEYS[q] || q)) || NUMBER_STORIES[0];
+      const n = NUMBER_STORIES.find(x => x.key === (OLD_NUMBER_KEYS[q] || q)) || EARLY_STORY;
       return `${new URL("./", location.href).href}s/n-${n.key}.html`;
     };
     const b = makeShare(() => document.title, shareTo, "Share");
@@ -2529,7 +2633,8 @@ async function load() {
     const k = sget("fx-capsule", sessionStorage);
     const cap = k ? await getJSON(`data/capsule/${k}/tx.json`, true) : null;
     if (cap && Date.now() >= Date.parse(cap.frozen_at)) { CAPSULE = cap; capsuleBar(cap); }
-    const nums = await getJSON(txNumbersURL());
+    const [nums, res] = await Promise.all([getJSON(txNumbersURL()), getResults()]);
+    TXRES = res;
     return renderNumbers(nums);
   }
   const params = new URLSearchParams(location.search);
