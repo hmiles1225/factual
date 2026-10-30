@@ -2631,6 +2631,36 @@ function renderStory(data) {
     body.append(sf);
   }
 
+  // The science (Heston, 2026-10-30): was the study peer-reviewed, what it measured, what other research says.
+  const sci = story.science;
+  if (sci && (sci.where || sci.measured || sci.gap || sci.research)) {
+    const sb = el("section", "block sci-block");
+    sb.id = "science";
+    sb.append(el("h2", "block-title", "The science"));
+    const status = { "peer-reviewed journal": "Published in a peer-reviewed journal", "not peer-reviewed": "Not peer-reviewed",
+      "not found": "Not found in the journal databases we searched", "no single study": "No single study cited" }[sci.peer_reviewed];
+    const row = el("p", "sci-status");
+    row.append(el("strong", null, status || ""));
+    if (sci.where) row.append(document.createTextNode(`. ${sci.where.replace(/\.$/, "")}.`));
+    sb.append(row);
+    for (const [label, text] of [["What it measured", sci.measured], ["What the coverage adds", sci.gap], ["What other research says", sci.research]]) {
+      if (!text) continue;
+      sb.append(el("h3", "sub-title", label), el("p", "sci-text", text));
+    }
+    if ((sci.papers || []).length) {
+      const ul = el("ul", "sci-papers");
+      for (const pp of sci.papers) {
+        const li = el("li");
+        const t = pp.doi ? sourceLink(pp.title, pp.doi) : el("span", null, pp.title);
+        li.append(t, el("span", "sci-venue", ` ${pp.venue || "no journal"}, ${pp.year}${pp.type === "review" ? " \u00b7 review" : ""}`));
+        ul.append(li);
+      }
+      sb.append(ul);
+    }
+    sb.append(basedOn(`a search of OpenAlex, a free index of journal articles, preprints and reports, for "${sci.searched}" (${plural(sci.found, "result", "results")}), read by AI against the coverage. Only papers we found are cited. No person reviews it.`));
+    body.append(sb);
+  }
+
   // 2. Splits, each side's claim checked inside its panel.
   const diffs = (brief && brief.differences) || [];
   if (diffs.length) {

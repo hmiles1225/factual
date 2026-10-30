@@ -23,6 +23,7 @@ import re
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
@@ -1298,6 +1299,56 @@ def main():
             claims[got]["ledger_outcome"] = True
             e["outcome"], e["outcome_at"] = got, datetime.now(timezone.utc).isoformat(timespec="seconds")
             print(f"  ledger: came due, checked: {e['what'][:70]} -> {claims[got].get('verdict')}")
+    # Science check: its own cap and spend line, after everything else, a few stories a scan.
+    sci = lib.setdefault("science", {})
+    spend.setdefault("science_usd", 0.0)
+    spend.setdefault("science_new", 0)
+    shown_now = sorted((s for s in data["stories"] if (s.get("on_today") or s.get("one_side")) and s.get("brief")),
+                       key=lambda s: -len(s["sources"]))
+    done_here = 0
+    for st in shown_now:
+        rec = sci.get(st["sid"])
+        if rec and rec.get("v") == SCIENCE_VERSION:
+            if rec.get("result"):
+                st["science"] = rec["result"]
+            continue
+        b = st["brief"]
+        text = " ".join([st["working_title"]] + [f["fact"] for f in b.get("agreed", [])] + [p["says"] for d in b.get("differences", []) for p in d["positions"]])
+        if not SCIENCE_WORDS.search(text):
+            continue
+        if done_here >= SCIENCE_PER_SCAN or spend["science_new"] >= SCIENCE_PER_DAY or spend["science_usd"] + 0.05 > SCIENCE_DAILY_USD or past_deadline():
+            continue
+        cov = "\n".join([f"Headline: {a['title']} ({a['source']})" for a in st["articles"][:10]] + [f"Fact: {f['fact']}" for f in b.get("agreed", [])]
+                         + [f"{', '.join(p['outlets'][:3])}: {p['says']}" for d in b.get("differences", []) for p in d["positions"]])
+        try:
+            first, u1 = gemini_json(STUDY_PROMPT.replace("{coverage}", cov), STUDY_SCHEMA, "low")
+            spend["science_usd"] = round(spend["science_usd"] + UNDERCOUNT * cost_usd(C.GEMINI_MODEL, u1), 4)
+            result = None
+            if first["science"] and first["search"].strip():
+                items = openalex(first["search"], 6) + openalex(first["search"], 4, reviews=True)
+                seen_t, uniq = set(), []
+                for it in items:
+                    if it["title"].lower() not in seen_t:
+                        seen_t.add(it["title"].lower()); uniq.append(it)
+                listing = "\n".join(f"[{i}] {it['title']} ({it['venue'] or 'no journal'}, {it['year']}, {it['type']}). {it['abstract']}" for i, it in enumerate(uniq, 1))
+                out, u2 = gemini_json(SCIENCE_PROMPT.replace("{claim}", first["claim"]).replace("{study}", first["study"] or "(none cited)")
+                                      .replace("{coverage}", cov).replace("{items}", listing or "(none found)"), SCIENCE_SCHEMA)
+                spend["science_usd"] = round(spend["science_usd"] + UNDERCOUNT * cost_usd(C.GEMINI_MODEL, u2), 4)
+                cited = [uniq[i - 1] for i in out["cites"] if 1 <= i <= len(uniq)]  # only items we actually found
+                result = {"claim": first["claim"], "study": first["study"], "peer_reviewed": out["peer_reviewed"], "where": out["where"].strip(),
+                          "measured": out["measured"].strip(), "gap": out["gap"].strip(), "research": out["research"].strip() if cited else "",
+                          "papers": [{k: it[k] for k in ("title", "venue", "year", "type", "doi")} for it in cited],
+                          "searched": first["search"], "found": len(uniq), "at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+                st["science"] = result
+                print(f"  science: {result['peer_reviewed']}, {len(cited)} papers cited of {len(uniq)}: {st['working_title'][:60]}")
+            sci[st["sid"]] = {"v": SCIENCE_VERSION, "result": result}
+            if result:  # a story the first pass rules out doesn't use one of the day's checks
+                spend["science_new"] += 1
+                done_here += 1
+        except Exception as e:
+            note_ai_error("science", e)
+    lib["science"] = {k: v for k, v in sci.items() if k in {s["sid"] for s in data["stories"]}}
+
     frame_faces(data["stories"], lib)
     track_changes(lib, data["stories"])
     shown = [s for s in data["stories"] if s.get("on_today") or (s.get("one_side") and s.get("brief"))]
@@ -1328,7 +1379,7 @@ def main():
     lib["ai_errors"] = {"at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "count": len(AI_ERRORS), "last": AI_ERRORS[-3:]}
     lib["caps"] = {"anthropic_daily_usd": ANTHROPIC_DAILY_USD, "gemini_daily_usd": GEMINI_DAILY_USD,
                    "today_gemini_cap": gemini_cap, "today_anthropic_cap": anthropic_cap, "testing_until": TESTING_UNTIL,
-                   "gemini_free_searches": GEMINI_FREE_SEARCHES, "search_usd": SEARCH_USD, "new_claims_per_day": new_per_day}
+                   "science_daily_usd": SCIENCE_DAILY_USD, "gemini_free_searches": GEMINI_FREE_SEARCHES, "search_usd": SEARCH_USD, "new_claims_per_day": new_per_day}
     (ROOT / "data/library.json").write_text(json.dumps(lib, indent=1))
     stories_path.write_text(json.dumps(data, indent=1))
     write_capsule(data, lib)
@@ -1785,7 +1836,7 @@ def write_archive(stories, feeds):
         print(f"  archive not readable ({e}); not writing it this scan")
         return
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    keep = ("sid", "working_title", "topic", "span", "outlets", "sources", "coverage", "articles", "checks", "image", "image_alt", "one_side")
+    keep = ("sid", "working_title", "topic", "span", "outlets", "sources", "coverage", "articles", "checks", "image", "image_alt", "one_side", "science")
     for st in stories:
         rec = {k: st[k] for k in keep if k in st}
         rec["brief"] = {k: v for k, v in st["brief"].items() if k != "dropped_agreed"}
@@ -1903,9 +1954,78 @@ groups they belong to (an official of the current U.S. administration is "Federa
 plain sentence in the past tense stating what would be true if it happened, with its date, for a fact-checker
 to check later (for "The mayor said the bridge will reopen on March 3": "The bridge reopened on or before March 3, 2027."). Use only the claim.
 For none, set who, what, due and when to "" and group to "Other"."""
+# Science check (Heston, 2026-10-30: "I need that sort of thing checked against peer-reviewed science"): a story that
+# cites a study or makes a health or science claim gets three answers on its page: was the study peer-reviewed and
+# where; what it measured against what the coverage says; what other peer-reviewed research says, reviews first.
+# Papers come from OpenAlex (free; journals, preprints, reports, abstracts); the model reads only what we found.
+# Its own cap, apart from the day's Gemini budget (Heston: $1 a day).
+SCIENCE_VERSION = "1"
+SCIENCE_DAILY_USD = 1.00
+SCIENCE_PER_DAY = 5
+SCIENCE_PER_SCAN = 3
+SCIENCE_WORDS = re.compile(r"\b(stud(y|ies)|research(ers)?|scientists?|trial|journal|peer[- ]review\w*|meta-analys\w+|"
+                           r"life[- ]cycle|carcinogen\w*|clinical|vaccines?|FDA|CDC|toxic\w*|cancer|disease|outbreak|"
+                           r"climate|emissions?|peptides?|drugs?)\b", re.I)
+STUDY_SCHEMA = _item({"science": {"type": "boolean"}, "study": {"type": "string"}, "claim": {"type": "string"},
+                      "search": {"type": "string"}}, ["science", "study", "claim", "search"])
+STUDY_PROMPT = """Below is the coverage of one news story. Does the story rest on a scientific or medical study, or make a
+health or science claim that published research can settle?
+If yes: science = true; study = the study or report the coverage cites, as the coverage describes it (who did it,
+who paid for it, when), or "" if none is cited; claim = the main scientific claim, one plain sentence, as the
+coverage states it; search = 3 to 8 plain English words to search a database of journal articles for research on
+the same question (no names of outlets or politicians). If no: science = false and the rest "".
+
+Coverage:
+{coverage}"""
+SCIENCE_SCHEMA = _item({
+    "peer_reviewed": {"type": "string", "enum": ["peer-reviewed journal", "not peer-reviewed", "not found", "no single study"]},
+    "where": {"type": "string"}, "measured": {"type": "string"}, "gap": {"type": "string"},
+    "research": {"type": "string"}, "cites": {"type": "array", "items": {"type": "integer"}}},
+    ["peer_reviewed", "where", "measured", "gap", "research", "cites"])
+SCIENCE_PROMPT = """A news story makes this claim: {claim}
+The coverage describes its source as: {study}
+
+Below are journal articles and reports from a scholarly database, numbered. Using ONLY the coverage description
+and these items, answer for a general reader, in plain short sentences:
+- peer_reviewed: "peer-reviewed journal" if the study the coverage cites is one of the items and is a journal
+  article (say which in where); "not peer-reviewed" if the coverage itself describes it as a report, a government
+  or company study, a preprint or similar (say so in where); "not found" if it is neither (where = ""); "no single
+  study" if the coverage cites none.
+- measured: what that study actually measured, if the coverage or an item says; else "".
+- gap: anything the coverage says that the study as described does not show (for example a modeled impact
+  reported as a direct risk), in one or two sentences; "" if none.
+- research: what the other peer-reviewed items say on the same question, two to four sentences, reviews first.
+  Say where they agree and where they differ. Never add a finding that is not in an item.
+- cites: the numbers of the items research uses.
+No opinion, no words about anyone's motives. If the items do not address the question, research = "" and cites = [].
+
+Coverage:
+{coverage}
+
+Items:
+{items}"""
 NEW_SAME = 0.85   # a rewritten fact this close to an earlier one is that fact reworded, not new
 # Measured 10-30 on 107 facts against the day before's: rewordings scored 0.87 to 0.97; facts with a new detail
 # mostly under 0.80. Two rewordings at 0.82 still count as new (the safe side: nothing new is hidden).
+
+
+def openalex(query, n, reviews=False):
+    """Works from OpenAlex (free, no key): title, journal or source, year, type, DOI, abstract (rebuilt)."""
+    params = {"search": query, "per-page": n, "select": "doi,title,publication_year,type,primary_location,abstract_inverted_index"}
+    if reviews:
+        params["filter"] = "type:review"
+    req = urllib.request.Request("https://api.openalex.org/works?" + urllib.parse.urlencode(params),
+                                 headers={"User-Agent": "fACTUAL-scan/0.1 (+https://hestonmiles.com/factual/)"})
+    with urllib.request.urlopen(req, timeout=30, context=C.SSL_CTX) as r:
+        out = []
+        for w in json.loads(r.read()).get("results", []):
+            inv = w.get("abstract_inverted_index") or {}
+            words = sorted((i, t) for t, idx in inv.items() for i in idx)
+            src = ((w.get("primary_location") or {}).get("source") or {})
+            out.append({"title": (w.get("title") or "").strip(), "venue": src.get("display_name") or "", "venue_type": src.get("type") or "",
+                        "year": w.get("publication_year"), "type": w.get("type") or "", "doi": w.get("doi") or "",
+                        "abstract": " ".join(t for _, t in words)[:900]})
+        return [x for x in out if x["title"]]
 
 
 def date_of(text):
