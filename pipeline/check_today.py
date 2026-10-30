@@ -92,7 +92,7 @@ SAME_CLAIM = 0.93                # embedding similarity at which two wordings ar
 MAYBE_SAME = 0.85
 # Shadow mode until the model's answers are scored against a person's reading of the same pairs: asked and
 # recorded with both sentences (lib["same_claim"]), never used to reuse a verdict while this is False.
-SAME_LIVE = False
+SAME_LIVE = True   # scored 2026-10-30 (eval/score_same.py): 13 of 16 right, 0 wrong "same"; 3 rewordings missed (safe side)
 # One pass over the pairs already in the library (2026-10-30): new claims bring a pair into the band only a few
 # times a day, too few to score. Asked once, under the same cap, through same_claim(); tagged "calibration".
 SAME_CALIBRATE = "1"
