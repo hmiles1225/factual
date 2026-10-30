@@ -68,7 +68,8 @@ ROSTER_VERSION = "2026-10-19b"   # 35 outlets, 15 left / 15 right
 GEMINI_FREE_SEARCHES = 150      # Google gives 5,000 free a month across Gemini 3 models; ~150 a day
 SEARCH_USD = 0.014               # then $14 per 1,000 searches (ai.google.dev pricing, 2026-10-18), charged to the Gemini cap
 TX_NUMBERS_USD = 0.40            # kept for tx_numbers.py out of the same cap (polls checked against releases), Texas edition only
-CHECK_RESERVE_USD = 0.35         # most one fact-check has cost (tokens plus paid searches), with margin
+PACE_START = 0.20               # share of the day's Gemini budget open at midnight UTC; the rest opens hour by hour
+CHECK_RESERVE_USD = 0.35        # most one fact-check has cost (tokens plus paid searches), with margin
 UNDERCOUNT = 1.7                 # our cost log ran this far under the real bill (2026-10-17)
 RECHECK_AFTER_DAYS = 7
 DECIDED = ("Holds up", "Missing context", "Doesn't hold up")
@@ -584,6 +585,11 @@ def main():
     # day's cap for confirming new polls against their releases; claims stop that much short of the cap.
     tx = (data.get("regions") or {}).get("tx")
     work_cap = gemini_cap - (TX_NUMBERS_USD if tx and datetime.now(timezone.utc) < datetime.fromisoformat(tx["until"]) else 0.0)
+    # The day's budget is paced across the day: a fifth at midnight UTC, the rest in step with the clock. Unpaced,
+    # the first three scans after midnight UTC (7 pm in Texas) spent it all and Today froze until the next evening
+    # (Heston, 2026-10-30: "nothing has updated in like 16 hours"). Same total; what a scan leaves, the next can use.
+    now = datetime.now(timezone.utc)
+    work_cap *= min(1.0, PACE_START + (1 - PACE_START) * (now.hour + now.minute / 60) / 24)
 
     def gemini_ok():
         return spend["gemini_usd"] < work_cap and not past_deadline()
