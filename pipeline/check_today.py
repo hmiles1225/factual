@@ -1147,6 +1147,38 @@ def main():
         return bool(shared)  # Today shows only what both sides report; no common ground, no slot
 
 
+    # Promises and predictions: classify confirmed claims before the sections (cheap, parallel, capped per scan), so a
+    # tight day's budget can't crowd it out (Heston, 2026-10-30: "where is the predictions section").
+    ledger = lib.setdefault("ledger", {})
+    now_et = datetime.now(ZoneInfo("America/New_York")).date()
+    todo_l = [k for k, c in sorted(claims.items(), key=lambda kc: kc[1].get("checked_at", ""), reverse=True)
+              if c.get("verdict") == "Holds up" and not c.get("ledger_outcome") and (ledger.get(k) or {}).get("v") != LEDGER_VERSION][:LEDGER_PER_SCAN]
+    if todo_l and gemini_ok():
+        ask = lambda k: (k, *gemini_json(LEDGER_PROMPT.replace("{today}", now_et.isoformat()).replace("{claim}", claims[k]["claim"]), LEDGER_SCHEMA, "low"))
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            for fut in [pool.submit(ask, k) for k in todo_l]:
+                try:
+                    k, out, usage = fut.result()
+                except Exception as e:
+                    note_ai_error("ledger", e)
+                    continue
+                charge_gemini(usage)
+                due = (out.get("due") or "").strip()
+                try:
+                    due = date_of(due).isoformat() if due else ""
+                except ValueError:
+                    due = ""
+                kind = out["kind"] if not (out["kind"] == "dated" and not due) else "none"  # a date we can't read is no date
+                checked = claims[k].get("checked_at")
+                ledger[k] = {"v": LEDGER_VERSION, "kind": kind, "claim": claims[k]["claim"], "stories": claims[k].get("stories", []),
+                             "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                             # the day its story was on Today, for a link to the archived copy once it has left
+                             "day": datetime.fromisoformat(checked).astimezone(ZoneInfo("America/New_York")).date().isoformat() if checked else None}
+                if kind != "none":
+                    ledger[k].update({"who": out["who"].strip(), "group": out["group"], "what": out["what"].strip(),
+                                      "due": due if kind == "dated" else "", "when": out["when"].strip() if kind == "pledge" else "",
+                                      "outcome": None})
+        print(f"  ledger: {len(todo_l)} claims read, {sum(1 for v in ledger.values() if v['kind'] != 'none')} promises and predictions")
     # Every verdict, explained plainly: which part holds, is false, or is missing, and what the sources show,
     # from the checker's finding only. Once per claim. First in the scan: it is cheap, and readers see it on
     # every check, so it should never wait behind summaries and new checks for the day's budget.
@@ -1247,38 +1279,9 @@ def main():
     print(f"  one side: left {len(lanes['left'])}, right {len(lanes['right'])}; {day_os['summaries']} summaries today "
           f"(left {day_os['left']}, right {day_os['right']}), ${day_os['gemini_usd']:.2f}")
 
-    # Promises and predictions: classify confirmed claims (cheap, parallel, capped per scan), then check the ones
-    # whose date has passed, under the same caps as any check.
+    # Promises and predictions: outcomes of statements whose date has passed, under the same caps as any check.
     ledger = lib.setdefault("ledger", {})
     now_et = datetime.now(ZoneInfo("America/New_York")).date()
-    todo_l = [k for k, c in sorted(claims.items(), key=lambda kc: kc[1].get("checked_at", ""), reverse=True)
-              if c.get("verdict") == "Holds up" and not c.get("ledger_outcome") and (ledger.get(k) or {}).get("v") != LEDGER_VERSION][:LEDGER_PER_SCAN]
-    if todo_l and gemini_ok():
-        ask = lambda k: (k, *gemini_json(LEDGER_PROMPT.replace("{today}", now_et.isoformat()).replace("{claim}", claims[k]["claim"]), LEDGER_SCHEMA, "low"))
-        with ThreadPoolExecutor(max_workers=6) as pool:
-            for fut in [pool.submit(ask, k) for k in todo_l]:
-                try:
-                    k, out, usage = fut.result()
-                except Exception as e:
-                    note_ai_error("ledger", e)
-                    continue
-                charge_gemini(usage)
-                due = (out.get("due") or "").strip()
-                try:
-                    due = date_of(due).isoformat() if due else ""
-                except ValueError:
-                    due = ""
-                kind = out["kind"] if not (out["kind"] == "dated" and not due) else "none"  # a date we can't read is no date
-                checked = claims[k].get("checked_at")
-                ledger[k] = {"v": LEDGER_VERSION, "kind": kind, "claim": claims[k]["claim"], "stories": claims[k].get("stories", []),
-                             "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-                             # the day its story was on Today, for a link to the archived copy once it has left
-                             "day": datetime.fromisoformat(checked).astimezone(ZoneInfo("America/New_York")).date().isoformat() if checked else None}
-                if kind != "none":
-                    ledger[k].update({"who": out["who"].strip(), "group": out["group"], "what": out["what"].strip(),
-                                      "due": due if kind == "dated" else "", "when": out["when"].strip() if kind == "pledge" else "",
-                                      "outcome": None})
-        print(f"  ledger: {len(todo_l)} claims read, {sum(1 for v in ledger.values() if v['kind'] != 'none')} promises and predictions")
     for k, e in ledger.items():
         if e["kind"] != "dated" or not e["what"] or (claims.get(e.get("outcome")) or {}).get("verdict") in DECIDED:
             continue  # an Unproven outcome is asked again; check_claim re-checks it after RECHECK_AFTER_DAYS
