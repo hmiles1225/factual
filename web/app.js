@@ -483,7 +483,10 @@ function drawToday() {
   // The top story: the scan's order (most outlets, still being reported, held against small gains), first one
   // in a topic this reader follows. Shown once, above the sections, not again in its own.
   const byId = Object.fromEntries(data.stories.map(s => [s.sid, s]));
-  const top = (data.top || []).map(sid => byId[sid]).find(s => s && shownToday(s) && follow.has(s.topic));
+  // Until a scan writes data.top, the same rule here: broke in the last 24 h, an article in the last 6 h, most outlets.
+  const topOrder = data.top || data.stories.filter(s => shownToday(s) && Date.now() - brokeAt(s) <= 24 * 36e5 && Date.now() - updatedAt(s) <= 6 * 36e5)
+    .sort((a, b) => b.sources.length - a.sources.length || brokeAt(b) - brokeAt(a)).map(s => s.sid);
+  const top = topOrder.map(sid => byId[sid]).find(s => s && shownToday(s) && follow.has(s.topic));
   if (top) {
     const sec = el("section", "topic-section top-section");
     sec.id = "top";
