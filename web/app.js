@@ -478,6 +478,16 @@ function drawToday() {
     link.append(el("span", "strip-n", String(list.length)));
     nav.append(link);
   }
+  // Covered by one side (Heston, 2026-10-30): its own section at the end of Today, after the reader's topics.
+  if (data.one_side && !CAPSULE) {
+    const n = data.one_side.lanes.left.length + data.one_side.lanes.right.length;
+    $("sections").append(oneSideSection(data));
+    const link = el("a", "strip-link", "One side");
+    link.href = "#one-side";
+    link.dataset.key = "one-side";
+    link.append(el("span", "strip-n", String(n)));
+    nav.append(link);
+  }
   const edit = el("button", "strip-edit");
   edit.type = "button";
   edit.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="16" cy="7" r="2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="10" cy="17" r="2" fill="none" stroke="currentColor" stroke-width="2"/></svg>';
@@ -487,6 +497,124 @@ function drawToday() {
   nav.append(edit);
   spyStrip();
   if ($("today-count")) $("today-count").textContent = WORDS[total] || String(total);
+}
+
+/* ---------- Covered by one side ----------
+   Stories that 4+ outlets on one side covered and none on the other, each side counted against its own list of
+   outlets. Both lanes always shown, the same width, no party colours, and the side on top alternates by day.
+   It states the numbers and what they rest on, never a reason for the gap. Never called "Blindspot". */
+const OTHER = { left: "right", right: "left" };
+function outletStrip(o) {
+  // One square per outlet on our list, filled where it covered the story; the same colour for both sides.
+  const box = el("div", "os-strip");
+  box.setAttribute("aria-hidden", "true");
+  const covered = new Set(o.covered);
+  for (const k of ["left", "right"]) {
+    const row = el("div", "os-row");
+    row.append(el("span", "os-row-label", k === "left" ? "Left" : "Right"));
+    const sq = el("span", "os-squares");
+    const names = [...o.roster[k]].sort((a, b) => covered.has(b) - covered.has(a));  // filled first: the count reads at a glance
+    for (const name of names) sq.append(el("span", covered.has(name) ? "os-sq is-on" : "os-sq"));
+    row.append(sq);
+    box.append(row);
+  }
+  return box;
+}
+function oneSideCount(o) {
+  const k = o.side, x = OTHER[k];
+  return `${o.covered.length} of ${o.roster[k].length} ${k}-leaning outlets covered this. 0 of ${o.roster[x].length} ${x}-leaning outlets did.`;
+}
+function oneSideBasis(o) {
+  const first = o.first_at ? ` First report: ${o.first_by}, ${o.first_day_only ? shortDate(o.first_at.slice(0, 10)) : stamp(o.first_at)}.` : "";
+  return basedOn(`our outlets' own feeds (${o.roster.left.length} left, ${o.roster.center.length} center, ${o.roster.right.length} right), and every ${OTHER[o.side]}-leaning article from the past 7 days searched for this story.${first}`);
+}
+// What the covering side reports: the facts at least two of its outlets state, and the first decided check.
+function oneSideFacts(story, max) {
+  const k = story.one_side.side;
+  return ((story.brief && story.brief.agreed) || []).filter(f => (f.sides || []).includes(k)).slice(0, max);
+}
+function oneSideCard(story, data) {
+  const o = story.one_side;
+  const li = el("li", "story os-card");
+  const main = el("div", "story-main");
+  const when = updatedAgo(story);
+  if (when) main.append(el("p", "story-when", when));
+  const h = el("h4", "headline");
+  const a = el("a", null, story.working_title);
+  a.href = story.brief ? storyHref(story) : lead(story).url;
+  if (!story.brief) a.rel = "noopener";
+  h.append(a);
+  main.append(h, el("p", "os-count", oneSideCount(o)), outletStrip(o));
+  const names = el("p", "os-names", `Covered by ${listNames(o.covered, 6)}.`);
+  if (o.center.length) names.append(document.createTextNode(` Center outlets that covered it, not counted: ${listNames(o.center, 4)}.`));
+  main.append(names);
+  const facts = oneSideFacts(story, 2);
+  if (facts.length) {
+    main.append(el("p", "os-label", `What ${o.side}-leaning outlets report`));
+    main.append(el("p", "gist", facts.map(f => firstSentence(f.fact)).join(" ")));
+  }
+  const check = decided(story, data.library)[0];
+  if (check) {
+    const row = el("p", "os-check");
+    row.append(chip(check.c.verdict), el("span", "os-check-claim", check.c.claim));
+    main.append(row);
+  }
+  main.append(oneSideBasis(o));
+  li.append(main);
+  return li;
+}
+function tookText(r) {
+  const k = r.side;
+  if (r.day_only || r.broke_day_only) {
+    const d = Math.round((Date.parse(r.at.slice(0, 10)) - Date.parse(r.broke_at.slice(0, 10))) / 864e5);
+    return d <= 0 ? `on the same day as the first ${k}-leaning report` : `${plural(d, "day", "days")} after the first ${k}-leaning report`;
+  }
+  const h = (Date.parse(r.at) - Date.parse(r.broke_at)) / 36e5;
+  const span = h < 1 ? "within an hour of" : h < 48 ? `${plural(Math.round(h), "hour", "hours")} after` : `${plural(Math.round(h / 24), "day", "days")} after`;
+  return `${span} the first ${k}-leaning report`;
+}
+function laneBlock(k, data, by) {
+  const os = data.one_side, x = OTHER[k];
+  const lane = el("div", "os-lane");
+  lane.append(el("h3", "os-lane-title", `Covered on the ${k}, not the ${x}`));
+  const list = os.lanes[k].map(sid => by[sid]).filter(s => s && s.one_side);
+  if (list.length) {
+    const ol = el("ol", "stories");
+    ol.setAttribute("aria-label", `Covered on the ${k}, not the ${x}`);
+    list.forEach(s => ol.append(oneSideCard(s, data)));
+    lane.append(ol);
+  } else {
+    lane.append(el("p", "topic-empty", `None right now: no story in the last ${os.hours} hours has ${os.min} or more ${k}-leaning outlets and no ${x}-leaning ones.`));
+  }
+  const picked = (os.picked_up || []).filter(r => r.side === k).slice(0, 3);
+  if (picked.length) {
+    lane.append(el("h4", "os-picked-title", "Picked up since"));
+    const ul = el("ul", "os-picked");
+    for (const r of picked) {
+      const li = el("li");
+      const s = by[r.sid];
+      if (s && s.on_today) { const a = el("a", "os-picked-link", r.title); a.href = storyHref(s); li.append(a); }
+      else li.append(el("span", "os-picked-link", r.title));
+      li.append(el("span", "os-picked-when", `${r.by} was the first ${x}-leaning outlet, ${tookText(r)} (${r.broke_by}).`));
+      ul.append(li);
+    }
+    lane.append(ul);
+  }
+  return lane;
+}
+function oneSideSection(data) {
+  const os = data.one_side;
+  const by = Object.fromEntries(data.stories.map(s => [s.sid, s]));
+  const sec = el("section", "topic-section one-side");
+  sec.id = "one-side";
+  const head = el("div", "topic-head");
+  head.append(el("h2", "topic-name", "Covered by one side"), el("p", "topic-span", `${os.hours} hours · ${os.lanes.left.length + os.lanes.right.length}`));
+  sec.append(head);
+  sec.append(el("p", "os-dek", `Stories that ${os.min} or more outlets on one side covered and no outlet on the other side did. Each side is counted against its own list of outlets, so a side with more outlets can't look louder.`));
+  const lanes = el("div", "os-lanes");
+  for (const k of os.first === "right" ? ["right", "left"] : ["left", "right"]) lanes.append(laneBlock(k, data, by));
+  sec.append(lanes);
+  return sec;
 }
 
 // The section strip stays pinned while reading and underlines the section in view (scroll-spy). The
@@ -875,17 +1003,18 @@ function renderArchive(index) {
       loaded = true;
       getJSON(`data/archive/${d.date}.json`).then(arch => {
         const stories = Object.values(arch.stories || {});
-        for (const t of TOPICS) {
-          const list = stories.filter(s => s.topic === t.key);
+        const groups = [...TOPICS.map(t => [t.name, stories.filter(s => s.topic === t.key && !s.one_side)]), ["Covered by one side", stories.filter(s => s.one_side)]];
+        for (const [name, list] of groups) {
           if (!list.length) continue;
-          body.append(el("h3", "arch-topic", t.name));
+          body.append(el("h3", "arch-topic", name));
           const ul = el("ul", "arch-list");
           for (const s of list) {
             const li = el("li");
             const a = el("a", "arch-link", s.working_title);
             a.href = storyHref(s, d.date);
             const cg = ((s.brief && s.brief.agreed) || []).filter(acrossSides).length;
-            li.append(a, el("span", "arch-meta", `${s.sources.length} outlets${cg ? ` \u00b7 ${cg} common-ground ${cg === 1 ? "fact" : "facts"}` : ""}`));
+            li.append(a, el("span", "arch-meta", s.one_side ? `${s.one_side.covered.length} of ${s.one_side.roster[s.one_side.side].length} ${s.one_side.side}-leaning outlets, 0 ${OTHER[s.one_side.side]}-leaning`
+              : `${s.sources.length} outlets${cg ? ` \u00b7 ${cg} common-ground ${cg === 1 ? "fact" : "facts"}` : ""}`));
             ul.append(li);
           }
           body.append(ul);
@@ -2217,6 +2346,33 @@ function renderStory(data) {
   ALLSIDES = Object.fromEntries((data.feeds || []).filter(f => f.lean == null && f.allsides).map(f => [f.source, f.allsides]));
   $("story-sub").querySelector(".byline").after(metricRow(story, "metrics metrics-tiles"));
 
+  // Covered by one side: the page opens with the count and what that side reports, never an empty state.
+  if (story.one_side) {
+    const o = story.one_side;
+    const so = el("section", "block os-block");
+    so.id = "one-side";
+    so.append(el("h2", "block-title", `Covered on the ${o.side}, not the ${OTHER[o.side]}`));
+    so.append(el("p", "os-count", oneSideCount(o)), outletStrip(o));
+    const names = el("p", "os-names", "Covered by ");
+    o.covered.forEach((n, i) => { if (i) names.append(document.createTextNode(", ")); names.append(ARTICLE[n] ? sourceLink(n, ARTICLE[n]) : document.createTextNode(n)); });
+    names.append(document.createTextNode("."));
+    if (o.center.length) names.append(document.createTextNode(` Center outlets that covered it, not counted: ${listNames(o.center, 6)}.`));
+    so.append(names);
+    const facts = oneSideFacts(story, 12);
+    if (facts.length) {
+      so.append(el("h3", "sub-title", `What ${o.side}-leaning outlets report`));
+      const ul = el("ul", "facts");
+      for (const f of facts) {
+        const li = el("li");
+        li.append(el("span", "fact-mark", "\u2713"), el("span", "fact-text", f.fact));
+        ul.append(li);
+      }
+      so.append(ul);
+    }
+    so.append(oneSideBasis(o));
+    body.append(so);
+  }
+
   // 1. Agreed: only facts outlets on both the left and the right report.
   if (agreed.some(acrossSides)) {
     const s1 = el("section", "block");
@@ -2574,7 +2730,7 @@ function backLink(story, data) {
   const a = el("a", "back-link");
   a.append(el("span", "back-arrow", "\u2190"), document.createTextNode(data.archiveDay ? " Archive" : " Today"));
   a.querySelector(".back-arrow").setAttribute("aria-hidden", "true");
-  a.href = data.archiveDay ? "archive.html" : `./#${story.topic}`;
+  a.href = data.archiveDay ? "archive.html" : `./#${story.one_side ? "one-side" : story.topic}`;
   a.addEventListener("click", e => {
     let from = null;
     try { from = document.referrer && new URL(document.referrer); } catch (err) {}
@@ -2689,7 +2845,7 @@ async function load() {
   // A link with a day (from the archive or a shared link) shows the live story while it is still on
   // Today, and that day's archived copy once it has left.
   const live = page === "story" && params.get("d") ? await getJSON("data/stories.json", true) : null;
-  if (page === "story" && params.get("d") && !(live && live.stories.some(s => s.sid === params.get("s") && s.on_today))) {
+  if (page === "story" && params.get("d") && !(live && live.stories.some(s => s.sid === params.get("s") && (s.on_today || s.one_side)))) {
     data = fromArchive(await getJSON(`data/archive/${params.get("d")}.json`), params.get("d"));
   } else {
     data = live || await getJSON("data/stories.json");

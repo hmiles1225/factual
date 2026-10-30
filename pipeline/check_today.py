@@ -93,6 +93,10 @@ MAYBE_SAME = 0.85
 # Shadow mode until the model's answers are scored against a person's reading of the same pairs: asked and
 # recorded with both sentences (lib["same_claim"]), never used to reuse a verdict while this is False.
 SAME_LIVE = False
+# One pass over the pairs already in the library (2026-10-30): new claims bring a pair into the band only a few
+# times a day, too few to score. Asked once, under the same cap, through same_claim(); tagged "calibration".
+SAME_CALIBRATE = "1"
+SAME_CALIBRATE_MAX = 40
 SAME_PROMPT = """Are these two sentences the same factual claim?
 
 A: {a}
@@ -112,6 +116,21 @@ def numbers_in(text):
     t = text.lower().replace(",", "")
     out = {re.sub(r"(st|nd|rd|th)$", "", n) for n in re.findall(r"\d+(?:\.\d+)?(?:st|nd|rd|th)?", t)}
     return out | {_NUM_WORDS[w] for w in re.findall(r"[a-z]+", t) if w in _NUM_WORDS}
+# Covered by one side (Heston, 2026-10-30; never "Blindspot"): a story 4+ outlets on one side covered and none on the
+# other, each side measured against its own roster. Measured on the live scan 10-30 (15 left, 5 center, 15 right):
+# 2 left-only and 3 right-only stories. Its summaries come out of the day's caps, after Today's sections.
+ONE_SIDE_MIN = 4
+ONE_SIDE_HOURS = 48         # the story's newest article is at most this old
+ONE_SIDE_LANE = 3           # stories per lane
+ONE_SIDE_PER_DAY = 6        # new summaries a day for the section (about 6 approved; no cap raised)
+ONE_SIDE_PER_SCAN = 2
+PICKED_UP_DAYS = 7
+# The zero is checked against every article in the 7-day pool, not only the story's own: grouping uses the last
+# 48 hours, so on 10-30 Fox News, Daily Wire, OAN and Breitbart's Spain train crash reports (its first day) had aged
+# out and the story read "0 right-leaning". Measured that day on 6 stories: other-side reports of the same event
+# scored 0.835 to 0.915 against the story's centre; the closest article for a true zero, 0.735 (a photo roundup).
+ZERO_SIM = 0.78
+ZERO_NEAR = 0.70            # recorded for review (lib one_side.near), not acted on
 MIN_OUTLETS_AGREED = 2           # an agreed fact needs at least this many outlets to state it
 BRIEF_VERSION = "8"              # bump when the brief instructions change, so cached briefs regenerate
 PRICES = {"claude-opus-5-5": (4.00, 20.00, 0.010), "claude-haiku-5-5": (0.10, 0.50, 0), "claude-sonnet-5-5": (2.00, 10.00, 0),
@@ -680,6 +699,20 @@ def main():
                     return lib_keys[i]
         return None
 
+    if lib.get("same_calibrated") != SAME_CALIBRATE and lib_vecs is not None and gemini_ok():
+        sims = np.triu(lib_vecs @ lib_vecs.T, 1)
+        band = sorted(zip(*np.where((sims >= MAYBE_SAME) & (sims < SAME_CLAIM))), key=lambda ij: -sims[ij])[:SAME_CALIBRATE_MAX]
+        before = set(same_cache)
+        for i, j in band:
+            same_claim(claims[lib_keys[j]]["claim"], lib_keys[i])
+        for pair in set(same_cache) - before:
+            same_cache[pair]["calibration"] = True
+        gated = [f"{key_of(claims[lib_keys[j]]['claim'])}:{lib_keys[i]}" for i, j in band
+                 if numbers_in(claims[lib_keys[j]]["claim"]) == numbers_in(claims[lib_keys[i]]["claim"])]
+        if all(p in same_cache for p in gated):  # a pair not asked (cap reached) is tried next scan
+            lib["same_calibrated"] = SAME_CALIBRATE
+        print(f"  same claim calibration: {len(band)} library pairs in the band, {len(set(same_cache) - before)} asked")
+
     def support_ok(record):
         """Holds up must follow from the verified quotes, read in their passage on the source page."""
         # Version 1 judged quotes alone and cut true claims whose quotes didn't repeat the names (a court
@@ -901,7 +934,7 @@ def main():
                 return person(name)
         return None
 
-    def process(story):
+    def process(story, rebrief=True):
         """Summarize one story (cached unless stale), check its claims, find its image. True if summarized."""
         arts = pick_articles(story["articles"], side_of, ARTICLES_PER_BRIEF)
         outlets_now = sorted({a["source"] for a in story["articles"]})
@@ -914,7 +947,7 @@ def main():
             cached.get("outlets") != outlets_now and (cached.get("sides") != sides_now or age_h >= REBRIEF_HOURS
                                                       or cached.get("roster") != ROSTER_VERSION))
         brief = cached["brief"] if cached else None
-        if stale and gemini_ok():
+        if stale and rebrief and gemini_ok():
             lines, excerpts = coverage_lines(arts, side_of, summaries)
             try:
                 prior = [c["claim"] for c in claims.values() if story["sid"] in c.get("stories", []) and c.get("verdict") in DECIDED]
@@ -1165,10 +1198,43 @@ def main():
                 story["on_today"] = True
         print(f"  {topic}: {done} of {quota} on Today ({len(cands)} stories covered by both sides)")
 
+    # Covered by one side: chosen in code (one_side_lanes), then summarized and checked like any story, a lane at a
+    # time so neither side's stories wait behind the other's. Only after Today's sections, inside the same caps.
+    osd = lib.setdefault("one_side", {})
+    pool = json.loads((ROOT / "data/articles.json").read_text())["articles"] if (ROOT / "data/articles.json").exists() else []
+    zero_check = make_zero_check(pool, side_of, data.get("roster") or {}, vec, osd)
+    lanes = one_side_lanes(data["stories"], data.get("roster") or {}, osd, datetime.now(timezone.utc), zero_check)
+    day_os = osd.setdefault("days", {}).setdefault(today, {"summaries": 0, "left": 0, "right": 0, "gemini_usd": 0.0})
+    osd["days"] = {d: v for d, v in osd["days"].items() if d >= cutoff}
+    first = "left" if day_os["left"] <= day_os["right"] else "right"
+    order = [st for pair in zip(*(lanes[k] + [None] * (ONE_SIDE_LANE - len(lanes[k])) for k in (first, "right" if first == "left" else "left")))
+             for st in pair if st]
+    new_here = 0
+    for st in order:
+        k = st["one_side"]["side"]
+        can_new = day_os["summaries"] < ONE_SIDE_PER_DAY and new_here < ONE_SIDE_PER_SCAN
+        was = (briefs.get(st["sid"]) or {}).get("at")
+        if was is None and not can_new:
+            continue
+        g0 = spend["gemini_usd"]
+        process(st, rebrief=can_new)
+        if (briefs.get(st["sid"]) or {}).get("at") != was:
+            day_os["summaries"] += 1
+            day_os[k] += 1
+            new_here += 1
+        day_os["gemini_usd"] = round(day_os["gemini_usd"] + spend["gemini_usd"] - g0, 4)
+    data["one_side"] = {"min": ONE_SIDE_MIN, "hours": ONE_SIDE_HOURS,
+                        "lanes": {k: [st["sid"] for st in v] for k, v in lanes.items()},
+                        "picked_up": sorted(osd.get("picked_up", []), key=lambda r: r["seen_at"], reverse=True),
+                        "first": "left" if datetime.now(ZoneInfo("America/New_York")).date().toordinal() % 2 else "right"}
+    print(f"  one side: left {len(lanes['left'])}, right {len(lanes['right'])}; {day_os['summaries']} summaries today "
+          f"(left {day_os['left']}, right {day_os['right']}), ${day_os['gemini_usd']:.2f}")
+
     frame_faces(data["stories"], lib)
     track_changes(lib, data["stories"])
-    write_archive([s for s in data["stories"] if s.get("on_today")], data.get("feeds", []))
-    write_share_pages([s for s in data["stories"] if s.get("on_today")])
+    shown = [s for s in data["stories"] if s.get("on_today") or (s.get("one_side") and s.get("brief"))]
+    write_archive(shown, data.get("feeds", []))
+    write_share_pages(shown)
 
     # People pictured on 4+ stories on Today in 7 days, with no photo rotation yet: flagged for hand-picked photos
     # (the rules are in images.py). Read from data/library.json, "photo_repeats".
@@ -1398,6 +1464,12 @@ def write_share_pages(stories):
         shared = [f["fact"] for f in brief.get("agreed", []) if "left" in f.get("sides", []) and "right" in f.get("sides", [])]
         splits = len(brief.get("differences", []))
         desc = f"Left and right agree: {shared[0]}" if shared else "What left- and right-leaning outlets agree on, and where they split."
+        if st.get("one_side"):
+            o = st["one_side"]
+            k, x = o["side"], "right" if o["side"] == "left" else "left"
+            desc = (f"{len(o['covered'])} of {len(o['roster'][k])} {k}-leaning outlets covered this. "
+                    f"0 of {len(o['roster'][x])} {x}-leaning outlets did.")
+            splits = 0
         if len(desc) > 200:
             desc = desc[:197].rsplit(" ", 1)[0] + "\u2026"
         if splits:
@@ -1513,6 +1585,127 @@ def frame_faces(stories, lib):
                 im.pop("face", None)
 
 
+def _when(a):
+    """An article's time from its feed, and whether the feed gives only the day (Just the News: always midnight)."""
+    p = a.get("published") or ""
+    try:
+        t = datetime.fromisoformat(p)
+    except ValueError:
+        return None, False
+    return t, p.endswith("T00:00:00+00:00")
+
+
+def first_report(arts, outlets):
+    """The earliest article from these outlets: (time, outlet, day_only). A day-only article counts as first only
+    when that whole day ends before every timed one."""
+    timed = sorted((t, a["source"]) for a in arts if a["source"] in outlets for t, d in [_when(a)] if t and not d)
+    dated = sorted((t, a["source"]) for a in arts if a["source"] in outlets for t, d in [_when(a)] if t and d)
+    if dated and (not timed or dated[0][0] + timedelta(days=1) <= timed[0][0]):
+        return dated[0][0], dated[0][1], True
+    return (timed[0][0], timed[0][1], False) if timed else (None, None, False)
+
+
+def make_zero_check(pool, side_of, roster, vec, osd):
+    """zero_check(story, side): True if an article from that side in the 7-day pool reports the same event
+    (ZERO_SIM against the story's centre). Each scan's held-out stories and near misses go to osd for review."""
+    as_text = lambda a: f"{a['title']}. {(a.get('summary') or '')[:300]}"  # as cluster.py embeds them
+    side_vecs = {}
+    osd["held_out"], osd["near"] = [], []
+
+    def zero_check(st, o):
+        if o not in side_vecs:
+            arts = [a for a in pool if side_of.get(a["source"]) == o and a["source"] in roster.get(o, [])]
+            side_vecs[o] = (arts, vec([as_text(a) for a in arts]) if arts else None)
+        arts, P = side_vecs[o]
+        if P is None:
+            return False
+        cen = vec([as_text(a) for a in st["articles"]]).mean(axis=0)
+        sims = P @ (cen / np.linalg.norm(cen))
+        i = int(np.argmax(sims))
+        rec = {"sid": st["sid"], "title": st["working_title"], "side": o, "by": arts[i]["source"],
+               "match": arts[i]["title"], "sim": round(float(sims[i]), 3)}
+        if sims[i] >= ZERO_SIM:
+            osd["held_out"].append(rec)
+            print(f"  one side: held out ({o} reported it, {sims[i]:.2f}, {arts[i]['source']}): {st['working_title'][:60]}")
+            return True
+        if sims[i] >= ZERO_NEAR:
+            osd["near"].append(rec)
+        return False
+    return zero_check
+
+
+def one_side_lanes(stories, roster, state, now, zero_check=None):
+    """Covered by one side, in code only. A lane story: ONE_SIDE_MIN+ outlets on one side, none on the other, its
+    newest article within ONE_SIDE_HOURS; ranked by the share of its side's own roster that covered it. A story
+    that was listed and that the other side then covered goes to state["picked_up"], with who was first and when,
+    by the articles' own times. Marks each lane story with story["one_side"]."""
+    other = {"left": "right", "right": "left"}
+    lanes = {"left": [], "right": []}
+    newest = lambda s: max((t for a in s["articles"] for t, _ in [_when(a)] if t), default=None)
+    # Grouping can split one event in two (10-30: The Epoch Times' peptide article sat in a linked story, so the
+    # main one read "0 right-leaning"). A story's linked stories count toward its coverage.
+    by_id = {s.get("id"): s for s in stories}
+    linked = {}
+    for s in stories:
+        for r in s.get("related") or []:
+            linked.setdefault(s.get("id"), set()).add(r)
+            linked.setdefault(r, set()).add(s.get("id"))
+        if s.get("related_to") is not None:
+            linked.setdefault(s.get("id"), set()).add(s["related_to"])
+            linked.setdefault(s["related_to"], set()).add(s.get("id"))
+    def sides_with_links(st):
+        cov = {k: set(st["coverage"].get(k, [])) for k in ("left", "center", "right")}
+        for i in linked.get(st.get("id"), ()):
+            for k in cov:
+                cov[k] |= set((by_id.get(i) or {}).get("coverage", {}).get(k, []))
+        return cov
+    for st in stories:
+        if st.get("related_to") is not None or st.get("region") or st.get("on_today"):
+            continue
+        n = newest(st)
+        if not n or (now - n).total_seconds() > ONE_SIDE_HOURS * 3600:
+            continue
+        cov, wide = st["coverage"], sides_with_links(st)
+        for k in lanes:
+            if len(cov.get(k, [])) >= ONE_SIDE_MIN and not wide[other[k]] and roster.get(k) \
+                    and not (zero_check and zero_check(st, other[k])):
+                lanes[k].append(st)
+    for k in lanes:
+        lanes[k] = sorted(lanes[k], key=lambda s: (len(s["coverage"][k]) / len(roster[k]), newest(s)), reverse=True)[:ONE_SIDE_LANE]
+        for st in lanes[k]:
+            t, src, day_only = first_report(st["articles"], set(st["coverage"][k]))
+            st["one_side"] = {"side": k, "covered": sorted(st["coverage"][k]), "center": sorted(st["coverage"].get("center", [])),
+                              "roster": {x: roster.get(x, []) for x in ("left", "center", "right")},
+                              "first_at": t.isoformat() if t else None, "first_by": src, "first_day_only": day_only}
+
+    by_sid = {s["sid"]: s for s in stories}
+    tracked = state.setdefault("tracked", {})
+    picked = state.setdefault("picked_up", [])
+    stamp = now.isoformat(timespec="seconds")
+    for sid, tr in list(tracked.items()):
+        st = by_sid.get(sid)
+        if st is None:  # aged out of the scan's window, still one-sided: nothing to report
+            del tracked[sid]
+            continue
+        o = other[tr["side"]]
+        if not st["coverage"].get(o):
+            continue
+        t, src, day_only = first_report(st["articles"], set(st["coverage"][o]))
+        b, bsrc, b_day = first_report(st["articles"], set(st["coverage"].get(tr["side"], [])))
+        if t and b and t >= b:  # the other side's first report came after the first one, by their own times
+            picked.append({"sid": sid, "title": st["working_title"], "side": tr["side"], "by": src, "at": t.isoformat(),
+                           "day_only": day_only, "broke_at": b.isoformat(), "broke_by": bsrc, "broke_day_only": b_day,
+                           "listed_at": tr["listed_at"], "seen_at": stamp})
+            print(f"  picked up: {src} ({o}) on {st['working_title'][:60]}")
+        del tracked[sid]
+    for k in lanes:
+        for st in lanes[k]:
+            tracked.setdefault(st["sid"], {"side": k, "listed_at": stamp})
+    keep = (now - timedelta(days=PICKED_UP_DAYS)).isoformat()
+    state["picked_up"] = [r for r in picked if r["seen_at"] >= keep]
+    return lanes
+
+
 def write_archive(stories, feeds):
     """Keep every story that was on Today, by day (U.S. Eastern), so the site builds an archive. A story
     keeps its latest summary for the day. If the live archive can't be read, skip: never overwrite it."""
@@ -1524,7 +1717,7 @@ def write_archive(stories, feeds):
         print(f"  archive not readable ({e}); not writing it this scan")
         return
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    keep = ("sid", "working_title", "topic", "span", "outlets", "sources", "coverage", "articles", "checks", "image", "image_alt")
+    keep = ("sid", "working_title", "topic", "span", "outlets", "sources", "coverage", "articles", "checks", "image", "image_alt", "one_side")
     for st in stories:
         rec = {k: st[k] for k in keep if k in st}
         rec["brief"] = {k: v for k, v in st["brief"].items() if k != "dropped_agreed"}
