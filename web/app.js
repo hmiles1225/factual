@@ -384,14 +384,46 @@ function firstSentence(text) {
   return text;
 }
 
+/* ---------- New since you last read ----------
+   The scan stamps when each fact and split first appeared ("since"); this device keeps when the reader last opened
+   each story (localStorage "fx-read", 14 days, never sent anywhere). No accounts. A fact from before stamping began
+   has no stamp and is never called new. */
+const READ_KEY = "fx-read";
+function readLog() { try { return JSON.parse(sget(READ_KEY) || "{}") || {}; } catch (e) { return {}; } }
+function markRead(sid) {
+  const log = readLog(), cut = Date.now() - 14 * 864e5;
+  for (const k of Object.keys(log)) if (!(Date.parse(log[k]) >= cut)) delete log[k];
+  log[sid] = new Date().toISOString();
+  sset(READ_KEY, JSON.stringify(log));
+}
+const isNew = (item, since) => !!(since && item && item.since && Date.parse(item.since) > Date.parse(since));
+// Only what the story page shows: facts both sides report (or, on a one-side story, that side's facts) and splits.
+function shownFacts(story) {
+  const b = story.brief || {};
+  return story.one_side ? oneSideFacts(story, 12) : (b.agreed || []).filter(acrossSides).slice(0, 12);
+}
+function newCount(story, since) {
+  if (!since) return 0;
+  return [...shownFacts(story), ...((story.brief && story.brief.differences) || [])].filter(x => isNew(x, since)).length;
+}
+const newTag = () => el("span", "new-tag", "New");
+function whenLine(story) {
+  const when = updatedAgo(story);
+  const n = newCount(story, readLog()[story.sid]);
+  if (!when && !n) return null;
+  const p = el("p", "story-when", when || "");
+  if (n) p.append(el("span", "new-since", `${when ? " \u00b7 " : ""}${n} new since you read it`));
+  return p;
+}
+
 function storyCard(story, i, data, isLead) {
   const li = el("li", isLead ? "story story-lead" : "story");
   // The first story in each section shows its photo, when it has one, and never one already shown higher up.
   const img = (isLead || i === 0) ? photoFor(story) : null;
   if (img) li.append(figure(img, isLead ? "lead-photo" : "card-photo", storyHref(story)));
   const main = el("div", "story-main");
-  const when = updatedAgo(story);
-  if (when) main.append(el("p", "story-when", when));
+  const when = whenLine(story);
+  if (when) main.append(when);
   main.append(metricRow(story, "metrics"));
   const h = el("h2", "headline");
   const a = el("a", null, story.working_title);
@@ -537,8 +569,8 @@ function oneSideCard(story, data) {
   const o = story.one_side;
   const li = el("li", "story os-card");
   const main = el("div", "story-main");
-  const when = updatedAgo(story);
-  if (when) main.append(el("p", "story-when", when));
+  const when = whenLine(story);
+  if (when) main.append(when);
   const h = el("h4", "headline");
   const a = el("a", null, story.working_title);
   a.href = story.brief ? storyHref(story) : lead(story).url;
@@ -2337,6 +2369,16 @@ function renderStory(data) {
 
   const brief = story.brief;
   const agreed = (brief && brief.agreed) || [];
+  const lastRead = data.archiveDay ? null : readLog()[story.sid];  // read before marking this visit
+  if (!data.archiveDay) markRead(story.sid);
+  const factItem = f => {
+    const li = el("li");
+    const text = el("span", "fact-text");
+    if (isNew(f, lastRead)) text.append(newTag(), document.createTextNode(" "));
+    text.append(document.createTextNode(f.fact));
+    li.append(el("span", "fact-mark", "\u2713"), text);
+    return li;
+  };
 
   const leanOf = Object.fromEntries((data.feeds || []).filter(f => f.lean != null).map(f => [f.source, f.lean]));
   PEW = Object.fromEntries((data.feeds || []).filter(f => f.pew).map(f => [f.source, f.pew]));
@@ -2362,11 +2404,7 @@ function renderStory(data) {
     if (facts.length) {
       so.append(el("h3", "sub-title", `What ${o.side}-leaning outlets report`));
       const ul = el("ul", "facts");
-      for (const f of facts) {
-        const li = el("li");
-        li.append(el("span", "fact-mark", "\u2713"), el("span", "fact-text", f.fact));
-        ul.append(li);
-      }
+      for (const f of facts) ul.append(factItem(f));
       so.append(ul);
     }
     so.append(oneSideBasis(o));
@@ -2379,11 +2417,7 @@ function renderStory(data) {
     s1.id = "agreed";
     s1.append(el("h2", "block-title", "Agreed \u00b7 left and right"));
     const ul = el("ul", "facts");
-    for (const f of agreed.filter(acrossSides).slice(0, 12)) {
-      const li = el("li");
-      li.append(el("span", "fact-mark", "\u2713"), el("span", "fact-text", f.fact));
-      ul.append(li);
-    }
+    for (const f of agreed.filter(acrossSides).slice(0, 12)) ul.append(factItem(f));
     s1.append(ul);
     body.append(s1);
   }
@@ -2430,7 +2464,11 @@ function renderStory(data) {
     const s3 = el("section", "block");
     s3.id = "splits";
     s3.append(el("h2", "block-title", diffs.length === 1 ? "Split" : `Splits \u00b7 ${diffs.length}`));
-    for (const d of diffs) s3.append(differenceBlock(d, data.library, leanOf));
+    for (const d of diffs) {
+      const block = differenceBlock(d, data.library, leanOf);
+      if (isNew(d, lastRead)) block.querySelector(".diff-point").prepend(newTag(), document.createTextNode(" "));
+      s3.append(block);
+    }
     body.append(s3);
   }
 

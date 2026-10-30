@@ -831,3 +831,7 @@ a.num-name:hover { text-decoration: underline; }
 .os-block .os-count { margin: 0 0 10px; }
 .os-block .os-strip { margin-bottom: 10px; }
 .os-lane .stories { grid-template-columns: 1fr; }  /* one card per row inside a lane at every width */
+
+/* New since you last read: a word, never colour alone. Lavender text on the surface (6.3:1 dark, 8.1:1 light). */
+.new-tag { display: inline-block; padding: 1px 6px; border: 1px solid var(--lav); border-radius: 4px; font: 600 0.6875rem/1.3 var(--mono); letter-spacing: 0.04em; text-transform: uppercase; color: var(--lav); vertical-align: 0.1em; }
+.new-since { color: var(--lav); }
