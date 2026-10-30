@@ -17,6 +17,7 @@ is paid for once. Spend is capped per day in code. A failure here never blocks t
 keeps last hour's results.
 """
 import hashlib
+import html
 import json
 import os
 import re
@@ -1334,7 +1335,15 @@ def main():
                 out, u2 = gemini_json(SCIENCE_PROMPT.replace("{claim}", first["claim"]).replace("{study}", first["study"] or "(none cited)")
                                       .replace("{coverage}", cov).replace("{items}", listing or "(none found)"), SCIENCE_SCHEMA)
                 spend["science_usd"] = round(spend["science_usd"] + UNDERCOUNT * cost_usd(C.GEMINI_MODEL, u2), 4)
+                if (out.get("research") or "").strip() and not [i for i in out["cites"] if 1 <= i <= len(uniq)] and uniq:
+                    # research with no item numbers can't be shown (every finding names its paper): ask once more
+                    out, u3 = gemini_json(SCIENCE_PROMPT.replace("{claim}", first["claim"]).replace("{study}", first["study"] or "(none cited)")
+                                          .replace("{coverage}", cov).replace("{items}", listing) + "\n\nYour research text cited no item numbers. "
+                                          "List in cites the number of every item it uses, or set research to \"\" if no item addresses the question.", SCIENCE_SCHEMA)
+                    spend["science_usd"] = round(spend["science_usd"] + UNDERCOUNT * cost_usd(C.GEMINI_MODEL, u3), 4)
                 cited = [uniq[i - 1] for i in out["cites"] if 1 <= i <= len(uniq)]  # only items we actually found
+                out = {k: html.unescape(v) if isinstance(v, str) else v for k, v in out.items()}
+                first = {k: html.unescape(v) if isinstance(v, str) else v for k, v in first.items()}
                 result = {"claim": first["claim"], "study": first["study"], "peer_reviewed": out["peer_reviewed"], "where": out["where"].strip(),
                           "measured": out["measured"].strip(), "gap": out["gap"].strip(), "research": out["research"].strip() if cited else "",
                           "papers": [{k: it[k] for k in ("title", "venue", "year", "type", "doi")} for it in cited],
@@ -1959,7 +1968,7 @@ For none, set who, what, due and when to "" and group to "Other"."""
 # where; what it measured against what the coverage says; what other peer-reviewed research says, reviews first.
 # Papers come from OpenAlex (free; journals, preprints, reports, abstracts); the model reads only what we found.
 # Its own cap, apart from the day's Gemini budget (Heston: $1 a day).
-SCIENCE_VERSION = "1"
+SCIENCE_VERSION = "2"   # 2: one retry when research is written without citing items; entities decoded
 SCIENCE_DAILY_USD = 1.00
 SCIENCE_PER_DAY = 5
 SCIENCE_PER_SCAN = 3
