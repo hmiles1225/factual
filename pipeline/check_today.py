@@ -634,6 +634,7 @@ def main():
         if record.get("support") == "partial" and record.get("support_v") != SUPPORT_VERSION and record.get("model_verdict") == C.HU \
                 and not record.get("second_opinion"):
             record["verdict"] = C.HU
+            record["change_why"] = "Its quotes were read again in their source pages, and they support the claim as stated."
             record.pop("support", None)
             if (record.get("note") or "").startswith("the sources confirm part"):
                 record["note"] = None
@@ -663,6 +664,8 @@ def main():
         record["support"] = "all" if ok else "partial"
         record["support_v"] = SUPPORT_VERSION
         if not ok:
+            if record["verdict"] != C.UN:
+                record["change_why"] = "Its quotes were read in their source pages, and they support only part of the claim."
             record["verdict"] = C.UN
             record["note"] = f"the sources confirm part of this claim, not all of it as stated: {missing}".rstrip(": ")
 
@@ -714,6 +717,10 @@ def main():
         record = public_record(text, first, second, verdict, note, sorted(set((rec or {}).get("stories", [])) | {story_sid}), said_by)
         if forced:
             record["rechecked"] = FORCE_RECHECK[existing]
+        if rec:  # why it was checked again, for the corrections log if the verdict changes (track_changes)
+            record["change_why"] = (f"Checked again because {FORCE_RECHECK[existing]}." if forced
+                                    else "The second opinion it was waiting for came in." if rec.get("pending_second")
+                                    else f"Checked again after {RECHECK_AFTER_DAYS} days, against the newest sources.")
         support_ok(record)
         if forced and record["verdict"] in DECIDED and not record["finding"].strip():
             record["verdict"], record["note"] = C.UN, "no part of the finding could be tied to a verified quote"
@@ -1106,6 +1113,7 @@ def main():
         print(f"  {topic}: {done} of {quota} on Today ({len(cands)} stories covered by both sides)")
 
     frame_faces(data["stories"], lib)
+    track_changes(lib)
     write_archive([s for s in data["stories"] if s.get("on_today")], data.get("feeds", []))
     write_share_pages([s for s in data["stories"] if s.get("on_today")])
 
@@ -1397,6 +1405,25 @@ def archived_brief(day, sid):
         except Exception:
             _ARCHIVED[day] = {}
     return ((_ARCHIVED[day].get("stories") or {}).get(sid) or {}).get("brief")
+
+
+def track_changes(lib):
+    """Every verdict that changes after it was published (Heston, 2026-10-30: a public corrections log). Compared
+    with the verdict last published, each scan; a change goes into lib["corrections"] with when and why. Code only."""
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    seen = lib.setdefault("published_verdicts", {})
+    log = lib.setdefault("corrections", [])
+    for k, c in lib.get("claims", {}).items():
+        v, was = c.get("verdict"), seen.get(k)
+        if was and was["verdict"] != v:
+            log.append({"key": k, "claim": c["claim"], "from": was["verdict"], "to": v, "at": now,
+                        "why": c.get("change_why") or "Checked again.", "stories": c.get("stories", [])})
+            print(f"  correction: {was['verdict']} -> {v}: {c['claim'][:70]}")
+        if not was or was["verdict"] != v:
+            seen[k] = {"verdict": v, "at": now}
+        c.pop("change_why", None)
+    if "corrections_since" not in lib:
+        lib["corrections_since"] = now  # changes before this scan were not recorded
 
 
 def frame_faces(stories, lib):
