@@ -601,10 +601,13 @@ function oneSideCard(story, data) {
   const names = el("p", "os-names", `Covered by ${listNames(o.covered, 6)}.`);
   if (o.center.length) names.append(document.createTextNode(` Center outlets that covered it, not counted: ${listNames(o.center, 4)}.`));
   main.append(names);
+  // What that side reports: facts two or more of its outlets state, else the full story's opening (it names its outlets).
   const facts = oneSideFacts(story, 2);
-  if (facts.length) {
+  const full = (story.brief && story.brief.full_story) || [];
+  const gist = facts.length ? facts.map(f => firstSentence(f.fact)).join(" ") : full.length ? full[0].map(x => x.text).slice(0, 2).join(" ") : "";
+  if (gist) {
     main.append(el("p", "os-label", `What ${o.side}-leaning outlets report`));
-    main.append(el("p", "gist", facts.map(f => firstSentence(f.fact)).join(" ")));
+    main.append(el("p", "gist", gist));
   }
   const check = decided(story, data.library)[0];
   if (check) {
@@ -632,7 +635,7 @@ function laneBlock(k, data, by) {
   lane.append(el("h3", "os-lane-title", `Covered on the ${k}, not the ${x}`));
   // Like Today's other stories, a story shows once it has its summary (the scan writes about 6 a day).
   const qualifying = os.lanes[k].map(sid => by[sid]).filter(s => s && s.one_side);
-  const list = qualifying.filter(s => s.brief && oneSideFacts(s, 1).length);
+  const list = qualifying.filter(s => s.brief && (oneSideFacts(s, 1).length || (s.brief.full_story || []).length));
   if (list.length) {
     const ol = el("ol", "stories");
     ol.setAttribute("aria-label", `Covered on the ${k}, not the ${x}`);
