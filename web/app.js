@@ -2644,8 +2644,8 @@ function renderStory(data) {
     if (sci.where) row.append(document.createTextNode(`. ${sci.where.replace(/\.$/, "")}.`));
     sb.append(row);
     for (const [label, text] of [["What it measured", sci.measured], ["What the coverage adds", sci.gap], ["What other research says", sci.research]]) {
-      if (!text) continue;
-      sb.append(el("h3", "sub-title", label), el("p", "sci-text", text));
+      if (!text) continue;  // the scan's item numbers ("[7]") don't match the list below, so they're dropped
+      sb.append(el("h3", "sub-title", label), el("p", "sci-text", text.replace(/\s*\[\d+(?:\s*,\s*\d+)*\]/g, "")));
     }
     if ((sci.papers || []).length) {
       const ul = el("ul", "sci-papers");
