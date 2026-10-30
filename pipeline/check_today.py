@@ -63,11 +63,13 @@ TESTING_GEMINI_USD, TESTING_ANTHROPIC_USD = 5.00, 2.00
 # One-off raises, approved by Heston for a specific date only. Expires by itself.
 GEMINI_EXTRA_USD = {"2026-10-19": 8.00}   # one-off, Heston 2026-10-19: new sections, polls, explanations, Texas races; cap $10.00
 GEMINI_EXTRA_USD["2026-10-20"] = 3.50   # one-off, Heston 2026-10-20: +$0.50 over the $5.00 testing cap, to check the Texas polls today; cap $5.50
+GEMINI_EXTRA_USD["2026-10-30"] = 1.00   # one-off, Heston 2026-10-30 ("run it"): the unpaced budget was gone by 2 am Texas time; cap $4.00
 # Bump when the outlet list changes: a story whose outlets changed since its summary is re-summarized once.
 ROSTER_VERSION = "2026-10-19b"   # 35 outlets, 15 left / 15 right
 GEMINI_FREE_SEARCHES = 150      # Google gives 5,000 free a month across Gemini 3 models; ~150 a day
 SEARCH_USD = 0.014               # then $14 per 1,000 searches (ai.google.dev pricing, 2026-10-18), charged to the Gemini cap
 TX_NUMBERS_USD = 0.40            # kept for tx_numbers.py out of the same cap (polls checked against releases), Texas edition only
+PACE_FROM = "2026-10-31"        # 2026-10-30 was spent unpaced by 2 am Texas time; its one-off $1 is for right away
 PACE_START = 0.20               # share of the day's Gemini budget open at midnight UTC; the rest opens hour by hour
 CHECK_RESERVE_USD = 0.35        # most one fact-check has cost (tokens plus paid searches), with margin
 UNDERCOUNT = 1.7                 # our cost log ran this far under the real bill (2026-10-17)
@@ -589,7 +591,8 @@ def main():
     # the first three scans after midnight UTC (7 pm in Texas) spent it all and Today froze until the next evening
     # (Heston, 2026-10-30: "nothing has updated in like 16 hours"). Same total; what a scan leaves, the next can use.
     now = datetime.now(timezone.utc)
-    work_cap *= min(1.0, PACE_START + (1 - PACE_START) * (now.hour + now.minute / 60) / 24)
+    if today >= PACE_FROM:
+        work_cap *= min(1.0, PACE_START + (1 - PACE_START) * (now.hour + now.minute / 60) / 24)
 
     def gemini_ok():
         return spend["gemini_usd"] < work_cap and not past_deadline()
