@@ -84,6 +84,35 @@ RESTORE_VERSION = "1"          # bump to re-run the one-time restore of dropped 
 ARCHIVE_DAYS_BACK = [(datetime.now(ZoneInfo("America/New_York")).date() - timedelta(days=n)).isoformat() for n in (2, 1, 0)]
 CARRY_OVER = 0.80               # same story, same side: an earlier decided claim this close is the same claim, reworded
 SAME_CLAIM = 0.93                # embedding similarity at which two wordings are one claim
+# A checked claim keeps its verdict when it comes back in other words, unless a detail changed (Heston,
+# 2026-10-30). Measured on the 248-claim library that day: no pair reached 0.93; of the 16 pairs at 0.85 to 0.93,
+# five were one claim reworded (two had been given different verdicts) and others differed in a detail that
+# matters ("third trip" vs "fourth visit", 0.895). So a pair in this band is one claim only if its numbers match in
+# code and a yes/no model call finds every detail the same. Asked once per pair (lib["same_claim"]).
+MAYBE_SAME = 0.85
+# Shadow mode until the model's answers are scored against a person's reading of the same pairs: asked and
+# recorded with both sentences (lib["same_claim"]), never used to reuse a verdict while this is False.
+SAME_LIVE = False
+SAME_SCHEMA = _item({"same": {"type": "boolean"}}, ["same"])
+SAME_PROMPT = """Are these two sentences the same factual claim?
+
+A: {a}
+B: {b}
+
+Answer true only if they assert the same facts: the same people or bodies, the same action, the same numbers,
+dates, places and amounts. Different wording is fine ("canceled" and "postponed" a deposition is not fine: they
+are different actions; "five days" and "5 days" is fine). One that adds a source ("X said that ...") to the
+other is the same claim. One that adds, drops or changes any other detail (a person, a number, a place, a
+qualifier like "repeatedly" or "all") is a different claim: answer false. When unsure, answer false."""
+_NUM_WORDS = {w: str(i) for i, w in enumerate("zero one two three four five six seven eight nine ten eleven twelve".split())}
+_NUM_WORDS.update({w: str(i) for i, w in enumerate("zeroth first second third fourth fifth sixth seventh eighth ninth tenth".split())})
+
+
+def numbers_in(text):
+    """Every number in a claim, words and ordinals as digits ("third" = "3rd" = 3, "1,200" = 1200)."""
+    t = text.lower().replace(",", "")
+    out = {re.sub(r"(st|nd|rd|th)$", "", n) for n in re.findall(r"\d+(?:\.\d+)?(?:st|nd|rd|th)?", t)}
+    return out | {_NUM_WORDS[w] for w in re.findall(r"[a-z]+", t) if w in _NUM_WORDS}
 MIN_OUTLETS_AGREED = 2           # an agreed fact needs at least this many outlets to state it
 BRIEF_VERSION = "8"              # bump when the brief instructions change, so cached briefs regenerate
 PRICES = {"claude-opus-5-5": (4.00, 20.00, 0.010), "claude-haiku-5-5": (0.10, 0.50, 0), "claude-sonnet-5-5": (2.00, 10.00, 0),
@@ -616,6 +645,27 @@ def main():
     lib_keys = list(claims)
     lib_vecs = vec([claims[k]["claim"] for k in lib_keys]) if lib_keys else None
 
+    same_cache = lib.setdefault("same_claim", {})
+
+    def same_claim(text, k):
+        """A reworded claim in the 0.85-0.93 band: numbers equal in code, then every detail the same (model)."""
+        if numbers_in(text) != numbers_in(claims[k]["claim"]):
+            return False
+        pair = f"{key_of(text)}:{k}"
+        if pair not in same_cache or not isinstance(same_cache[pair], dict):
+            if spend["gemini_usd"] >= work_cap:
+                return False  # not asked: checked as a new claim, under the same caps as always
+            try:
+                out, usage = gemini_json(SAME_PROMPT.replace("{a}", claims[k]["claim"]).replace("{b}", text), SAME_SCHEMA, thinking="low")
+            except Exception as e:
+                note_ai_error("same_claim", e)
+                return False
+            charge_gemini(usage)
+            same_cache[pair] = {"same": bool(out["same"]), "a": claims[k]["claim"], "b": text,
+                                "at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+            print(f"  same claim? {out['same']}: {text[:60]} | {claims[k]['claim'][:60]}")
+        return SAME_LIVE and same_cache[pair]["same"]
+
     def find_existing(text):
         k = key_of(text)
         if k in claims:
@@ -625,6 +675,9 @@ def main():
             i = int(np.argmax(s))
             if s[i] >= SAME_CLAIM:
                 return lib_keys[i]
+            for i in [j for j in np.argsort(-s)[:3] if s[j] >= MAYBE_SAME]:
+                if lib_keys[i] in claims and same_claim(text, lib_keys[i]):
+                    return lib_keys[i]
         return None
 
     def support_ok(record):
