@@ -93,7 +93,6 @@ MAYBE_SAME = 0.85
 # Shadow mode until the model's answers are scored against a person's reading of the same pairs: asked and
 # recorded with both sentences (lib["same_claim"]), never used to reuse a verdict while this is False.
 SAME_LIVE = False
-SAME_SCHEMA = _item({"same": {"type": "boolean"}}, ["same"])
 SAME_PROMPT = """Are these two sentences the same factual claim?
 
 A: {a}
@@ -120,6 +119,7 @@ PRICES = {"claude-opus-5-5": (4.00, 20.00, 0.010), "claude-haiku-5-5": (0.10, 0.
 
 _item = lambda props, req: {"type": "object", "properties": props, "required": req, "additionalProperties": False}
 _ints = {"type": "array", "items": {"type": "integer"}}
+SAME_SCHEMA = _item({"same": {"type": "boolean"}}, ["same"])
 BRIEF_SCHEMA = _item({
     "common_ground": {"type": "array", "items": _item({"fact": {"type": "string"}, "articles": _ints}, ["fact", "articles"])},
     "agreed": {"type": "array", "items": _item({"fact": {"type": "string"}, "articles": _ints}, ["fact", "articles"])},
