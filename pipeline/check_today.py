@@ -1113,7 +1113,7 @@ def main():
         print(f"  {topic}: {done} of {quota} on Today ({len(cands)} stories covered by both sides)")
 
     frame_faces(data["stories"], lib)
-    track_changes(lib)
+    track_changes(lib, data["stories"])
     write_archive([s for s in data["stories"] if s.get("on_today")], data.get("feeds", []))
     write_share_pages([s for s in data["stories"] if s.get("on_today")])
 
@@ -1407,17 +1407,21 @@ def archived_brief(day, sid):
     return ((_ARCHIVED[day].get("stories") or {}).get(sid) or {}).get("brief")
 
 
-def track_changes(lib):
+def track_changes(lib, stories):
     """Every verdict that changes after it was published (Heston, 2026-10-30: a public corrections log). Compared
     with the verdict last published, each scan; a change goes into lib["corrections"] with when and why. Code only."""
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    day = datetime.now(ZoneInfo("America/New_York")).date().isoformat()
+    on_today = {st["sid"]: st for st in stories if st.get("on_today")}
     seen = lib.setdefault("published_verdicts", {})
     log = lib.setdefault("corrections", [])
     for k, c in lib.get("claims", {}).items():
         v, was = c.get("verdict"), seen.get(k)
         if was and was["verdict"] != v:
+            st = next((on_today[s] for s in c.get("stories", []) if s in on_today), None)  # linked by title and day
             log.append({"key": k, "claim": c["claim"], "from": was["verdict"], "to": v, "at": now,
-                        "why": c.get("change_why") or "Checked again.", "stories": c.get("stories", [])})
+                        "why": c.get("change_why") or "Checked again.",
+                        "story": {"sid": st["sid"], "title": st.get("working_title", ""), "day": day} if st else None})
             print(f"  correction: {was['verdict']} -> {v}: {c['claim'][:70]}")
         if not was or was["verdict"] != v:
             seen[k] = {"verdict": v, "at": now}

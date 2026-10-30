@@ -584,6 +584,35 @@ function renderHow(data) {
   if (tx.length) $("feeds").append(el("p", "feeds-down", `Texas Election (a demo edition, until Nov 4) also reads ${tx.map(f => `${f.source} (AllSides ${f.allsides})`).join(", ")} and Breitbart\u2019s Texas section, alongside the national outlets\u2019 Texas coverage. Texas outlets never feed the national sections.`));
 }
 
+/* ---------- Corrections (Heston, 2026-10-30): every verdict that changed after it appeared ---------- */
+function renderCorrections(lib) {
+  const box = $("corrections");
+  const since = lib && lib.corrections_since ? new Date(lib.corrections_since).toLocaleDateString([], { month: "long", day: "numeric", year: "numeric" }) : null;
+  const log = ((lib && lib.corrections) || []).slice().reverse();  // newest first
+  box.append(el("p", "cg-lede", `When a claim is checked again (after a week, when a second AI model weighs in, or when its quotes are read in their source pages) and the verdict changes, the story shows the new verdict and the change is listed here.${since ? ` Kept since ${since}.` : ""}`));
+  if (!log.length) {
+    box.append(el("p", "fix-none", `No verdict has changed${since ? ` since ${since}` : " yet"}.`));
+    return;
+  }
+  const ul = el("ul", "fix-list");
+  for (const x of log) {
+    const li = el("li", "fix");
+    li.append(el("p", "fix-when", new Date(x.at).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })));
+    li.append(el("p", "check-claim fix-claim", x.claim));
+    const ch = el("p", "fix-change");
+    ch.append(el("span", "sr-only", "Changed from "), chip(x.from), el("span", "fix-arrow", " \u2192 "), el("span", "sr-only", " to "), chip(x.to));
+    ch.querySelector(".fix-arrow").setAttribute("aria-hidden", "true");
+    li.append(ch, el("p", "fix-why", x.why));
+    if (x.story) {
+      const a = el("a", "fix-story", `${x.story.title} \u2192`);
+      a.href = storyHref({ sid: x.story.sid }, x.story.day);
+      li.append(a);
+    }
+    ul.append(li);
+  }
+  box.append(ul);
+}
+
 /* ---------- Common ground: shared ground, and what we get wrong about each other ---------- */
 function sourceLink(text, href) {
   const a = el("a", null, text);
@@ -2340,7 +2369,9 @@ function renderStory(data) {
   foot.append(document.createTextNode("Written and checked by AI. No human review. "));
   const m = el("a", null, "Method \u2192");
   m.href = "how.html";
-  foot.append(m);
+  const fx = el("a", null, "Corrections \u2192");
+  fx.href = "corrections.html";
+  foot.append(m, document.createTextNode(" \u00b7 "), fx);
   s4.append(foot);
   body.append(s4);
   linkTiles($("story-sub").querySelector(".metrics-tiles"));
@@ -2628,6 +2659,7 @@ async function load() {
   if (page === "archive") return renderArchive(await getJSON("data/archive/index.json", true));
   if (page === "common") return renderCommon(await getJSON("common-ground.json"));
   if (page === "how") return renderHow(await getJSON("data/stories.json", true));
+  if (page === "corrections") return renderCorrections(await getJSON("data/library.json", true));
   if (page === "numbers") {
     // The investors' key shows the numbers as they stood at the cutoff, like the rest of the edition.
     const k = sget("fx-capsule", sessionStorage);
