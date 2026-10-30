@@ -496,6 +496,30 @@ function drawToday() {
     $("sections").append(sec);
     total += 1;
   }
+  // Covered by one side, then Promises and predictions: right below Texas (Heston, 2026-10-30), or below Politics
+  // for a reader without Texas, or under the top story when neither is followed. The strip follows the page.
+  const extras = () => {
+    if (data.one_side && !CAPSULE) {
+      const n = data.one_side.lanes.left.length + data.one_side.lanes.right.length;
+      $("sections").append(oneSideSection(data));
+      const link = el("a", "strip-link", "One side");
+      link.href = "#one-side";
+      link.dataset.key = "one-side";
+      link.append(el("span", "strip-n", String(n)));
+      nav.append(link);
+    }
+    if (data.library && !CAPSULE && ledgerEntries(data.library).length) {  // shown once there is something in it
+      const due = dueSection(data);
+      $("sections").append(due.sec);
+      const link = el("a", "strip-link", "Promises");
+      link.href = "#due";
+      link.dataset.key = "due";
+      link.append(el("span", "strip-n", String(due.n)));
+      nav.append(link);
+    }
+  };
+  const anchor = (order.find(t => t.key === "texas" || t.key === "local") || order.find(t => t.key === "politics") || {}).key;
+  if (!anchor) extras();
   for (const t of order) {
     // A national story that is mostly the same articles as a Texas race shows once, in Texas Election.
     const ranked = data.stories.filter(s => s !== top && shownToday(s) && s.topic === t.key && !(follow.has("texas") && s.also_in === "texas"));
@@ -525,25 +549,7 @@ function drawToday() {
     link.dataset.key = t.key;
     link.append(el("span", "strip-n", String(list.length)));
     nav.append(link);
-  }
-  // Covered by one side (Heston, 2026-10-30): its own section at the end of Today, after the reader's topics.
-  if (data.one_side && !CAPSULE) {
-    const n = data.one_side.lanes.left.length + data.one_side.lanes.right.length;
-    $("sections").append(oneSideSection(data));
-    const link = el("a", "strip-link", "One side");
-    link.href = "#one-side";
-    link.dataset.key = "one-side";
-    link.append(el("span", "strip-n", String(n)));
-    nav.append(link);
-  }
-  if (data.library && !CAPSULE && ledgerEntries(data.library).length) {  // shown once there is something in it
-    const due = dueSection(data);
-    $("sections").append(due.sec);
-    const link = el("a", "strip-link", "Promises");
-    link.href = "#due";
-    link.dataset.key = "due";
-    link.append(el("span", "strip-n", String(due.n)));
-    nav.append(link);
+    if (t.key === anchor) extras();
   }
   const edit = el("button", "strip-edit");
   edit.type = "button";
