@@ -480,25 +480,11 @@ function drawToday() {
   let total = 0;
   const order = TOPICS.filter(t => follow.has(t.key));
   if (follow.has("local")) order.splice(order.findIndex(t => t.key === "politics") + 1, 0, { key: "local", name: `${STATES[localState()] || "Local"} Election`, span: "" });
-  // The top story: the scan's order (most outlets, still being reported, held against small gains), first one
-  // in a topic this reader follows. Shown once, above the sections, not again in its own.
-  const byId = Object.fromEntries(data.stories.map(s => [s.sid, s]));
-  // Until a scan writes data.top, the same rule here: broke in the last 24 h, an article in the last 6 h, most outlets.
+  // Each section opens with its most-covered story still being reported (Heston, 2026-10-30: "the first story in
+  // politics was stale"): the scan's order (data.top), else the same rule here. The rest: most recently reported first.
   const topOrder = data.top || data.stories.filter(s => shownToday(s) && Date.now() - brokeAt(s) <= 24 * 36e5 && Date.now() - updatedAt(s) <= 6 * 36e5)
     .sort((a, b) => b.sources.length - a.sources.length || brokeAt(b) - brokeAt(a)).map(s => s.sid);
-  const top = topOrder.map(sid => byId[sid]).find(s => s && shownToday(s) && follow.has(s.topic));
-  if (top) {
-    const sec = el("section", "topic-section top-section");
-    sec.id = "top";
-    const head = el("div", "topic-head");
-    head.append(el("h2", "topic-name", "Top story"), el("p", "topic-span", `${top.sources.length} outlets`));
-    const ol = el("ol", "stories");
-    ol.setAttribute("aria-label", "Top story");
-    ol.append(storyCard(top, 0, data, true));
-    sec.append(head, ol);
-    $("sections").append(sec);
-    total += 1;
-  }
+  const rankOf = Object.fromEntries(topOrder.map((sid, i) => [sid, i]));
   // Covered by one side, then Promises and predictions: right below Texas (Heston, 2026-10-30), or below Politics
   // for a reader without Texas, or under the top story when neither is followed. The strip follows the page.
   const extras = () => {
@@ -525,9 +511,10 @@ function drawToday() {
   if (!anchor) extras();
   for (const t of order) {
     // A national story that is mostly the same articles as a Texas race shows once, in Texas Election.
-    const ranked = data.stories.filter(s => s !== top && shownToday(s) && s.topic === t.key && !(follow.has("texas") && s.also_in === "texas"));
-    // Newest first, all of it (Heston): a ranked lead jumped around as later scans found more outlets.
-    const list = ranked.sort((a, b) => brokeAt(b) - brokeAt(a));
+    const ranked = data.stories.filter(s => shownToday(s) && s.topic === t.key && !(follow.has("texas") && s.also_in === "texas"));
+    const list = ranked.sort((a, b) => updatedAt(b) - updatedAt(a));
+    const lead = list.filter(s => s.sid in rankOf).sort((a, b) => rankOf[a.sid] - rankOf[b.sid])[0];
+    if (lead) list.splice(list.indexOf(lead), 1), list.unshift(lead);
     total += list.length;
     const sec = el("section", "topic-section");
     sec.id = t.key;
@@ -571,19 +558,20 @@ function drawToday() {
    It states the numbers and what they rest on, never a reason for the gap. Never called "Blindspot". */
 const OTHER = { left: "right", right: "left" };
 function outletStrip(o) {
-  // One square per outlet on our list, filled where it covered the story; the same colour for both sides.
-  const box = el("div", "os-strip");
+  // One bar, left to right (Heston, 2026-10-30): a dot on the left half for each left-leaning outlet that covered
+  // the story, on the right half for each right-leaning one. One colour for both sides; the text says the numbers.
+  const box = el("div", "os-bar");
   box.setAttribute("aria-hidden", "true");
+  const track = el("div", "os-track");
+  track.style.setProperty("--n", String(Math.max(o.roster.left.length, o.roster.right.length)));
   const covered = new Set(o.covered);
-  for (const k of ["left", "right"]) {
-    const row = el("div", "os-row");
-    row.append(el("span", "os-row-label", k === "left" ? "Left" : "Right"));
-    const sq = el("span", "os-squares");
-    const names = [...o.roster[k]].sort((a, b) => covered.has(b) - covered.has(a));  // filled first: the count reads at a glance
-    for (const name of names) sq.append(el("span", covered.has(name) ? "os-sq is-on" : "os-sq"));
-    row.append(sq);
-    box.append(row);
-  }
+  const nLeft = o.roster.left.filter(x => covered.has(x)).length, nRight = o.roster.right.filter(x => covered.has(x)).length;
+  for (let i = 0; i < nLeft; i++) { const d = el("span", "os-dot"); d.style.gridColumn = String(i + 1); track.append(d); }
+  const mid = el("span", "os-mid"); mid.style.gridColumn = String(Math.max(o.roster.left.length, o.roster.right.length) + 1); track.append(mid);
+  for (let i = 0; i < nRight; i++) { const d = el("span", "os-dot"); d.style.gridColumn = `${-(i + 2)}`; track.append(d); }
+  const ends = el("div", "os-ends");
+  ends.append(el("span", null, "Left"), el("span", null, "Right"));
+  box.append(track, ends);
   return box;
 }
 function oneSideCount(o) {

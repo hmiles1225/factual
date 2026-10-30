@@ -852,3 +852,11 @@ a.num-name:hover { text-decoration: underline; }
 .corrections > .num-basis { margin-bottom: 20px; }
 .pp-section > .num-basis { margin-top: 12px; }
 .corrections > .read-more { display: inline-block; margin-bottom: 14px; }
+
+/* One bar for Covered by one side (replaces the two rows of squares) */
+.os-bar { display: grid; gap: 4px; max-width: 360px; }
+.os-track { position: relative; display: grid; grid-template-columns: repeat(var(--n), 1fr) 14px repeat(var(--n), 1fr); align-items: center; height: 14px; }
+.os-track::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 2px; margin-top: -1px; background: var(--line); border-radius: 1px; }
+.os-dot { position: relative; grid-row: 1; justify-self: center; width: 10px; height: 10px; border-radius: 50%; background: var(--lav); }
+.os-mid { position: relative; grid-row: 1; justify-self: center; width: 2px; height: 14px; background: var(--ink-3); }
+.os-ends { display: flex; justify-content: space-between; font: 500 0.6875rem/1 var(--mono); letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-3); }
