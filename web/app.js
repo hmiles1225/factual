@@ -520,7 +520,7 @@ function drawToday() {
     link.append(el("span", "strip-n", String(n)));
     nav.append(link);
   }
-  if (data.library && !CAPSULE) {
+  if (data.library && !CAPSULE && ledgerEntries(data.library).length) {  // shown once there is something in it
     const due = dueSection(data);
     $("sections").append(due.sec);
     const link = el("a", "strip-link", "Promises");

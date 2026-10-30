@@ -13,7 +13,7 @@ header('X-Content-Type-Options: nosniff');
 // Off until Heston decides (2026-10-30): the state's results website puts a robot check (Cloudflare Turnstile)
 // in front of browsers; the feed behind it asks for none, and robots.txt allows every agent. His rule is that we
 // never get past a robot check, so whether reading the feed is fair use is his call.
-const LIVE = false;
+const LIVE = true;   // Heston 2026-10-30: "Yes keep the election results going"
 const ELECTION_ID = '53815';  // 2026 NOVEMBER GENERAL ELECTION
 const FEED = 'https://goelect.txelections.civixapps.com/api-ivis-system/api/s3/enr/election/' . ELECTION_ID;
 const SITE = 'https://goelect.txelections.civixapps.com/ivis-enr-ui/races';
