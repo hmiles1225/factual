@@ -386,6 +386,59 @@ function firstSentence(text) {
   return text;
 }
 
+/* ---------- The science ----------
+   Leads the story page when a story rests on a study (Heston, 2026-10-30: "a tag that draws my eye", "easy to read").
+   Chips use the verdict palette in its own meaning: green = peer-reviewed, amber = not peer-reviewed or the coverage
+   goes further than the study shows, grey outline = not found. */
+const SCI_STATUS = { "peer-reviewed journal": ["hold", "\u2713", "Peer-reviewed"], "not peer-reviewed": ["ctx", "!", "Not peer-reviewed"],
+  "not found": ["unk", "?", "Not found in journals"] };
+function sciChip(cls, glyph, label) {
+  const c = el("span", `chip chip-${cls}`);
+  c.append(el("span", "chip-glyph", glyph), el("span", "chip-word", label));
+  return c;
+}
+function sciChips(sci) {
+  const row = el("p", "sci-chips");
+  const st = SCI_STATUS[sci.peer_reviewed];
+  if (st) row.append(sciChip(...st));
+  if (sci.gap) row.append(sciChip("ctx", "\u25d0", "Goes beyond the study"));
+  return row.childNodes.length ? row : null;
+}
+const noRefs = t => (t || "").replace(/\s*\[\d+(?:\s*,\s*\d+)*\]/g, "");
+function scienceBlock(sci) {
+  if (!sci || !(sci.where || sci.measured || sci.gap || sci.research)) return null;
+  const sb = el("section", "block sci-block");
+  sb.id = "science";
+  sb.append(el("h2", "block-title", "The science"));
+  const chips = sciChips(sci);
+  if (chips) sb.append(chips);
+  // One plain sentence of what is going on: what the study is, and where the coverage goes further.
+  const where = sci.where ? sci.where.charAt(0).toUpperCase() + sci.where.slice(1).replace(/\.$/, "") + "." : "";
+  const lead = [where, firstSentence(sci.gap || sci.measured || "")].filter(Boolean).join(" ");
+  if (lead) sb.append(el("p", "sci-lead", lead));
+  // Two sentences in view; the rest folds into "more" (Heston: keep it tight).
+  const rs = noRefs(sci.research).match(/[^.!?]+[.!?]+(\s|$)/g) || [];
+  if (rs.length) sb.append(el("h3", "sub-title", "What other research says"), el("p", "sci-text", rs.slice(0, 2).join("").trim()));
+  const more = el("details", "sci-more");
+  if (rs.length > 2) more.append(el("p", "sci-text", rs.slice(2).join("").trim()));
+  const n = (sci.papers || []).length;
+  more.prepend(el("summary", null, n ? `More, and the ${plural(n, "paper", "papers")}` : "More"));
+  if (sci.measured) more.append(el("h3", "sub-title", "What it measured"), el("p", "sci-text", sci.measured));
+  if (sci.gap && firstSentence(sci.gap) !== sci.gap) more.append(el("p", "sci-text", sci.gap));
+  if (n) {
+    const ul = el("ul", "sci-papers");
+    for (const pp of sci.papers) {
+      const li = el("li");
+      li.append(pp.doi ? sourceLink(pp.title, pp.doi) : el("span", null, pp.title), el("span", "sci-venue", ` ${pp.venue || "no journal"}, ${pp.year}${pp.type === "review" ? " \u00b7 review" : ""}`));
+      ul.append(li);
+    }
+    more.append(ul);
+  }
+  if (sci.measured || n) sb.append(more);
+  sb.append(basedOn(`journal articles and reviews found on OpenAlex for "${sci.searched}", read by AI against the coverage. No person reviews it.`));
+  return sb;
+}
+
 /* ---------- New since you last read ----------
    The scan stamps when each fact and split first appeared ("since"); this device keeps when the reader last opened
    each story (localStorage "fx-read", 14 days, never sent anywhere). No accounts. A fact from before stamping began
@@ -432,6 +485,8 @@ function storyCard(story, i, data, isLead) {
   a.href = storyHref(story);
   h.append(a);
   main.append(h);
+  const sciRow = story.science && sciChips(story.science);
+  if (sciRow) main.append(sciRow);
   // The first story in each section carries its summary; the rest are headline, time and counts only.
   // One sentence: the first thing outlets on both sides report.
   if (isLead || i === 0) {
@@ -592,34 +647,26 @@ function oneSideFacts(story, max) {
   return ((story.brief && story.brief.agreed) || []).filter(f => (f.sides || []).includes(k)).slice(0, max);
 }
 function oneSideCard(story, data) {
-  const o = story.one_side;
+  // Like Today's other cards (Heston, 2026-10-30): time, headline, one sentence, then the bar and the count.
+  const o = story.one_side, k = o.side, x = OTHER[k];
   const li = el("li", "story os-card");
   const main = el("div", "story-main");
   const when = whenLine(story);
   if (when) main.append(when);
   const h = el("h4", "headline");
   const a = el("a", null, story.working_title);
-  a.href = storyHref(story);  // our story page, like any story (Heston, 2026-10-30), never the outlet's article
+  a.href = storyHref(story);  // our story page, like any story, never the outlet's article
   h.append(a);
-  main.append(h, el("p", "os-count", oneSideCount(o)), outletStrip(o));
-  const names = el("p", "os-names", `Covered by ${listNames(o.covered, 6)}.`);
-  if (o.center.length) names.append(document.createTextNode(` Center outlets that covered it, not counted: ${listNames(o.center, 4)}.`));
-  main.append(names);
-  // What that side reports: facts two or more of its outlets state, else the full story's opening (it names its outlets).
-  const facts = oneSideFacts(story, 2);
+  main.append(h);
+  const chips = story.science && sciChips(story.science);
+  if (chips) main.append(chips);
+  const facts = oneSideFacts(story, 1);
   const full = (story.brief && story.brief.full_story) || [];
-  const gist = facts.length ? facts.map(f => firstSentence(f.fact)).join(" ") : full.length ? full[0].map(x => x.text).slice(0, 2).join(" ") : "";
-  if (gist) {
-    main.append(el("p", "os-label", `What ${o.side}-leaning outlets report`));
-    main.append(el("p", "gist", gist));
-  }
-  const check = decided(story, data.library)[0];
-  if (check) {
-    const row = el("p", "os-check");
-    row.append(chip(check.c.verdict), el("span", "os-check-claim", check.c.claim));
-    main.append(row);
-  }
-  main.append(oneSideBasis(o));
+  const gist = facts.length ? firstSentence(facts[0].fact) : full.length ? firstSentence(full[0].map(t => t.text).join(" ")) : "";
+  if (gist) main.append(el("p", "gist", gist));
+  const row = el("div", "os-row-mini");
+  row.append(outletStrip(o), el("p", "os-mini", `${o.covered.length} of ${sideList(o, k).length} ${k} \u00b7 0 of ${sideList(o, x).length} ${x}`));
+  main.append(row);
   li.append(main);
   return li;
 }
@@ -678,6 +725,8 @@ function oneSideSection(data) {
   const lanes = el("div", "os-lanes");
   for (const k of os.first === "right" ? ["right", "left"] : ["left", "right"]) lanes.append(laneBlock(k, data, by));
   sec.append(lanes);
+  const any = [...os.lanes.left, ...os.lanes.right].map(sid => by[sid]).find(s => s && s.one_side);
+  if (any) sec.append(basedOn(`our outlets' own feeds (${any.one_side.roster.left.length} left, ${any.one_side.roster.center.length} center, ${any.one_side.roster.right.length} right) over the last ${os.hours} hours, and a search of every article from the other side in the past 7 days. Center outlets are listed on each story, not counted.`));
   return sec;
 }
 
@@ -2561,6 +2610,10 @@ function renderStory(data) {
   ALLSIDES = Object.fromEntries((data.feeds || []).filter(f => f.lean == null && f.allsides).map(f => [f.source, f.allsides]));
   $("story-sub").querySelector(".byline").after(metricRow(story, "metrics metrics-tiles"));
 
+  // The science leads when the story rests on a study: it is the verdict a reader needs first.
+  const sciB = scienceBlock(story.science);
+  if (sciB) body.append(sciB);
+
   // Covered by one side: the page opens with the count and what that side reports, never an empty state.
   if (story.one_side) {
     const o = story.one_side;
@@ -2629,36 +2682,6 @@ function renderStory(data) {
     }
     sf.append(basis);  // the basis rule: what it rests on is always in view, preview or not
     body.append(sf);
-  }
-
-  // The science (Heston, 2026-10-30): was the study peer-reviewed, what it measured, what other research says.
-  const sci = story.science;
-  if (sci && (sci.where || sci.measured || sci.gap || sci.research)) {
-    const sb = el("section", "block sci-block");
-    sb.id = "science";
-    sb.append(el("h2", "block-title", "The science"));
-    const status = { "peer-reviewed journal": "Published in a peer-reviewed journal", "not peer-reviewed": "Not peer-reviewed",
-      "not found": "Not found in the journal databases we searched", "no single study": "No single study cited" }[sci.peer_reviewed];
-    const row = el("p", "sci-status");
-    row.append(el("strong", null, status || ""));
-    if (sci.where) row.append(document.createTextNode(`. ${sci.where.replace(/\.$/, "")}.`));
-    sb.append(row);
-    for (const [label, text] of [["What it measured", sci.measured], ["What the coverage adds", sci.gap], ["What other research says", sci.research]]) {
-      if (!text) continue;  // the scan's item numbers ("[7]") don't match the list below, so they're dropped
-      sb.append(el("h3", "sub-title", label), el("p", "sci-text", text.replace(/\s*\[\d+(?:\s*,\s*\d+)*\]/g, "")));
-    }
-    if ((sci.papers || []).length) {
-      const ul = el("ul", "sci-papers");
-      for (const pp of sci.papers) {
-        const li = el("li");
-        const t = pp.doi ? sourceLink(pp.title, pp.doi) : el("span", null, pp.title);
-        li.append(t, el("span", "sci-venue", ` ${pp.venue || "no journal"}, ${pp.year}${pp.type === "review" ? " \u00b7 review" : ""}`));
-        ul.append(li);
-      }
-      sb.append(ul);
-    }
-    sb.append(basedOn(`a search of OpenAlex, a free index of journal articles, preprints and reports, for "${sci.searched}" (${plural(sci.found, "result", "results")}), read by AI against the coverage. Only papers we found are cited. No person reviews it.`));
-    body.append(sb);
   }
 
   // 2. Splits, each side's claim checked inside its panel.
