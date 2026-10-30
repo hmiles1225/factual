@@ -131,6 +131,13 @@ PICKED_UP_DAYS = 7
 # scored 0.835 to 0.915 against the story's centre; the closest article for a true zero, 0.735 (a photo roundup).
 ZERO_SIM = 0.78
 ZERO_NEAR = 0.70            # recorded for review (lib one_side.near), not acted on
+# The top story (Heston, 2026-10-30: "our top story is like a day old"): the most-covered story still being reported.
+# Broke in the last TOP_BROKE_H, an article in the last TOP_ACTIVE_H, most outlets (both sides, as all of Today);
+# it holds the top until another beats it by TOP_MARGIN outlets or it goes TOP_ACTIVE_H without an article.
+TOP_BROKE_H = 24
+TOP_ACTIVE_H = 6
+TOP_MARGIN = 3
+TOP_FIRST = 2               # the leading candidates are summarized before the sections, so a tight budget can't drop them
 MIN_OUTLETS_AGREED = 2           # an agreed fact needs at least this many outlets to state it
 BRIEF_VERSION = "8"              # bump when the brief instructions change, so cached briefs regenerate
 PRICES = {"claude-opus-5-5": (4.00, 20.00, 0.010), "claude-haiku-5-5": (0.10, 0.50, 0), "claude-sonnet-5-5": (2.00, 10.00, 0),
@@ -1184,12 +1191,16 @@ def main():
     # Each topic: walk its ranking (stories covered by both left- and right-leaning outlets only) until
     # its quota has a real summary, trying at most EXTRA_CANDIDATES more. Only these appear on Today.
     both = lambda s: bool(s["coverage"].get("left")) and bool(s["coverage"].get("right"))
+    # The likely top stories are summarized first (cached after), and lead their topic's candidates.
+    first = [s for s in top_candidates(data["stories"]) if s.get("topic") in TOPIC_QUOTAS][:TOP_FIRST]
+    for st in first:
+        process(st)
     for topic, quota in TOPIC_QUOTAS.items():
         cands = [s for s in data["stories"] if s.get("related_to") is None and s.get("topic") == topic and both(s)]
         # Daily sections: stories that broke in the last FRESH_HOURS go first, in ranking order; older ones
         # only fill what is left. Weekly sections (span "week") keep their whole pool.
         fresh = [s for s in cands if s.get("span") != "week" and hours_since_broke(s) <= FRESH_HOURS]
-        cands = fresh + [s for s in cands if s not in fresh]
+        cands = [s for s in first if s in cands] + [s for s in fresh if s not in first] + [s for s in cands if s not in fresh and s not in first]
         done = 0
         for story in cands[:quota + EXTRA_CANDIDATES]:
             if done >= quota:
@@ -1198,6 +1209,11 @@ def main():
                 done += 1
                 story["on_today"] = True
         print(f"  {topic}: {done} of {quota} on Today ({len(cands)} stories covered by both sides)")
+
+    data["top"] = top_order(data["stories"], lib.get("top_sid"))
+    if data["top"]:
+        lib["top_sid"] = data["top"][0]
+    print(f"  top story: {next((s['working_title'][:70] for s in data['stories'] if data['top'] and s['sid'] == data['top'][0]), 'none')}")
 
     # Covered by one side: chosen in code (one_side_lanes), then summarized and checked like any story, a lane at a
     # time so neither side's stories wait behind the other's. Only after Today's sections, inside the same caps.
@@ -1786,6 +1802,30 @@ def deattribute(claim, outlets):
     out = re.sub(rf"^(?:the\s+)?(?:{names})\s+(?:reported|reports|says|said|states|stated|writes|wrote)\s+(?:that\s+)?",
                  "", claim.strip(), flags=re.I) if names else claim.strip()
     return out[:1].upper() + out[1:]
+
+
+def hours_since_update(story):
+    """Hours since a story's newest article; very large when no article has a date."""
+    times = [t for t, _ in (_when(a) for a in story.get("articles", [])) if t]
+    return (datetime.now(timezone.utc) - max(times)).total_seconds() / 3600 if times else 1e9
+
+
+def top_candidates(stories):
+    """Stories that can be the top story, most outlets first (then newest)."""
+    both = lambda s: bool(s["coverage"].get("left")) and bool(s["coverage"].get("right"))
+    c = [s for s in stories if s.get("related_to") is None and not s.get("region") and both(s)
+         and hours_since_broke(s) <= TOP_BROKE_H and hours_since_update(s) <= TOP_ACTIVE_H]
+    return sorted(c, key=lambda s: (len(s["sources"]), -hours_since_broke(s)), reverse=True)
+
+
+def top_order(stories, prev_sid):
+    """The top story, then the runners-up (the site shows the first one in a topic the reader follows). The one on
+    top keeps its place unless another has TOP_MARGIN more outlets: so it doesn't jump as outlets come in."""
+    ranked = [s for s in top_candidates(stories) if s.get("on_today")]
+    prev = next((s for s in ranked if s["sid"] == prev_sid), None)
+    if prev and ranked and len(ranked[0]["sources"]) < len(prev["sources"]) + TOP_MARGIN:
+        ranked = [prev] + [s for s in ranked if s is not prev]
+    return [s["sid"] for s in ranked]
 
 
 def hours_since_broke(story):

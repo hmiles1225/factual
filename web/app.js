@@ -480,9 +480,25 @@ function drawToday() {
   let total = 0;
   const order = TOPICS.filter(t => follow.has(t.key));
   if (follow.has("local")) order.splice(order.findIndex(t => t.key === "politics") + 1, 0, { key: "local", name: `${STATES[localState()] || "Local"} Election`, span: "" });
+  // The top story: the scan's order (most outlets, still being reported, held against small gains), first one
+  // in a topic this reader follows. Shown once, above the sections, not again in its own.
+  const byId = Object.fromEntries(data.stories.map(s => [s.sid, s]));
+  const top = (data.top || []).map(sid => byId[sid]).find(s => s && shownToday(s) && follow.has(s.topic));
+  if (top) {
+    const sec = el("section", "topic-section top-section");
+    sec.id = "top";
+    const head = el("div", "topic-head");
+    head.append(el("h2", "topic-name", "Top story"), el("p", "topic-span", `${top.sources.length} outlets`));
+    const ol = el("ol", "stories");
+    ol.setAttribute("aria-label", "Top story");
+    ol.append(storyCard(top, 0, data, true));
+    sec.append(head, ol);
+    $("sections").append(sec);
+    total += 1;
+  }
   for (const t of order) {
     // A national story that is mostly the same articles as a Texas race shows once, in Texas Election.
-    const ranked = data.stories.filter(s => shownToday(s) && s.topic === t.key && !(follow.has("texas") && s.also_in === "texas"));
+    const ranked = data.stories.filter(s => s !== top && shownToday(s) && s.topic === t.key && !(follow.has("texas") && s.also_in === "texas"));
     // Newest first, all of it (Heston): a ranked lead jumped around as later scans found more outlets.
     const list = ranked.sort((a, b) => brokeAt(b) - brokeAt(a));
     total += list.length;
