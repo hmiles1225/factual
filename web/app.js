@@ -595,8 +595,7 @@ function oneSideCard(story, data) {
   if (when) main.append(when);
   const h = el("h4", "headline");
   const a = el("a", null, story.working_title);
-  a.href = story.brief ? storyHref(story) : lead(story).url;
-  if (!story.brief) a.rel = "noopener";
+  a.href = storyHref(story);  // our story page, like any story (Heston, 2026-10-30), never the outlet's article
   h.append(a);
   main.append(h, el("p", "os-count", oneSideCount(o)), outletStrip(o));
   const names = el("p", "os-names", `Covered by ${listNames(o.covered, 6)}.`);
@@ -631,12 +630,16 @@ function laneBlock(k, data, by) {
   const os = data.one_side, x = OTHER[k];
   const lane = el("div", "os-lane");
   lane.append(el("h3", "os-lane-title", `Covered on the ${k}, not the ${x}`));
-  const list = os.lanes[k].map(sid => by[sid]).filter(s => s && s.one_side);
+  // Like Today's other stories, a story shows once it has its summary (the scan writes about 6 a day).
+  const qualifying = os.lanes[k].map(sid => by[sid]).filter(s => s && s.one_side);
+  const list = qualifying.filter(s => s.brief && oneSideFacts(s, 1).length);
   if (list.length) {
     const ol = el("ol", "stories");
     ol.setAttribute("aria-label", `Covered on the ${k}, not the ${x}`);
     list.forEach(s => ol.append(oneSideCard(s, data)));
     lane.append(ol);
+  } else if (qualifying.length) {
+    lane.append(el("p", "topic-empty", `${plural(qualifying.length, "story qualifies", "stories qualify")}. ${qualifying.length === 1 ? "Its summary is" : "Their summaries are"} written in the next scans.`));
   } else {
     lane.append(el("p", "topic-empty", `None right now: no story in the last ${os.hours} hours has ${os.min} or more ${k}-leaning outlets and no ${x}-leaning ones.`));
   }
