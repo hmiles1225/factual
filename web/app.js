@@ -520,6 +520,15 @@ function drawToday() {
     link.append(el("span", "strip-n", String(n)));
     nav.append(link);
   }
+  if (data.library && !CAPSULE) {
+    const due = dueSection(data);
+    $("sections").append(due.sec);
+    const link = el("a", "strip-link", "Promises");
+    link.href = "#due";
+    link.dataset.key = "due";
+    link.append(el("span", "strip-n", String(due.n)));
+    nav.append(link);
+  }
   const edit = el("button", "strip-edit");
   edit.type = "button";
   edit.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="16" cy="7" r="2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="10" cy="17" r="2" fill="none" stroke="currentColor" stroke-width="2"/></svg>';
@@ -647,6 +656,125 @@ function oneSideSection(data) {
   for (const k of os.first === "right" ? ["right", "left"] : ["left", "right"]) lanes.append(laneBlock(k, data, by));
   sec.append(lanes);
   return sec;
+}
+
+/* ---------- Promises and predictions ----------
+   A dated statement about the future that we confirmed was made, checked again the day after its date. Rules
+   (Heston, 2026-10-30): never a tally per person, party or agency; both sides' pledges count; whose statements are
+   in it is stated; outcome words only. */
+const OUTCOME = { "Holds up": "Happened", "Doesn't hold up": "Didn't happen", "Missing context": "Partly", Unproven: "Not settled" };
+function outcomeChip(verdict) {
+  const c = chip(verdict);
+  c.querySelector(".chip-word").textContent = OUTCOME[verdict] || "Not settled";
+  return c;
+}
+const dueDate = iso => new Date(`${iso}T12:00:00`).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
+const todayET = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+function ledgerEntries(lib) {
+  return Object.entries((lib && lib.ledger) || {}).filter(([, e]) => e.kind === "dated" || e.kind === "pledge").map(([k, e]) => ({ key: k, ...e }));
+}
+// One person's statements: the same name with titles dropped ("President Donald Trump" = "Donald Trump").
+const WHO_TITLES = /^(the |president |vice president |former president |sen\.? |senator |rep\.? |representative |gov\.? |governor |lt\.? gov\.? |dr\.? |mr\.? |mrs\.? |ms\.? |secretary |attorney general |judge |acting )+/i;
+const whoKey = w => (w || "").replace(WHO_TITLES, "").replace(/[^a-z0-9 ]/gi, "").replace(/\s+/g, " ").trim().toLowerCase();
+function ledgerItem(e, data) {
+  const li = el("li", "pp-item");
+  const out = e.outcome && data.library && data.library.claims ? data.library.claims[e.outcome] : null;
+  const head = el("p", "pp-when");
+  head.append(document.createTextNode(e.kind === "dated" ? `By ${dueDate(e.due)}` : "A pledge with no date"), document.createTextNode(" \u00b7 "));
+  if (data.who && whoKey(e.who) === data.who) head.append(document.createTextNode(e.who));
+  else {
+    const w = el("a", "pp-who", e.who);
+    w.href = `promises.html?who=${encodeURIComponent(e.who)}`;
+    w.setAttribute("aria-label", `Everything ${e.who} said would happen`);
+    head.append(w);
+  }
+  li.append(head, el("p", "check-claim pp-claim", e.claim));
+  if (e.kind === "pledge") {
+    if (e.when) li.append(el("p", "pp-note", `We can check it ${e.when.replace(/^(it )?can be checked /i, "")}.`));
+  } else if (out && DECIDED.includes(out.verdict)) {
+    const row = el("p", "pp-outcome");
+    row.append(el("span", "pp-q", "Did it happen?"), outcomeChip(out.verdict));
+    li.append(row);
+    const ex = out.explain && (out.explain.part || out.explain.context);
+    if (ex) li.append(el("p", "pp-note", ex));
+  } else if (e.due < todayET()) {
+    const row = el("p", "pp-outcome");
+    row.append(el("span", "pp-q", "Did it happen?"), el("span", "pp-note", out ? "Not clear yet. We'll check again in a week." : "The date has passed. We're checking."));
+    li.append(row);
+  } else {
+    const next = new Date(`${e.due}T12:00:00`); next.setDate(next.getDate() + 1);
+    li.append(el("p", "pp-note", `We'll check on ${next.toLocaleDateString([], { month: "short", day: "numeric" })} whether it happened.`));
+  }
+  // The story: live while it is on Today, then its archived copy (entries are never removed; this page is the record).
+  const s = (data.stories || []).find(x => (e.stories || []).includes(x.sid) && (x.on_today || x.one_side));
+  const sid = s ? s.sid : (e.stories || []).find(x => x !== "ledger" && x !== "recheck");
+  if (s) { const a = el("a", "fix-story", `${s.working_title} \u2192`); a.href = storyHref(s); li.append(a); }
+  else if (sid && e.day && data.linkOld !== false) { const a = el("a", "fix-story", "The story it came from \u2192"); a.href = storyHref({ sid }, e.day); li.append(a); }
+  return li;
+}
+// Whose statements are in it, by group, so a lean in the mix is visible (rule 3).
+function ledgerMix(list) {
+  const n = {};
+  for (const e of list) n[e.group || "Other"] = (n[e.group || "Other"] || 0) + 1;
+  const parts = Object.entries(n).sort((a, b) => b[1] - a[1]).map(([g, c]) => `${c} ${/^(Republican|Democratic|Independent)/.test(g) ? g : g.charAt(0).toLowerCase() + g.slice(1)}`);  // party names keep their capital
+  return basedOn(`claims we checked, kept only where we confirmed the statement was made. Whose statements: ${parts.length ? parts.join(", ") : "none yet"}. Governments set more dates than campaigns do, so they appear more often. We keep no score for any person, party or agency.`);
+}
+function dueSection(data) {
+  const all = ledgerEntries(data.library);
+  const today = todayET();
+  const week = new Date(Date.now() + 7 * 864e5).toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+  const ago = new Date(Date.now() - 7 * 864e5).toISOString();
+  const soon = all.filter(e => e.kind === "dated" && e.due >= today && e.due <= week).sort((a, b) => a.due.localeCompare(b.due));
+  const settled = all.filter(e => e.kind === "dated" && e.outcome && (e.outcome_at || "") >= ago).sort((a, b) => b.outcome_at.localeCompare(a.outcome_at));
+  const sec = el("section", "topic-section pp-section");
+  sec.id = "due";
+  const head = el("div", "topic-head");
+  head.append(el("h2", "topic-name", "Promises and predictions"), el("p", "topic-span", `7 days \u00b7 ${soon.length + settled.length}`));
+  sec.append(head, el("p", "os-dek", "When someone in the news says something will happen by a date, we check whether it did."));
+  for (const [title, list, empty] of [["Due this week", soon, "Nothing is due this week."], ["Checked this week", settled, "Nothing was checked this week."]]) {
+    sec.append(el("h3", "os-lane-title", title));
+    if (list.length) { const ul = el("ul", "pp-list"); list.forEach(e => ul.append(ledgerItem(e, data))); sec.append(ul); }
+    else sec.append(el("p", "topic-empty", empty));
+  }
+  const more = el("a", "read-more", "Every promise and prediction \u2192");
+  more.href = "promises.html";
+  sec.append(more, ledgerMix(all));
+  return { sec, n: soon.length + settled.length };
+}
+function renderPromises(data) {
+  const box = $("promises");
+  const asked = new URLSearchParams(location.search).get("who");
+  if (asked) data.who = whoKey(asked);
+  const all = ledgerEntries(data.library).filter(e => !data.who || whoKey(e.who) === data.who);
+  if (asked) {
+    // One person: a list, never a score or a rank (Heston, 2026-10-30).
+    $("fix-title").textContent = `What ${asked.replace(/^The /, "the ")} said would happen`;
+    document.title = `${asked} \u00b7 Promises and predictions \u00b7 fACTUAL`;
+    box.append(el("p", "cg-lede", "Only statements reported in the news we read, and only where we confirmed the statement was made. Not a full record of what they have said."));
+    const back = el("a", "read-more", "\u2190 Everyone");
+    back.href = "promises.html";
+    box.append(back);
+    if (!all.length) { box.append(el("p", "fix-none", "No statements from this name yet.")); return; }
+    const ul = el("ul", "pp-list");
+    all.sort((a, b) => (b.due || b.at || "").localeCompare(a.due || a.at || "")).forEach(e => ul.append(ledgerItem(e, data)));
+    box.append(ul);
+    return;
+  }
+  const today = todayET();
+  const groups = [
+    ["Still to come", all.filter(e => e.kind === "dated" && e.due >= today).sort((a, b) => a.due.localeCompare(b.due))],
+    ["Date has passed", all.filter(e => e.kind === "dated" && e.due < today).sort((a, b) => b.due.localeCompare(a.due))],
+    ["Pledges with no date", all.filter(e => e.kind === "pledge").sort((a, b) => (b.at || "").localeCompare(a.at || ""))]];
+  box.append(el("p", "cg-lede", "When someone in the news says something will happen by a date, we check whether it did, the day after that date. The answer is one of four: Happened, Didn't happen, Partly, or Not settled. Pledges with no date are listed until they can be checked. We check statements, never people."));
+  box.append(ledgerMix(all));
+  if (!all.length) { box.append(el("p", "fix-none", "None yet. The first are read from the claims we have checked.")); return; }
+  for (const [title, list] of groups) {
+    if (!list.length) continue;
+    box.append(el("h2", "block-title", `${title} \u00b7 ${list.length}`));
+    const ul = el("ul", "pp-list");
+    list.forEach(e => ul.append(ledgerItem(e, data)));
+    box.append(ul);
+  }
 }
 
 // The section strip stays pinned while reading and underlines the section in view (scroll-spy). The
@@ -1020,6 +1148,11 @@ function initSettings() {
 
 function renderArchive(index) {
   const box = $("archive-days");
+  const pp = el("p", "arch-note");
+  const a = el("a", null, "Promises and predictions \u2192");
+  a.href = "promises.html";
+  pp.append(document.createTextNode("Every dated statement we have tracked, and what happened: "), a);
+  box.before(pp);
   const days = (index && index.days) || [];
   if (!days.length) { box.append(el("p", "topic-empty", "The archive starts with today. Stories are kept here once they have been on Today.")); return; }
   days.forEach((d, n) => {
@@ -2472,6 +2605,21 @@ function renderStory(data) {
     body.append(s3);
   }
 
+  // Promises and predictions from this story's checked claims.
+  const pp = ledgerEntries(data.library).filter(e => (e.stories || []).includes(story.sid));
+  if (pp.length) {
+    const sp = el("section", "block");
+    sp.id = "promises";
+    sp.append(el("h2", "block-title", "Promises and predictions"));
+    const ul = el("ul", "pp-list");
+    pp.forEach(e => ul.append(ledgerItem(e, { ...data, stories: [], linkOld: false })));  // already on its story
+    sp.append(ul);
+    const more = el("a", "read-more", "Every promise and prediction \u2192");
+    more.href = "promises.html";
+    sp.append(more);
+    body.append(sp);
+  }
+
   // Texas Election: the claims driving the race (ads, attacks, speeches, posts, claims about voting), each checked.
   const ads = (brief && brief.ad_claims) || [];
   if (ads.length) {
@@ -2565,7 +2713,9 @@ function renderStory(data) {
   m.href = "how.html";
   const fx = el("a", null, "Corrections \u2192");
   fx.href = "corrections.html";
-  foot.append(m, document.createTextNode(" \u00b7 "), fx);
+  const pl = el("a", null, "Promises and predictions \u2192");
+  pl.href = "promises.html";
+  foot.append(m, document.createTextNode(" \u00b7 "), fx, document.createTextNode(" \u00b7 "), pl);
   s4.append(foot);
   body.append(s4);
   linkTiles($("story-sub").querySelector(".metrics-tiles"));
@@ -2854,6 +3004,7 @@ async function load() {
   if (page === "common") return renderCommon(await getJSON("common-ground.json"));
   if (page === "how") return renderHow(await getJSON("data/stories.json", true));
   if (page === "corrections") return renderCorrections(await getJSON("data/library.json", true));
+  if (page === "promises") { const [lib, st] = await Promise.all([getJSON("data/library.json", true), getJSON("data/stories.json", true)]); return renderPromises({ library: lib, stories: (st && st.stories) || [] }); }
   if (page === "numbers") {
     // The investors' key shows the numbers as they stood at the cutoff, like the rest of the edition.
     const k = sget("fx-capsule", sessionStorage);

@@ -1231,6 +1231,48 @@ def main():
     print(f"  one side: left {len(lanes['left'])}, right {len(lanes['right'])}; {day_os['summaries']} summaries today "
           f"(left {day_os['left']}, right {day_os['right']}), ${day_os['gemini_usd']:.2f}")
 
+    # Promises and predictions: classify confirmed claims (cheap, parallel, capped per scan), then check the ones
+    # whose date has passed, under the same caps as any check.
+    ledger = lib.setdefault("ledger", {})
+    now_et = datetime.now(ZoneInfo("America/New_York")).date()
+    todo_l = [k for k, c in sorted(claims.items(), key=lambda kc: kc[1].get("checked_at", ""), reverse=True)
+              if c.get("verdict") == "Holds up" and not c.get("ledger_outcome") and (ledger.get(k) or {}).get("v") != LEDGER_VERSION][:LEDGER_PER_SCAN]
+    if todo_l and gemini_ok():
+        ask = lambda k: (k, *gemini_json(LEDGER_PROMPT.replace("{today}", now_et.isoformat()).replace("{claim}", claims[k]["claim"]), LEDGER_SCHEMA, "low"))
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            for fut in [pool.submit(ask, k) for k in todo_l]:
+                try:
+                    k, out, usage = fut.result()
+                except Exception as e:
+                    note_ai_error("ledger", e)
+                    continue
+                charge_gemini(usage)
+                due = (out.get("due") or "").strip()
+                try:
+                    due = date_of(due).isoformat() if due else ""
+                except ValueError:
+                    due = ""
+                kind = out["kind"] if not (out["kind"] == "dated" and not due) else "none"  # a date we can't read is no date
+                checked = claims[k].get("checked_at")
+                ledger[k] = {"v": LEDGER_VERSION, "kind": kind, "claim": claims[k]["claim"], "stories": claims[k].get("stories", []),
+                             "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                             # the day its story was on Today, for a link to the archived copy once it has left
+                             "day": datetime.fromisoformat(checked).astimezone(ZoneInfo("America/New_York")).date().isoformat() if checked else None}
+                if kind != "none":
+                    ledger[k].update({"who": out["who"].strip(), "group": out["group"], "what": out["what"].strip(),
+                                      "due": due if kind == "dated" else "", "when": out["when"].strip() if kind == "pledge" else "",
+                                      "outcome": None})
+        print(f"  ledger: {len(todo_l)} claims read, {sum(1 for v in ledger.values() if v['kind'] != 'none')} promises and predictions")
+    for k, e in ledger.items():
+        if e["kind"] != "dated" or not e["what"] or (claims.get(e.get("outcome")) or {}).get("verdict") in DECIDED:
+            continue  # an Unproven outcome is asked again; check_claim re-checks it after RECHECK_AFTER_DAYS
+        if date_of(e["due"]) + timedelta(days=LEDGER_GRACE_DAYS) > now_et:
+            continue
+        got = check_claim(e["what"], (e.get("stories") or ["ledger"])[0], [])
+        if got:
+            claims[got]["ledger_outcome"] = True
+            e["outcome"], e["outcome_at"] = got, datetime.now(timezone.utc).isoformat(timespec="seconds")
+            print(f"  ledger: came due, checked: {e['what'][:70]} -> {claims[got].get('verdict')}")
     frame_faces(data["stories"], lib)
     track_changes(lib, data["stories"])
     shown = [s for s in data["stories"] if s.get("on_today") or (s.get("one_side") and s.get("brief"))]
@@ -1781,9 +1823,45 @@ def keep_checked_splits(new, old, claims, vec, limit=3):
     return new
 
 
+# Promises and predictions (Heston, 2026-10-30): a dated statement about the future that we confirmed was made
+# (its claim checked Holds up) is checked again for what happened, the day after its date. Undated pledges are
+# listed as open. Rules: never a tally per person, party or agency; both sides' pledges count; whose statements
+# are in it is stated; outcome words only (Happened / Didn't happen / Partly / Not settled).
+LEDGER_VERSION = "1"
+LEDGER_PER_SCAN = 40       # classified per scan, six at a time (low thinking, about $0.0005 each)
+LEDGER_GRACE_DAYS = 1      # checked this long after the date, so the outcome has been reported
+LEDGER_GROUPS = ["Federal government", "State or local government", "Foreign government", "Republican campaign or official",
+                 "Democratic campaign or official", "Independent or other candidate", "Court", "Company", "Pollster or forecaster", "Other"]
+LEDGER_SCHEMA = _item({"kind": {"type": "string", "enum": ["none", "dated", "pledge"]}, "who": {"type": "string"},
+                       "group": {"type": "string", "enum": LEDGER_GROUPS}, "what": {"type": "string"},
+                       "due": {"type": "string"}, "when": {"type": "string"}}, ["kind", "who", "group", "what", "due", "when"])
+LEDGER_PROMPT = """Today is {today}. Below is a claim from news coverage that has been confirmed as reported.
+
+Claim: {claim}
+
+Does it report a statement about the future by a named person, office, body, company, court or poll: a promise,
+plan, announced date, deadline or prediction? Answer with kind:
+- "dated": it names a date or period by which something will happen ("on November 12", "by next year", "this
+  month"). Set due to the date to check, YYYY-MM-DD: the date itself, or the last day of the period ("by next
+  year" from 2026 = 2027-12-31).
+- "pledge": a promise by a person about what they would do in office or if elected, with no date ("would vote
+  to ban X"). Set due to "" and when to one short phrase saying when it could be checked ("if elected, when
+  the Senate votes on it").
+- "none": anything else: a statement about the past or present, an opinion, a warning about vague
+  consequences, a conditional ("if X, then Y"), a joke, or a report that something is being considered.
+For dated and pledge, who = the person or body that made the statement, as named; group = which of the listed
+groups they belong to (an official of the current U.S. administration is "Federal government"); what = one
+plain sentence in the past tense stating what would be true if it happened, with its date, for a fact-checker
+to check later (for "The mayor said the bridge will reopen on March 3": "The bridge reopened on or before March 3, 2027."). Use only the claim.
+For none, set who, what, due and when to "" and group to "Other"."""
 NEW_SAME = 0.85   # a rewritten fact this close to an earlier one is that fact reworded, not new
 # Measured 10-30 on 107 facts against the day before's: rewordings scored 0.87 to 0.97; facts with a new detail
 # mostly under 0.80. Two rewordings at 0.82 still count as new (the safe side: nothing new is hidden).
+
+
+def date_of(text):
+    """YYYY-MM-DD as a date (ValueError otherwise)."""
+    return datetime.strptime(text, "%Y-%m-%d").date()
 
 
 def stamp_since(new, old, vec, now):

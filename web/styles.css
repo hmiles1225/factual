@@ -835,3 +835,20 @@ a.num-name:hover { text-decoration: underline; }
 /* New since you last read: a word, never colour alone. Lavender text on the surface (6.3:1 dark, 8.1:1 light). */
 .new-tag { display: inline-block; padding: 1px 6px; border: 1px solid var(--lav); border-radius: 4px; font: 600 0.6875rem/1.3 var(--mono); letter-spacing: 0.04em; text-transform: uppercase; color: var(--lav); vertical-align: 0.1em; }
 .new-since { color: var(--lav); }
+
+/* Promises and predictions */
+.pp-list { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 10px; }
+.pp-item { display: grid; gap: 6px; padding: 14px; background: var(--surf); border-radius: 12px; }
+.pp-when { margin: 0; font: 500 0.75rem/1.3 var(--mono); letter-spacing: 0.02em; color: var(--ink-3); }
+.pp-claim { margin: 0; }
+.pp-outcome { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0; }
+.pp-q { font: 600 0.875rem/1.3 var(--cond); color: var(--ink); }
+.pp-note { margin: 0; font-size: 0.875rem; line-height: 1.45; color: var(--ink-2); }
+.pp-section .os-lane-title { margin-top: 14px; }
+.pp-section .read-more { display: inline-block; margin-top: 6px; }
+.arch-note { margin: 0 0 16px; font-size: 0.9375rem; color: var(--ink-2); }
+.pp-who { color: var(--ink-2); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; }
+.pp-who:hover { color: var(--ink); }
+.corrections > .num-basis { margin-bottom: 20px; }
+.pp-section > .num-basis { margin-top: 12px; }
+.corrections > .read-more { display: inline-block; margin-bottom: 14px; }
