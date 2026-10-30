@@ -123,7 +123,8 @@ ONE_SIDE_MIN = 4
 ONE_SIDE_HOURS = 48         # the story's newest article is at most this old
 ONE_SIDE_LANE = 3           # stories per lane
 ONE_SIDE_PER_DAY = 6        # new summaries a day for the section (about 6 approved; no cap raised)
-ONE_SIDE_PER_SCAN = 2
+ONE_SIDE_PER_SCAN = 3
+ONE_SIDE_EXTRA_USD = {"2026-10-30": 0.50}   # one-off, Heston 2026-10-30 ("Yep"): only for this section's summaries, today
 PICKED_UP_DAYS = 7
 # The zero is checked against every article in the 7-day pool, not only the story's own: grouping uses the last
 # 48 hours, so on 10-30 Fox News, Daily Wire, OAN and Breitbart's Spain train crash reports (its first day) had aged
@@ -362,6 +363,7 @@ FULL_SCHEMA = _item({"paragraphs": {"type": "array", "items": _item({"sentences"
 FULL_PROMPT = """Write the full story of this news event for a reader who wants all of it, the way a neutral wire-service
 reporter would, using ONLY the numbered material below. Rules:
 - Open with what outlets on both the left and the right report (marked BOTH), stated plainly, most important first.
+  If nothing is marked BOTH, open with the most important fact and say which outlets report it.
 - Anything not marked BOTH must say who reports it, by outlet name ("Fox News and the New York Post report that ...").
 - Where coverage differs, give each version with its outlets, in the same neutral words. If fACTUAL checked it, say what
   the check found, in plain words ("fACTUAL's check found this false: ...").
@@ -1094,7 +1096,8 @@ def main():
         story["checks"] = [k for d in brief["differences"] for k in [d.get("check")] + [p.get("check") for p in d["positions"]] if k] \
             + [a["check"] for a in brief.get("ad_claims", []) if a.get("check")]
         # The full story, for stories that will be on Today (facts both sides report), from the brief only.
-        if any("left" in f["sides"] and "right" in f["sides"] for f in brief["agreed"]):
+        # One-side stories get one too (Heston, 2026-10-30: like our regular stories), every fact attributed.
+        if story.get("one_side") or any("left" in f["sides"] and "right" in f["sides"] for f in brief["agreed"]):
             sig = json.dumps(sorted((k, claims[k].get("verdict")) for k in story["checks"] if k in claims))
             material, src = full_material(brief, claims)
             loaded = [t.get("term", "") for t in brief.get("loaded", [])]
@@ -1259,6 +1262,9 @@ def main():
     order = [st for pair in zip(*(lanes[k] + [None] * (ONE_SIDE_LANE - len(lanes[k])) for k in (first, "right" if first == "left" else "left")))
              for st in pair if st]
     new_here = 0
+    extra = ONE_SIDE_EXTRA_USD.get(today, 0.0)
+    work_cap += extra  # opened only now, after Today's sections, so it goes to this section
+    gemini_cap += extra
     for st in order:
         k = st["one_side"]["side"]
         can_new = day_os["summaries"] < ONE_SIDE_PER_DAY and new_here < ONE_SIDE_PER_SCAN
