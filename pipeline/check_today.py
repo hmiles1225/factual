@@ -1968,7 +1968,7 @@ For none, set who, what, due and when to "" and group to "Other"."""
 # where; what it measured against what the coverage says; what other peer-reviewed research says, reviews first.
 # Papers come from OpenAlex (free; journals, preprints, reports, abstracts); the model reads only what we found.
 # Its own cap, apart from the day's Gemini budget (Heston: $1 a day).
-SCIENCE_VERSION = "2"   # 2: one retry when research is written without citing items; entities decoded
+SCIENCE_VERSION = "3"   # 2: retry when research cites nothing; 3: research is about the topic, not the exact claim (straws: 4 on-topic LCAs went unused)
 SCIENCE_DAILY_USD = 1.00
 SCIENCE_PER_DAY = 5
 SCIENCE_PER_SCAN = 3
@@ -2003,8 +2003,10 @@ and these items, answer for a general reader, in plain short sentences:
 - measured: what that study actually measured, if the coverage or an item says; else "".
 - gap: anything the coverage says that the study as described does not show (for example a modeled impact
   reported as a direct risk), in one or two sentences; "" if none.
-- research: what the other peer-reviewed items say on the same question, two to four sentences, reviews first.
-  Say where they agree and where they differ. Never add a finding that is not in an item.
+- research: what the other peer-reviewed items say about the same topic (for a claim that paper straws are worse
+  than plastic: how paper and plastic straws compare), two to four sentences, reviews first. They need not test the
+  exact claim. Say where they agree and where they differ. An item with no abstract can be named for what its title
+  says it studied, never for a finding. Ignore items on a different subject. Never add a finding that is not in an item.
 - cites: the numbers of the items research uses.
 No opinion, no words about anyone's motives. If the items do not address the question, research = "" and cites = [].
 
