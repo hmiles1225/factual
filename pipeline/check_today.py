@@ -1317,7 +1317,9 @@ def main():
         text = " ".join([st["working_title"]] + [f["fact"] for f in b.get("agreed", [])] + [p["says"] for d in b.get("differences", []) for p in d["positions"]])
         if not SCIENCE_WORDS.search(text):
             continue
-        if done_here >= SCIENCE_PER_SCAN or spend["science_new"] >= SCIENCE_PER_DAY or spend["science_usd"] + 0.05 > SCIENCE_DAILY_USD or past_deadline():
+        rerun = rec is not None  # an earlier version's check of the same story: under the $ cap, not the daily count
+        if done_here >= SCIENCE_PER_SCAN or (not rerun and spend["science_new"] >= SCIENCE_PER_DAY) \
+                or spend["science_usd"] + 0.05 > SCIENCE_DAILY_USD or past_deadline():
             continue
         cov = "\n".join([f"Headline: {a['title']} ({a['source']})" for a in st["articles"][:10]] + [f"Fact: {f['fact']}" for f in b.get("agreed", [])]
                          + [f"{', '.join(p['outlets'][:3])}: {p['says']}" for d in b.get("differences", []) for p in d["positions"]])
@@ -1352,7 +1354,7 @@ def main():
                 print(f"  science: {result['peer_reviewed']}, {len(cited)} papers cited of {len(uniq)}: {st['working_title'][:60]}")
             sci[st["sid"]] = {"v": SCIENCE_VERSION, "result": result}
             if result:  # a story the first pass rules out doesn't use one of the day's checks
-                spend["science_new"] += 1
+                spend["science_new"] += 0 if rerun else 1
                 done_here += 1
         except Exception as e:
             note_ai_error("science", e)
