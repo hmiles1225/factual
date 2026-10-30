@@ -63,7 +63,7 @@ TESTING_GEMINI_USD, TESTING_ANTHROPIC_USD = 5.00, 2.00
 # One-off raises, approved by Heston for a specific date only. Expires by itself.
 GEMINI_EXTRA_USD = {"2026-10-19": 8.00}   # one-off, Heston 2026-10-19: new sections, polls, explanations, Texas races; cap $10.00
 GEMINI_EXTRA_USD["2026-10-20"] = 3.50   # one-off, Heston 2026-10-20: +$0.50 over the $5.00 testing cap, to check the Texas polls today; cap $5.50
-GEMINI_EXTRA_USD["2026-10-30"] = 1.00   # one-off, Heston 2026-10-30 ("run it"): the unpaced budget was gone by 2 am Texas time; cap $4.00
+GEMINI_EXTRA_USD["2026-10-30"] = 2.00   # one-off, Heston 2026-10-30: $1 ("run it", unpaced budget gone by 2 am Texas time) + $1 ("Yes", Today stale by evening); cap $5.00
 # Bump when the outlet list changes: a story whose outlets changed since its summary is re-summarized once.
 ROSTER_VERSION = "2026-10-19b"   # 35 outlets, 15 left / 15 right
 GEMINI_FREE_SEARCHES = 150      # Google gives 5,000 free a month across Gemini 3 models; ~150 a day
