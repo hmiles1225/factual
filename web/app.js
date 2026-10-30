@@ -55,6 +55,8 @@ function followedTopics() {
   const at = base.indexOf("politics") + 1;
   return [...base.slice(0, at), st === "TX" ? "texas" : "local", ...base.slice(at)];
 }
+const EXTRAS = [["one-side", "Covered by one side"], ["promises", "Promises and predictions"]];
+const extraOn = key => { try { return !(JSON.parse(sget("fx-extras-off") || "[]") || []).includes(key); } catch (e) { return true; } };
 function saveTopics(keys) {
   try { localStorage.setItem("fx-topics", JSON.stringify(keys)); } catch (e) {}
   document.dispatchEvent(new CustomEvent("fx-topics"));
@@ -488,7 +490,7 @@ function drawToday() {
   // Covered by one side, then Promises and predictions: right below Texas (Heston, 2026-10-30), or below Politics
   // for a reader without Texas, or under the top story when neither is followed. The strip follows the page.
   const extras = () => {
-    if (data.one_side && !CAPSULE) {
+    if (data.one_side && !CAPSULE && extraOn("one-side")) {
       const n = data.one_side.lanes.left.length + data.one_side.lanes.right.length;
       $("sections").append(oneSideSection(data));
       const link = el("a", "strip-link", "One side");
@@ -497,7 +499,7 @@ function drawToday() {
       link.append(el("span", "strip-n", String(n)));
       nav.append(link);
     }
-    if (data.library && !CAPSULE && ledgerEntries(data.library).length) {  // shown once there is something in it
+    if (data.library && !CAPSULE && extraOn("promises") && ledgerEntries(data.library).length) {  // shown once there is something in it
       const due = dueSection(data);
       $("sections").append(due.sec);
       const link = el("a", "strip-link", "Promises");
@@ -563,20 +565,22 @@ function outletStrip(o) {
   const box = el("div", "os-bar");
   box.setAttribute("aria-hidden", "true");
   const track = el("div", "os-track");
-  track.style.setProperty("--n", String(Math.max(o.roster.left.length, o.roster.right.length)));
-  const covered = new Set(o.covered);
-  const nLeft = o.roster.left.filter(x => covered.has(x)).length, nRight = o.roster.right.filter(x => covered.has(x)).length;
+  const n = Math.max(sideList(o, "left").length, sideList(o, "right").length);
+  track.style.setProperty("--n", String(n));
+  const nLeft = o.side === "left" ? o.covered.length : 0, nRight = o.side === "right" ? o.covered.length : 0;
   for (let i = 0; i < nLeft; i++) { const d = el("span", "os-dot"); d.style.gridColumn = String(i + 1); track.append(d); }
-  const mid = el("span", "os-mid"); mid.style.gridColumn = String(Math.max(o.roster.left.length, o.roster.right.length) + 1); track.append(mid);
+  const mid = el("span", "os-mid"); mid.style.gridColumn = String(n + 1); track.append(mid);
   for (let i = 0; i < nRight; i++) { const d = el("span", "os-dot"); d.style.gridColumn = `${-(i + 2)}`; track.append(d); }
   const ends = el("div", "os-ends");
   ends.append(el("span", null, "Left"), el("span", null, "Right"));
   box.append(track, ends);
   return box;
 }
+// An outlet that covered the story counts in its side's list even when its feed failed this scan (10-30: Daily Wire).
+const sideList = (o, k) => k === o.side ? [...new Set([...o.roster[k], ...o.covered])] : o.roster[k];
 function oneSideCount(o) {
   const k = o.side, x = OTHER[k];
-  return `${o.covered.length} of ${o.roster[k].length} ${k}-leaning outlets covered this. 0 of ${o.roster[x].length} ${x}-leaning outlets did.`;
+  return `${o.covered.length} of ${sideList(o, k).length} ${k}-leaning outlets covered this. 0 of ${sideList(o, x).length} ${x}-leaning outlets did.`;
 }
 function oneSideBasis(o) {
   const first = o.first_at ? ` First report: ${o.first_by}, ${o.first_day_only ? shortDate(o.first_at.slice(0, 10)) : stamp(o.first_at)}.` : "";
@@ -1105,6 +1109,17 @@ function initSettings() {
     fs.append(lab);
   }
   form.append(fs);
+  // Sections beyond the topics (Heston, 2026-10-30): on unless the reader turns them off.
+  const xs = el("fieldset", "settings-topics settings-sections");
+  xs.append(el("legend", null, "Sections"));
+  for (const [key, name] of EXTRAS) {
+    const lab = el("label");
+    const cb = el("input");
+    cb.type = "checkbox"; cb.name = "extra"; cb.value = key; cb.checked = extraOn(key);
+    lab.append(cb, document.createTextNode(` ${name}`));
+    xs.append(lab);
+  }
+  form.append(xs);
   // Local politics: off until a reader turns it on and picks a state. Shown only while an edition runs.
   const loc = el("fieldset", "settings-local");
   loc.hidden = true;
@@ -1145,6 +1160,12 @@ function initSettings() {
   document.addEventListener("fx-topics", syncTopics);
   form.addEventListener("change", e => {
     if (e.target.name === "local-on" || e.target.name === "local-state") return;  // handled above
+    if (e.target.name === "extra") {
+      const off = EXTRAS.map(([k]) => k).filter(k => !xs.querySelector(`input[value="${k}"]`).checked);
+      sset("fx-extras-off", off.length ? JSON.stringify(off) : null);
+      document.dispatchEvent(new CustomEvent("fx-topics"));
+      return;
+    }
     if (e.target.name === "topic") {
       const keys = [...fs.querySelectorAll("input:checked")].map(i => i.value);
       if (!keys.length) { e.target.checked = true; return; }

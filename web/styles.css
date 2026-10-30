@@ -860,3 +860,5 @@ a.num-name:hover { text-decoration: underline; }
 .os-dot { position: relative; grid-row: 1; justify-self: center; width: 10px; height: 10px; border-radius: 50%; background: var(--lav); }
 .os-mid { position: relative; grid-row: 1; justify-self: center; width: 2px; height: 14px; background: var(--ink-3); }
 .os-ends { display: flex; justify-content: space-between; font: 500 0.6875rem/1 var(--mono); letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-3); }
+.os-block .os-bar { margin-bottom: 10px; }
+.settings-sections { grid-template-columns: 1fr !important; }
