@@ -200,6 +200,41 @@ def _record(qid, ent, label, word, maps=False):
     return None
 
 
+# Where the face is, so the site frames it (Heston, 2026-10-30): the frames are 16:9 and 21:9, and a tall portrait
+# cut at a fixed height showed one person's forehead and another's mouth. YuNet (OpenCV's own detector; model and
+# license in pipeline/models) finds a face, never who it is. Only a clear, sizeable face counts: a crowd or a
+# close-up of skin keeps the default framing.
+FACE_MODEL = Path(__file__).resolve().parent / "models/face_detection_yunet_2023mar.onnx"
+FACE_MIN_SCORE = 0.85   # every portrait on the site on 10-30 scored 0.89 to 0.95; the one false face, 0.63
+FACE_MIN_HEIGHT = 0.12  # share of the image height: faces in a group photo were 2 to 5%
+
+
+def face(data):
+    """The main face in an image (bytes), as fractions of the image: {"w", "h", "box": [x0, y0, x1, y1], "eyes",
+    "mouth"}, or None when there is no clear face. Raises if OpenCV is missing or the image can't be read."""
+    import cv2
+    import numpy as np
+    cv2.utils.logging.setLogLevel(cv2.utils.logging.LOG_LEVEL_ERROR)
+    im = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
+    if im is None:
+        raise ValueError("not an image")
+    h, w = im.shape[:2]
+    s = min(1.0, 640 / max(h, w))
+    small = cv2.resize(im, (max(1, round(w * s)), max(1, round(h * s))))
+    sh, sw = small.shape[:2]
+    det = cv2.FaceDetectorYN.create(str(FACE_MODEL), "", (sw, sh), 0.6, 0.3, 50)
+    _, found = det.detect(small)
+    if found is None:
+        return None
+    # The largest face: one row is x, y, w, h, then five landmarks (right eye, left eye, nose, mouth corners), score
+    f = max(found, key=lambda r: r[2] * r[3])
+    if f[-1] < FACE_MIN_SCORE or f[3] / sh < FACE_MIN_HEIGHT:
+        return None
+    r = lambda v: round(float(v), 3)
+    return {"w": w, "h": h, "box": [r(f[0] / sw), r(f[1] / sh), r((f[0] + f[2]) / sw), r((f[1] + f[3]) / sh)],
+            "eyes": r((f[5] + f[7]) / 2 / sh), "mouth": r((f[11] + f[13]) / 2 / sh)}
+
+
 if __name__ == "__main__":
     import sys
     print(json.dumps(image_for(sys.argv[1], sys.argv[2] if len(sys.argv) > 2 else "person"), indent=1))

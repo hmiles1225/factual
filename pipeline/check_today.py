@@ -34,7 +34,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import check as C  # noqa: E402
-from images import ROTATION, image_for, image_for_title, rotate  # noqa: E402
+from images import ROTATION, face, image_for, image_for_title, rotate  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 LIBRARY_URL = "https://hestonmiles.com/factual/data/library.json"
@@ -1105,6 +1105,7 @@ def main():
                 story["on_today"] = True
         print(f"  {topic}: {done} of {quota} on Today ({len(cands)} stories covered by both sides)")
 
+    frame_faces(data["stories"], lib)
     write_archive([s for s in data["stories"] if s.get("on_today")], data.get("feeds", []))
     write_share_pages([s for s in data["stories"] if s.get("on_today")])
 
@@ -1396,6 +1397,36 @@ def archived_brief(day, sid):
         except Exception:
             _ARCHIVED[day] = {}
     return ((_ARCHIVED[day].get("stories") or {}).get(sid) or {}).get("brief")
+
+
+def frame_faces(stories, lib):
+    """Give every picture the place of its face (images.face), so the site frames the face, not a fixed band.
+    Found once per file and kept in the library by src; "no clear face" is kept too. A file that can't be read
+    or a missing OpenCV skips this scan and is tried again: a picture without it keeps the default framing."""
+    faces = lib.setdefault("faces", {})
+    for st in stories:
+        for k in ("image", "image_alt"):
+            im = st.get(k)
+            if not im or not im.get("src"):
+                continue
+            src = im["src"]
+            if src not in faces:
+                try:
+                    local = ROOT / ("web" if src.startswith("img/") else "") / src
+                    if local.exists():
+                        raw = local.read_bytes()
+                    else:
+                        req = urllib.request.Request(SITE_URL + src, headers={"User-Agent": "fACTUAL-scan/0.1 (+https://hestonmiles.com/factual/)"})
+                        with urllib.request.urlopen(req, timeout=20, context=C.SSL_CTX) as r:
+                            raw = r.read(8_000_000)
+                    faces[src] = face(raw)
+                except Exception as e:
+                    print(f"  face not read for {src}: {e}")
+                    continue
+            if faces[src]:
+                im["face"] = faces[src]
+            else:
+                im.pop("face", None)
 
 
 def write_archive(stories, feeds):

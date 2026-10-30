@@ -270,10 +270,30 @@ function statTiles(figures) {
 /* ---------- Today ---------- */
 
 // A license-verified photo with its caption: what, who made it, license, source. Text never sits on it.
+// Frame the face, not a fixed band (Heston, 2026-10-30). The scan stores where the face is (fractions of the
+// image); this places the crop for the frame's shape: eyes about a third of the way down, and the chin kept
+// before the hair. When the face is taller than the frame, the eyes win. No face found keeps the default.
+const FRAME_RATIO = { "lead-photo": 16 / 9, "card-photo": 21 / 9, "story-photo": 16 / 9 };
+function facePosition(fc, ratio) {
+  const fit = (want, seen, lo, hi) => {  // window start, as a share of the image, then the object-position %
+    if (seen >= 0.995) return 50;  // the frame shows (nearly) all of this side
+    const t = Math.min(Math.max(want, lo), hi, 1 - seen);
+    return Math.round(Math.max(t, 0) / (1 - seen) * 1000) / 10;
+  };
+  const [x0, y0, x1, y1] = fc.box;
+  const v = (fc.w / ratio) / fc.h;   // share of the height the frame shows
+  const u = (fc.h * ratio) / fc.w;   // share of the width
+  const chin = y1 + 0.06 * (y1 - y0) - v;  // the window starts no higher than this, so the chin shows
+  const y = fit(fc.eyes - 0.36 * v, v, chin, fc.eyes - 0.28 * v);
+  const x = fit((x0 + x1) / 2 - u / 2, u, -1, 1);
+  return `${x}% ${y}%`;
+}
+
 function figure(img, cls, href) {
   const f = el("figure", cls);
   const im = el("img");
   im.src = img.src; im.alt = img.alt; im.loading = "lazy"; im.decoding = "async";
+  if (img.face && FRAME_RATIO[cls]) im.style.objectPosition = facePosition(img.face, FRAME_RATIO[cls]);
   if (href) {
     // On Today the picture opens the story too. The headline is the one link screen readers and the
     // keyboard use, so this one is skipped by both instead of repeating it.
