@@ -401,7 +401,8 @@ function sciChips(sci) {
   const row = el("p", "sci-chips");
   const st = SCI_STATUS[sci.peer_reviewed];
   if (st) row.append(sciChip(...st));
-  if (sci.gap) row.append(sciChip("ctx", "\u25d0", "Goes beyond the study"));
+  if ((sci.overstated || []).length) row.append(sciChip("ctx", "\u25d0", sci.overstated.length === 1 ? "Headline overstates it" : `${sci.overstated.length} headlines overstate it`));
+  else if (sci.gap) row.append(sciChip("ctx", "\u25d0", "Goes beyond the study"));
   return row.childNodes.length ? row : null;
 }
 const noRefs = t => (t || "").replace(/\s*\[\d+(?:\s*,\s*\d+)*\]/g, "");
@@ -416,6 +417,23 @@ function scienceBlock(sci) {
   const where = sci.where ? sci.where.charAt(0).toUpperCase() + sci.where.slice(1).replace(/\.$/, "") + "." : "";
   const lead = [where, firstSentence(sci.gap || sci.measured || "")].filter(Boolean).join(" ");
   if (lead) sb.append(el("p", "sci-lead", lead));
+  // Headlines that claim more than the study shows, named and quoted word for word (checked by the scan against
+  // the outlet's own headline), each with what the study actually shows. The claim is called out, never a motive.
+  const over = sci.overstated || [];
+  if (over.length) {
+    const box = el("div", "sci-over");
+    box.append(el("h3", "sci-over-title", over.length === 1 ? "A headline that overstates the study" : `${over.length} headlines that overstate the study`));
+    const ul = el("ul", "sci-over-list");
+    for (const o of over) {
+      const li = el("li");
+      const q = el("p", "sci-over-q");
+      q.append(el("strong", null, `${o.outlet}: `), sourceLink(`\u201c${o.headline}\u201d`, o.url));
+      li.append(q, el("p", "sci-over-why", o.why));
+      ul.append(li);
+    }
+    box.append(ul);
+    sb.append(box);
+  }
   // Two sentences in view; the rest folds into "more" (Heston: keep it tight).
   const rs = noRefs(sci.research).match(/[^.!?]+[.!?]+(\s|$)/g) || [];
   if (rs.length) sb.append(el("h3", "sub-title", "What other research says"), el("p", "sci-text", rs.slice(0, 2).join("").trim()));
@@ -725,8 +743,7 @@ function oneSideSection(data) {
   const lanes = el("div", "os-lanes");
   for (const k of os.first === "right" ? ["right", "left"] : ["left", "right"]) lanes.append(laneBlock(k, data, by));
   sec.append(lanes);
-  const any = [...os.lanes.left, ...os.lanes.right].map(sid => by[sid]).find(s => s && s.one_side);
-  if (any) sec.append(basedOn(`our outlets' own feeds (${any.one_side.roster.left.length} left, ${any.one_side.roster.center.length} center, ${any.one_side.roster.right.length} right) over the last ${os.hours} hours, and a search of every article from the other side in the past 7 days. Center outlets are listed on each story, not counted.`));
+  // No outlet lists or Based on lines on Today's cards (Heston, 2026-10-30): the basis is on each story page.
   return sec;
 }
 

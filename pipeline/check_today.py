@@ -1346,7 +1346,18 @@ def main():
                 cited = [uniq[i - 1] for i in out["cites"] if 1 <= i <= len(uniq)]  # only items we actually found
                 out = {k: html.unescape(v) if isinstance(v, str) else v for k, v in out.items()}
                 first = {k: html.unescape(v) if isinstance(v, str) else v for k, v in first.items()}
+                # A called-out headline must be that outlet's own headline, word for word (checked here, not trusted).
+                norm = lambda t: re.sub(r"\W+", " ", html.unescape(t)).strip().lower()
+                theirs = {(a["source"].casefold(), norm(a["title"])): a for a in st["articles"]}
+                over = []
+                for o in out.get("overstated") or []:
+                    art = theirs.get((o.get("outlet", "").strip().casefold(), norm(o.get("headline", ""))))
+                    if art and o.get("why", "").strip():
+                        over.append({"outlet": art["source"], "headline": html.unescape(art["title"]), "url": art["url"], "why": o["why"].strip()})
+                    else:
+                        print(f"  science: dropped a callout that is not a real headline: {o.get('outlet')}: {o.get('headline', '')[:60]}")
                 result = {"claim": first["claim"], "study": first["study"], "peer_reviewed": out["peer_reviewed"], "where": out["where"].strip(),
+                          "overstated": over,
                           "measured": out["measured"].strip(), "gap": out["gap"].strip(), "research": out["research"].strip() if cited else "",
                           "papers": [{k: it[k] for k in ("title", "venue", "year", "type", "doi")} for it in cited],
                           "searched": first["search"], "found": len(uniq), "at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
@@ -1970,7 +1981,7 @@ For none, set who, what, due and when to "" and group to "Other"."""
 # where; what it measured against what the coverage says; what other peer-reviewed research says, reviews first.
 # Papers come from OpenAlex (free; journals, preprints, reports, abstracts); the model reads only what we found.
 # Its own cap, apart from the day's Gemini budget (Heston: $1 a day).
-SCIENCE_VERSION = "3"   # 2: retry when research cites nothing; 3: research is about the topic, not the exact claim (straws: 4 on-topic LCAs went unused)
+SCIENCE_VERSION = "4"   # 4: headlines that overstate the study are named and quoted (Heston: "call them out ... make it obvious")   # 2: retry when research cites nothing; 3: research is about the topic, not the exact claim (straws: 4 on-topic LCAs went unused)
 SCIENCE_DAILY_USD = 1.00
 SCIENCE_PER_DAY = 5
 SCIENCE_PER_SCAN = 3
@@ -1991,8 +2002,10 @@ Coverage:
 SCIENCE_SCHEMA = _item({
     "peer_reviewed": {"type": "string", "enum": ["peer-reviewed journal", "not peer-reviewed", "not found", "no single study"]},
     "where": {"type": "string"}, "measured": {"type": "string"}, "gap": {"type": "string"},
-    "research": {"type": "string"}, "cites": {"type": "array", "items": {"type": "integer"}}},
-    ["peer_reviewed", "where", "measured", "gap", "research", "cites"])
+    "research": {"type": "string"}, "cites": {"type": "array", "items": {"type": "integer"}},
+    "overstated": {"type": "array", "items": _item({"outlet": {"type": "string"}, "headline": {"type": "string"}, "why": {"type": "string"}},
+                                                   ["outlet", "headline", "why"])}},
+    ["peer_reviewed", "where", "measured", "gap", "research", "cites", "overstated"])
 SCIENCE_PROMPT = """A news story makes this claim: {claim}
 The coverage describes its source as: {study}
 
@@ -2010,6 +2023,11 @@ and these items, answer for a general reader, in plain short sentences:
   exact claim. Say where they agree and where they differ. An item with no abstract can be named for what its title
   says it studied, never for a finding. Ignore items on a different subject. Never add a finding that is not in an item.
 - cites: the numbers of the items research uses.
+- overstated: each headline in the coverage that claims more than the study as described shows (a modeled impact
+  stated as a direct risk, a correlation stated as a cause, a lab or animal result stated as a human one, one
+  study stated as settled fact). outlet = the outlet in parentheses after it; headline = the headline copied exactly;
+  why = one plain sentence on what the study actually shows, with no word about the outlet's motives. A headline
+  that matches the study goes nowhere. [] if none.
 No opinion, no words about anyone's motives. If the items do not address the question, research = "" and cites = [].
 
 Coverage:
