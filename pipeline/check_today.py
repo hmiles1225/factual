@@ -1157,7 +1157,7 @@ def main():
     ledger = lib.setdefault("ledger", {})
     now_et = datetime.now(ZoneInfo("America/New_York")).date()
     todo_l = [k for k, c in sorted(claims.items(), key=lambda kc: kc[1].get("checked_at", ""), reverse=True)
-              if c.get("verdict") == "Holds up" and not c.get("ledger_outcome") and (ledger.get(k) or {}).get("v") != LEDGER_VERSION][:LEDGER_PER_SCAN]
+              if LEDGER_ON and c.get("verdict") == "Holds up" and not c.get("ledger_outcome") and (ledger.get(k) or {}).get("v") != LEDGER_VERSION][:LEDGER_PER_SCAN]
     if todo_l and gemini_ok():
         ask = lambda k: (k, *gemini_json(LEDGER_PROMPT.replace("{today}", now_et.isoformat()).replace("{claim}", claims[k]["claim"]), LEDGER_SCHEMA, "low"))
         with ThreadPoolExecutor(max_workers=6) as pool:
@@ -1290,7 +1290,7 @@ def main():
     # Promises and predictions: outcomes of statements whose date has passed, under the same caps as any check.
     ledger = lib.setdefault("ledger", {})
     now_et = datetime.now(ZoneInfo("America/New_York")).date()
-    for k, e in ledger.items():
+    for k, e in (ledger.items() if LEDGER_ON else ()):
         if e["kind"] != "dated" or not e["what"] or (claims.get(e.get("outcome")) or {}).get("verdict") in DECIDED:
             continue  # an Unproven outcome is asked again; check_claim re-checks it after RECHECK_AFTER_DAYS
         if date_of(e["due"]) + timedelta(days=LEDGER_GRACE_DAYS) > now_et:
@@ -1949,6 +1949,7 @@ def keep_checked_splits(new, old, claims, vec, limit=3):
 # (its claim checked Holds up) is checked again for what happened, the day after its date. Undated pledges are
 # listed as open. Rules: never a tally per person, party or agency; both sides' pledges count; whose statements
 # are in it is stated; outcome words only (Happened / Didn't happen / Partly / Not settled).
+LEDGER_ON = False          # pulled (Heston, 2026-10-30: "missing the mark"); the stored ledger is kept, nothing new is paid for
 LEDGER_VERSION = "1"
 LEDGER_PER_SCAN = 40       # classified per scan, six at a time (low thinking, about $0.0005 each)
 LEDGER_GRACE_DAYS = 1      # checked this long after the date, so the outcome has been reported

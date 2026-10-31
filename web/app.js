@@ -55,7 +55,9 @@ function followedTopics() {
   const at = base.indexOf("politics") + 1;
   return [...base.slice(0, at), st === "TX" ? "texas" : "local", ...base.slice(at)];
 }
-const EXTRAS = [["one-side", "Covered by one side"], ["promises", "Promises and predictions"]];
+// Promises and predictions is pulled (Heston, 2026-10-30: "missing the mark"). The stored ledger is kept; true brings it back.
+const PROMISES_ON = false;
+const EXTRAS = [["one-side", "Covered by one side"], ...(PROMISES_ON ? [["promises", "Promises and predictions"]] : [])];
 const extraOn = key => { try { return !(JSON.parse(sget("fx-extras-off") || "[]") || []).includes(key); } catch (e) { return true; } };
 function saveTopics(keys) {
   try { localStorage.setItem("fx-topics", JSON.stringify(keys)); } catch (e) {}
@@ -572,7 +574,7 @@ function drawToday() {
       link.append(el("span", "strip-n", String(n)));
       nav.append(link);
     }
-    if (data.library && !CAPSULE && extraOn("promises") && ledgerEntries(data.library).length) {  // shown once there is something in it
+    if (PROMISES_ON && data.library && !CAPSULE && extraOn("promises") && ledgerEntries(data.library).length) {  // shown once there is something in it
       const due = dueSection(data);
       $("sections").append(due.sec);
       const link = el("a", "strip-link", "Promises");
@@ -1254,11 +1256,13 @@ function initSettings() {
 
 function renderArchive(index) {
   const box = $("archive-days");
-  const pp = el("p", "arch-note");
-  const a = el("a", null, "Promises and predictions \u2192");
-  a.href = "promises.html";
-  pp.append(document.createTextNode("Every dated statement we have tracked, and what happened: "), a);
-  box.before(pp);
+  if (PROMISES_ON) {
+    const pp = el("p", "arch-note");
+    const a = el("a", null, "Promises and predictions \u2192");
+    a.href = "promises.html";
+    pp.append(document.createTextNode("Every dated statement we have tracked, and what happened: "), a);
+    box.before(pp);
+  }
   const days = (index && index.days) || [];
   if (!days.length) { box.append(el("p", "topic-empty", "The archive starts with today. Stories are kept here once they have been on Today.")); return; }
   days.forEach((d, n) => {
@@ -2716,7 +2720,7 @@ function renderStory(data) {
   }
 
   // Promises and predictions from this story's checked claims.
-  const pp = ledgerEntries(data.library).filter(e => (e.stories || []).includes(story.sid));
+  const pp = PROMISES_ON ? ledgerEntries(data.library).filter(e => (e.stories || []).includes(story.sid)) : [];
   if (pp.length) {
     const sp = el("section", "block");
     sp.id = "promises";
@@ -2823,9 +2827,12 @@ function renderStory(data) {
   m.href = "how.html";
   const fx = el("a", null, "Corrections \u2192");
   fx.href = "corrections.html";
-  const pl = el("a", null, "Promises and predictions \u2192");
-  pl.href = "promises.html";
-  foot.append(m, document.createTextNode(" \u00b7 "), fx, document.createTextNode(" \u00b7 "), pl);
+  foot.append(m, document.createTextNode(" \u00b7 "), fx);
+  if (PROMISES_ON) {
+    const pl = el("a", null, "Promises and predictions \u2192");
+    pl.href = "promises.html";
+    foot.append(document.createTextNode(" \u00b7 "), pl);
+  }
   s4.append(foot);
   body.append(s4);
   linkTiles($("story-sub").querySelector(".metrics-tiles"));
@@ -3114,6 +3121,7 @@ async function load() {
   if (page === "common") return renderCommon(await getJSON("common-ground.json"));
   if (page === "how") return renderHow(await getJSON("data/stories.json", true));
   if (page === "corrections") return renderCorrections(await getJSON("data/library.json", true));
+  if (page === "promises" && !PROMISES_ON) { location.replace("./"); return; }
   if (page === "promises") { const [lib, st] = await Promise.all([getJSON("data/library.json", true), getJSON("data/stories.json", true)]); return renderPromises({ library: lib, stories: (st && st.stories) || [] }); }
   if (page === "numbers") {
     // The investors' key shows the numbers as they stood at the cutoff, like the rest of the edition.
