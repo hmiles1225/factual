@@ -566,7 +566,7 @@ function drawToday() {
   // for a reader without Texas, or under the top story when neither is followed. The strip follows the page.
   const extras = () => {
     if (data.one_side && !CAPSULE && extraOn("one-side")) {
-      const n = data.one_side.lanes.left.length + data.one_side.lanes.right.length;
+      const n = oneSideTotal(data);
       $("sections").append(oneSideSection(data));
       const link = el("a", "strip-link", "One side");
       link.href = "#one-side";
@@ -700,24 +700,28 @@ function tookText(r) {
   const span = h < 1 ? "within an hour of" : h < 48 ? `${plural(Math.round(h), "hour", "hours")} after` : `${plural(Math.round(h / 24), "day", "days")} after`;
   return `${span} the first ${k}-leaning report`;
 }
+// Like Today's other stories, a story shows once it has its summary (the scan writes about 6 a day).
+function oneSideShown(data, k, by) {
+  by = by || Object.fromEntries(data.stories.map(s => [s.sid, s]));
+  return data.one_side.lanes[k].map(sid => by[sid])
+    .filter(s => s && s.one_side && s.brief && (oneSideFacts(s, 1).length || (s.brief.full_story || []).length));
+}
+const oneSideTotal = (data, by) => oneSideShown(data, "left", by).length + oneSideShown(data, "right", by).length;
+const oneSidePicked = (data, k) => (data.one_side.picked_up || []).filter(r => r.side === k).slice(0, 3);
 function laneBlock(k, data, by) {
-  const os = data.one_side, x = OTHER[k];
+  const x = OTHER[k];
   const lane = el("div", "os-lane");
   lane.append(el("h3", "os-lane-title", `Covered on the ${k}, not the ${x}`));
-  // Like Today's other stories, a story shows once it has its summary (the scan writes about 6 a day).
-  const qualifying = os.lanes[k].map(sid => by[sid]).filter(s => s && s.one_side);
-  const list = qualifying.filter(s => s.brief && (oneSideFacts(s, 1).length || (s.brief.full_story || []).length));
+  const list = oneSideShown(data, k, by);
   if (list.length) {
     const ol = el("ol", "stories");
     ol.setAttribute("aria-label", `Covered on the ${k}, not the ${x}`);
     list.forEach(s => ol.append(oneSideCard(s, data)));
     lane.append(ol);
-  } else if (qualifying.length) {
-    lane.append(el("p", "topic-empty", `${plural(qualifying.length, "story qualifies", "stories qualify")}. ${qualifying.length === 1 ? "Its summary is" : "Their summaries are"} written in the next scans.`));
   } else {
-    lane.append(el("p", "topic-empty", `None right now: no story in the last ${os.hours} hours has ${os.min} or more ${k}-leaning outlets and no ${x}-leaning ones.`));
+    lane.append(el("p", "topic-empty", "None right now."));  // one line, like Today's other empty sections (Heston, 2026-10-31)
   }
-  const picked = (os.picked_up || []).filter(r => r.side === k).slice(0, 3);
+  const picked = oneSidePicked(data, k);
   if (picked.length) {
     lane.append(el("h4", "os-picked-title", "Picked up since"));
     const ul = el("ul", "os-picked");
@@ -739,8 +743,13 @@ function oneSideSection(data) {
   const sec = el("section", "topic-section one-side");
   sec.id = "one-side";
   const head = el("div", "topic-head");
-  head.append(el("h2", "topic-name", "Covered by one side"), el("p", "topic-span", `${os.hours} hours · ${os.lanes.left.length + os.lanes.right.length}`));
+  const n = oneSideTotal(data, by);
+  head.append(el("h2", "topic-name", "Covered by one side"), el("p", "topic-span", `${os.hours} hours · ${n}`));
   sec.append(head);
+  if (!n && !["left", "right"].some(k => oneSidePicked(data, k).length)) {
+    sec.append(el("p", "topic-empty", "Nothing right now that only one side is covering."));
+    return sec;
+  }
   sec.append(el("p", "os-dek", `Stories that ${os.min} or more outlets on one side covered and no outlet on the other side did. Each side is counted against its own list of outlets, so a side with more outlets can't look louder.`));
   const lanes = el("div", "os-lanes");
   for (const k of os.first === "right" ? ["right", "left"] : ["left", "right"]) lanes.append(laneBlock(k, data, by));
