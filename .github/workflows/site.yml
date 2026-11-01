@@ -1,6 +1,7 @@
 # Site-only deploy: a push that changes only web/ uploads the site in about a minute, without running
 # the scan (no fetch, no summaries, no spend). Pipeline changes still go through scan.yml, which deploys
-# the site too. Uses the same FTP secrets and upload as scan.yml.
+# the site too, from main as it is when the scan deploys (so a long scan never puts back an older site).
+# Uses the same FTP secrets and upload as scan.yml.
 name: site
 
 on:

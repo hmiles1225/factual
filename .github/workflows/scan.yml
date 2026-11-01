@@ -86,6 +86,12 @@ jobs:
             data/archive/*.json
           retention-days: 3
 
+      # A scan takes 10 to 30 minutes; a site change pushed meanwhile went live through site.yml, and uploading this
+      # run's older web/ would undo it (2026-11-01: a 17:28 scan put back the Today science tags at 17:36). Upload the
+      # site as it is on main now.
+      - name: Take the latest site
+        run: git fetch --depth 1 origin main && git checkout FETCH_HEAD -- web
+
       - name: Deploy to Hostinger
         env:
           FTP_HOST: ${{ secrets.FTP_HOST }}
