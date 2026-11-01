@@ -392,7 +392,7 @@ function firstSentence(text) {
    Leads the story page when a story rests on a study (Heston, 2026-10-30: "a tag that draws my eye", "easy to read").
    Chips use the verdict palette in its own meaning: green = peer-reviewed, amber = not peer-reviewed or the coverage
    goes further than the study shows, grey outline = not found. */
-const SCI_STATUS = { "peer-reviewed journal": ["hold", "\u2713", "Peer-reviewed"], "not peer-reviewed": ["ctx", "!", "Not peer-reviewed"],
+const SCI_STATUS = { "peer-reviewed journal": ["hold", "\u2713", "Peer-reviewed"], "not peer-reviewed": ["unk", "\u2013", "Not peer-reviewed"],
   "not found": ["unk", "?", "Not found in journals"] };
 function sciChip(cls, glyph, label) {
   const c = el("span", `chip chip-${cls}`);
@@ -403,7 +403,7 @@ function sciChips(sci) {
   const row = el("p", "sci-chips");
   const st = SCI_STATUS[sci.peer_reviewed];
   if (st) row.append(sciChip(...st));
-  if ((sci.overstated || []).length) row.append(sciChip("ctx", "\u25d0", sci.overstated.length === 1 ? "Headline overstates it" : `${sci.overstated.length} headlines overstate it`));
+  if ((sci.overstated || []).length) row.append(sciChip("ctx", "\u25d0", sci.overstated.length === 1 ? "Headline stretches the study" : `${sci.overstated.length} headlines stretch the study`));
   else if (sci.gap) row.append(sciChip("ctx", "\u25d0", "Goes beyond the study"));
   return row.childNodes.length ? row : null;
 }
@@ -416,15 +416,16 @@ function scienceBlock(sci) {
   const chips = sciChips(sci);
   if (chips) sb.append(chips);
   // One plain sentence of what is going on: what the study is, and where the coverage goes further.
-  const where = sci.where ? sci.where.charAt(0).toUpperCase() + sci.where.slice(1).replace(/\.$/, "") + "." : "";
-  const lead = [where, firstSentence(sci.gap || sci.measured || "")].filter(Boolean).join(" ");
+  const w = noRefs(sci.where).replace(/^[\s.]+/, "");  // the scan's item numbers ("[2].") are dropped, here as in the research
+  const where = w ? w.charAt(0).toUpperCase() + w.slice(1).replace(/\.$/, "") + "." : "";
+  const lead = [where, noRefs(firstSentence(sci.gap || sci.measured || ""))].filter(Boolean).join(" ");
   if (lead) sb.append(el("p", "sci-lead", lead));
   // Headlines that claim more than the study shows, named and quoted word for word (checked by the scan against
   // the outlet's own headline), each with what the study actually shows. The claim is called out, never a motive.
   const over = sci.overstated || [];
   if (over.length) {
     const box = el("div", "sci-over");
-    box.append(el("h3", "sci-over-title", over.length === 1 ? "A headline that overstates the study" : `${over.length} headlines that overstate the study`));
+    box.append(el("h3", "sci-over-title", over.length === 1 ? "The headline that stretches it" : `${over.length} headlines that stretch it`));
     const ul = el("ul", "sci-over-list");
     for (const o of over) {
       const li = el("li");
@@ -505,8 +506,6 @@ function storyCard(story, i, data, isLead) {
   a.href = storyHref(story);
   h.append(a);
   main.append(h);
-  const sciRow = story.science && sciChips(story.science);
-  if (sciRow) main.append(sciRow);
   // The first story in each section carries its summary; the rest are headline, time and counts only.
   // One sentence: the first thing outlets on both sides report.
   if (isLead || i === 0) {
@@ -678,8 +677,6 @@ function oneSideCard(story, data) {
   a.href = storyHref(story);  // our story page, like any story, never the outlet's article
   h.append(a);
   main.append(h);
-  const chips = story.science && sciChips(story.science);
-  if (chips) main.append(chips);
   const facts = oneSideFacts(story, 1);
   const full = (story.brief && story.brief.full_story) || [];
   const gist = facts.length ? firstSentence(facts[0].fact) : full.length ? firstSentence(full[0].map(t => t.text).join(" ")) : "";
