@@ -403,7 +403,7 @@ function sciChips(sci) {
   const row = el("p", "sci-chips");
   const st = SCI_STATUS[sci.peer_reviewed];
   if (st) row.append(sciChip(...st));
-  if ((sci.overstated || []).length) row.append(sciChip("ctx", "\u25d0", sci.overstated.length === 1 ? "Headline stretches the study" : `${sci.overstated.length} headlines stretch the study`));
+  if ((sci.overstated || []).length) row.append(sciChip("ctx", "\u25d0", sci.overstated.length === 1 ? "Exaggerated headline" : `${sci.overstated.length} exaggerated headlines`));
   else if (sci.gap) row.append(sciChip("ctx", "\u25d0", "Goes beyond the study"));
   return row.childNodes.length ? row : null;
 }
@@ -425,7 +425,7 @@ function scienceBlock(sci) {
   const over = sci.overstated || [];
   if (over.length) {
     const box = el("div", "sci-over");
-    box.append(el("h3", "sci-over-title", over.length === 1 ? "The headline that stretches it" : `${over.length} headlines that stretch it`));
+    box.append(el("h3", "sci-over-title", over.length === 1 ? "The exaggerated headline" : "The exaggerated headlines"));
     const ul = el("ul", "sci-over-list");
     for (const o of over) {
       const li = el("li");
