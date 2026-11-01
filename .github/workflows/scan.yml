@@ -127,3 +127,21 @@ jobs:
           for f in data/share/*.html; do if [ -f "$f" ]; then put "$f" "s/$(basename "$f")"; fi; done
           # The Texas time capsule (written only until the edition's cutoff; after it, the server keeps the last).
           if [ -d data/capsule ]; then find data/capsule -type f | while read -r f; do put "$f" "$f"; done; fi
+
+  # GitHub's scheduler skips most runs (2026-10-31: 7 of 26 in 13 hours, gaps of 3 hours), so each scan queues the
+  # next one itself, 15 minutes after it ends; the cron above stays as the backup if this chain ever breaks. The
+  # concurrency group holds one running and one waiting scan, so extra triggers merge into one chain, never pile up.
+  # The daily caps and pacing, not the scan count, set the cost. Free: Actions minutes cost nothing in a public repo.
+  next:
+    needs: scan
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      actions: write
+    steps:
+      - run: sleep 900
+      - name: Queue the next scan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run scan.yml --repo "$GITHUB_REPOSITORY" --ref main
