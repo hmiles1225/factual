@@ -124,6 +124,7 @@ def numbers_in(text):
 ONE_SIDE_MIN = 4
 ONE_SIDE_HOURS = 48         # the story's newest article is at most this old
 ONE_SIDE_LANE = 3           # stories per lane
+ONE_SIDE_ON = False         # pulled (Heston, 2026-11-03): 3 of 337 stories met the rule, all too old; nothing new is chosen or paid for
 ONE_SIDE_PER_DAY = 6        # new summaries a day for the section (about 6 approved; no cap raised)
 ONE_SIDE_PER_SCAN = 3
 ONE_SIDE_EXTRA_USD = {"2026-10-30": 0.50}   # one-off, Heston 2026-10-30 ("Yep"): only for this section's summaries, today
@@ -1256,8 +1257,11 @@ def main():
     # time so neither side's stories wait behind the other's. Only after Today's sections, inside the same caps.
     osd = lib.setdefault("one_side", {})
     pool = json.loads((ROOT / "data/articles.json").read_text())["articles"] if (ROOT / "data/articles.json").exists() else []
-    zero_check = make_zero_check(pool, side_of, data.get("roster") or {}, vec, osd)
-    lanes = one_side_lanes(data["stories"], data.get("roster") or {}, osd, datetime.now(timezone.utc), zero_check)
+    if ONE_SIDE_ON:
+        zero_check = make_zero_check(pool, side_of, data.get("roster") or {}, vec, osd)
+        lanes = one_side_lanes(data["stories"], data.get("roster") or {}, osd, datetime.now(timezone.utc), zero_check)
+    else:
+        lanes = {"left": [], "right": []}
     day_os = osd.setdefault("days", {}).setdefault(today, {"summaries": 0, "left": 0, "right": 0, "gemini_usd": 0.0})
     osd["days"] = {d: v for d, v in osd["days"].items() if d >= cutoff}
     first = "left" if day_os["left"] <= day_os["right"] else "right"

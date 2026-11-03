@@ -57,7 +57,10 @@ function followedTopics() {
 }
 // Promises and predictions is pulled (Heston, 2026-10-30: "missing the mark"). The stored ledger is kept; true brings it back.
 const PROMISES_ON = false;
-const EXTRAS = [["one-side", "Covered by one side"], ...(PROMISES_ON ? [["promises", "Promises and predictions"]] : [])];
+// Covered by one side is pulled too (Heston, 2026-11-03: "we never have any content in there"). Its stories already
+// published stay in the archive and keep their pages; true brings the section back.
+const ONE_SIDE_ON = false;
+const EXTRAS = [...(ONE_SIDE_ON ? [["one-side", "Covered by one side"]] : []), ...(PROMISES_ON ? [["promises", "Promises and predictions"]] : [])];
 const extraOn = key => { try { return !(JSON.parse(sget("fx-extras-off") || "[]") || []).includes(key); } catch (e) { return true; } };
 function saveTopics(keys) {
   try { localStorage.setItem("fx-topics", JSON.stringify(keys)); } catch (e) {}
@@ -564,7 +567,7 @@ function drawToday() {
   // Covered by one side, then Promises and predictions: right below Texas (Heston, 2026-10-30), or below Politics
   // for a reader without Texas, or under the top story when neither is followed. The strip follows the page.
   const extras = () => {
-    if (data.one_side && !CAPSULE && extraOn("one-side")) {
+    if (ONE_SIDE_ON && data.one_side && !CAPSULE && extraOn("one-side")) {
       const n = oneSideTotal(data);
       $("sections").append(oneSideSection(data));
       const link = el("a", "strip-link", "One side");
@@ -1168,7 +1171,7 @@ function initSettings() {
     lab.append(cb, document.createTextNode(` ${name}`));
     xs.append(lab);
   }
-  form.append(xs);
+  if (EXTRAS.length) form.append(xs);  // no extra sections on: no empty fieldset
   // Local politics: off until a reader turns it on and picks a state. Shown only while an edition runs.
   const loc = el("fieldset", "settings-local");
   loc.hidden = true;
