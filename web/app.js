@@ -532,7 +532,7 @@ function renderToday(data) {
   if (LOCAL_ON) getJSON(txNumbersURL(), true).then(n => { if (n && n.races) { TXNUM = n; const y = window.scrollY; drawToday(); window.scrollTo({ top: y, behavior: "instant" }); } }).catch(() => {});
   // Election night: the count joins the Texas numbers once counting starts, and keeps itself current.
   const results = () => getResults().then(r => { if (r || TXRES) { TXRES = r; const y = window.scrollY; drawToday(); window.scrollTo({ top: y, behavior: "instant" }); } return r; });
-  if (LOCAL_ON) results().then(r => { if (r) setInterval(results, 120000); }).catch(() => {});
+  if (LOCAL_ON) results().then(r => { if (r || awaitingCount()) setInterval(results, 120000); }).catch(() => {});
   // Coming back from a story: Today is drawn after the browser would restore the scroll, so keep the
   // position ourselves (this tab only) and put it back once the stories are on the page.
   try { history.scrollRestoration = "manual"; } catch (e) {}
@@ -600,7 +600,7 @@ function drawToday() {
     const head = el("div", "topic-head");
     head.append(el("h2", "topic-name", t.name), el("p", "topic-span", `${t.span} \u00b7 ${list.length}`));
     sec.append(head);
-    const numbers = t.key === "texas" && (TXRES || (TXNUM && Object.keys(TXNUM.races || {}).length)) ? numbersCards(TXNUM || { races: {} }) : null;
+    const numbers = t.key === "texas" && (TXRES || awaitingCount() || (TXNUM && Object.keys(TXNUM.races || {}).length)) ? numbersCards(TXNUM || { races: {} }) : null;
     // Texas Election (Heston, 2026-10-23): the Capitol as its header, the numbers first, then the stories.
     if (t.key === "texas") sec.append(figure(TX_HEADER, "section-photo"));
     if (numbers) { sec.append(numbers); sec.append(el("h3", "numbers-group-h stories-h", "Stories")); }
@@ -2315,9 +2315,14 @@ const RESULTS_STORY = { key: "results", kind: "results", title: "Texas results: 
 NUMBER_STORIES.unshift(RESULTS_STORY);
 const RESULTS_API = "api/results.php";
 let TXRES = null;  // the count, once api/results.php says counting has started
+// Election Day (Heston, 2026-11-03: "since it is election day"): before the first votes, the results card already
+// shows, says when the count starts, and the page keeps checking, so a reader who opened it at 6 pm sees the count
+// arrive. From midnight Central (CST, UTC-6, after daylight saving ended Nov 1) until the next morning.
+const ELECTION_DAY = [Date.parse("2026-11-03T06:00:00Z"), Date.parse("2026-11-04T15:00:00Z")];
+const awaitingCount = () => !TXRES && !CAPSULE && Date.now() >= ELECTION_DAY[0] && Date.now() < ELECTION_DAY[1];
 const getResults = () => CAPSULE ? Promise.resolve(null) : getJSON(RESULTS_API, true).then(r => (r && r.live && r.counted ? r : null));
 // A number story is shown when it has something to show: polls by group only once switched on and read.
-const numberShown = (n, nums) => n.kind === "results" ? !!TXRES : n.kind === "early" ? !!(nums.early_vote && nums.early_vote.voted)
+const numberShown = (n, nums) => n.kind === "results" ? !!TXRES || awaitingCount() : n.kind === "early" ? !!(nums.early_vote && nums.early_vote.voted)
   : !!nums.races[n.race] && (n.kind !== "groups" || (nums.groups_live && Object.keys(nums.races[n.race].groups || {}).length > 0));
 
 // The feed's names are in capitals: "GREG ABBOTT (I)", "R.F. \"BOB\" ACHGILL", "KEVIN MCCORMICK".
@@ -2446,19 +2451,20 @@ function numbersGist(n, nums) {
 function numbersCards(nums) {
   const box = el("div", "numbers-group");
   box.append(el("h3", "numbers-group-h", "By the numbers"));
-  if (TXRES) {
+  if (TXRES || awaitingCount()) {
     const g = el("div", "numbers-race");
     g.append(el("h4", "numbers-race-h", "Statewide \u00b7 results"));
     const ol = el("ol", "stories numbers-pair");
     ol.setAttribute("aria-label", "Election results");
     const li = el("li", "story story-data");
     const main = el("div", "story-main");
-    main.append(el("p", "story-when", agoText(Date.parse(TXRES.checked_at))));
+    main.append(el("p", "story-when", TXRES ? agoText(Date.parse(TXRES.checked_at)) : "Tonight"));
     const h = el("h2", "headline");
-    const a = el("a", null, "Results: the count so far");
+    const a = el("a", null, TXRES ? "Results: the count so far" : "Results: the count starts tonight");
     a.href = `numbers.html?n=${RESULTS_STORY.key}`;
     h.append(a);
-    main.append(h, el("p", "gist", resultsGist(TXRES)));
+    main.append(h, el("p", "gist", TXRES ? resultsGist(TXRES)
+      : "Polls close at 7 pm Central (8 pm Central in El Paso and Hudspeth counties). The state\u2019s own count shows here as counties report, updated every 2 minutes. We never call a race."));
     li.append(main);
     ol.append(li);
     g.append(ol);
