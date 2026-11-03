@@ -665,6 +665,11 @@ def main():
     def gemini_ok():
         return spend["gemini_usd"] < work_cap and not past_deadline()
 
+    def picture_ok():
+        """Picture checks (about $0.0005 each) use the whole day's cap, not the paced share: every picture needs one,
+        so pacing them blanked Today's pictures each morning (2026-11-03, 11 of 16 after the v7 re-pick)."""
+        return spend["gemini_usd"] < gemini_cap and not past_deadline()
+
     def charge_gemini(usage, searches=0):
         paid = max(0, spend["gemini_searches"] + searches - GEMINI_FREE_SEARCHES) - max(0, spend["gemini_searches"] - GEMINI_FREE_SEARCHES)
         spend["gemini_usd"] = round(spend["gemini_usd"] + UNDERCOUNT * cost_usd(C.GEMINI_MODEL, usage) + paid * SEARCH_USD, 4)
@@ -855,7 +860,7 @@ def main():
             return False
         seen = brief.setdefault("image_fits", {})
         if key not in seen:
-            if not gemini_ok():
+            if not picture_ok():
                 return False
             facts = " ".join(f["fact"] for f in brief["agreed"] if "left" in f["sides"] and "right" in f["sides"])
             try:
@@ -925,7 +930,7 @@ def main():
             if last not in avoid_last and len(last) >= 4 and re.search(rf"\b{re.escape(last)}\b", title) and ok(person(name)) \
                     and fits(story, brief, person(name), f"person:{name.casefold()}"):
                 return person(name)
-        if brief.get("img_v") != IMAGES_VERSION and gemini_ok():
+        if brief.get("img_v") != IMAGES_VERSION and picture_ok():
             # Ask once which Wikipedia articles' main pictures would illustrate the story (for an Ebola story,
             # "Ebola virus": the virus, not a patient). Each title must exist, and its picture passes the same
             # rules: freely licensed, not a map, flag or logo, nothing graphic.
