@@ -454,8 +454,9 @@
   "tx": {
    "name": "Texas",
    "section": "Texas Election",
-   "until": "2026-11-04T14:00:00+00:00",
-   "_note": "Demo edition (Heston, 2026-10-19). Live until the 9am Eastern scan on Nov 4 2026 (14:00 UTC), then frozen as a time capsule. Region outlets feed only the Texas section, never the national sections, so the national 15/15 balance is unchanged."
+   "until": "2026-11-07T06:00:00+00:00",
+   "capsule_until": "2026-11-04T14:00:00+00:00",
+   "_note": "Demo edition (Heston, 2026-10-19). The investors' time capsule freezes at the 9am Eastern scan on Nov 4 2026 (14:00 UTC, capsule_until), as planned. The live edition, with election results, runs through Friday Nov 6 Central (until; Heston 2026-11-03: keep results up while counties count). Region outlets feed only the Texas section, never the national sections, so the national 15/15 balance is unchanged."
   }
  }
 }

@@ -654,7 +654,7 @@ def main():
     # While the Texas edition runs, the race numbers step (tx_numbers.py, after this one) keeps a little of the
     # day's cap for confirming new polls against their releases; claims stop that much short of the cap.
     tx = (data.get("regions") or {}).get("tx")
-    work_cap = gemini_cap - (TX_NUMBERS_USD if tx and datetime.now(timezone.utc) < datetime.fromisoformat(tx["until"]) else 0.0)
+    work_cap = gemini_cap - (TX_NUMBERS_USD if tx and datetime.now(timezone.utc) < datetime.fromisoformat(tx.get("capsule_until") or tx["until"]) else 0.0)
     # The day's budget is paced across the day: a fifth at midnight UTC, the rest in step with the clock. Unpaced,
     # the first three scans after midnight UTC (7 pm in Texas) spent it all and Today froze until the next evening
     # (Heston, 2026-10-30: "nothing has updated in like 16 hours"). Same total; what a scan leaves, the next can use.
@@ -1661,12 +1661,13 @@ def write_capsule(data, lib):
     tx = (data.get("regions") or {}).get("tx")
     if not tx or not re.fullmatch(r"[A-Za-z0-9_-]{16,64}", key):
         return
-    if datetime.now(timezone.utc) >= datetime.fromisoformat(tx["until"]):
+    cut = tx.get("capsule_until") or tx["until"]  # the capsule freezes on its own date; the live edition can run longer
+    if datetime.now(timezone.utc) >= datetime.fromisoformat(cut):
         print("  capsule: frozen (past the Texas cutoff); not written")
         return
     on = [s for s in data["stories"] if s.get("on_today")]
     checks = {k for s in on for k in s.get("checks", [])}
-    capsule = {"edition": "tx", "frozen_at": tx["until"], "scanned_at": data["scanned_at"], "regions": data.get("regions"),
+    capsule = {"edition": "tx", "frozen_at": cut, "scanned_at": data["scanned_at"], "regions": data.get("regions"),
                "feeds": data.get("feeds", []), "stories": on,
                "library": {"claims": {k: c for k, c in lib.get("claims", {}).items() if k in checks}}}
     folder = ROOT / "data/capsule"

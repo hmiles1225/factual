@@ -1015,8 +1015,10 @@ def load_live():
 def main():
     now = datetime.now(timezone.utc)
     tx = json.loads((ROOT / "pipeline/feeds.json").read_text()).get("regions", {}).get("tx")
-    if not tx or now >= datetime.fromisoformat(tx["until"]):
-        print("tx_numbers: the Texas edition is over; the last file stays up")
+    # Polls and early vote end with the capsule (Nov 4): after the election they are history, and the results
+    # come from api/results.php, free. The last file stays up while the live edition runs on.
+    if not tx or now >= datetime.fromisoformat(tx.get("capsule_until") or tx["until"]):
+        print("tx_numbers: the Texas numbers are final; the last file stays up")
         return 0
     live = load_live()
     cache = live.get("confirmed", {}) if live.get("version") == VERSION else {}
@@ -1182,7 +1184,8 @@ def main():
         print(f"tx_numbers: share pages not written ({e})")
     # The investors' time capsule freezes these with the rest of the edition (see check_today.write_capsule).
     key = os.environ.get("CAPSULE_KEY", "").strip()
-    if re.fullmatch(r"[A-Za-z0-9_-]{16,64}", key):
+    cut = (tx or {}).get("capsule_until") or (tx or {}).get("until")
+    if re.fullmatch(r"[A-Za-z0-9_-]{16,64}", key) and cut and now < datetime.fromisoformat(cut):
         (ROOT / "data/capsule" / key).mkdir(parents=True, exist_ok=True)
         (ROOT / "data/capsule" / key / "tx-numbers.json").write_text(json.dumps({k: v for k, v in out.items() if k != "confirmed"}))
     if lib is not None and ask:
