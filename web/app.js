@@ -687,16 +687,6 @@ function oneSideCard(story, data) {
   li.append(main);
   return li;
 }
-function tookText(r) {
-  const k = r.side;
-  if (r.day_only || r.broke_day_only) {
-    const d = Math.round((Date.parse(r.at.slice(0, 10)) - Date.parse(r.broke_at.slice(0, 10))) / 864e5);
-    return d <= 0 ? `on the same day as the first ${k}-leaning report` : `${plural(d, "day", "days")} after the first ${k}-leaning report`;
-  }
-  const h = (Date.parse(r.at) - Date.parse(r.broke_at)) / 36e5;
-  const span = h < 1 ? "within an hour of" : h < 48 ? `${plural(Math.round(h), "hour", "hours")} after` : `${plural(Math.round(h / 24), "day", "days")} after`;
-  return `${span} the first ${k}-leaning report`;
-}
 // Like Today's other stories, a story shows once it has its summary (the scan writes about 6 a day).
 function oneSideShown(data, k, by) {
   by = by || Object.fromEntries(data.stories.map(s => [s.sid, s]));
@@ -704,7 +694,6 @@ function oneSideShown(data, k, by) {
     .filter(s => s && s.one_side && s.brief && (oneSideFacts(s, 1).length || (s.brief.full_story || []).length));
 }
 const oneSideTotal = (data, by) => oneSideShown(data, "left", by).length + oneSideShown(data, "right", by).length;
-const oneSidePicked = (data, k) => (data.one_side.picked_up || []).filter(r => r.side === k).slice(0, 3);
 function laneBlock(k, data, by) {
   const x = OTHER[k];
   const lane = el("div", "os-lane");
@@ -718,20 +707,6 @@ function laneBlock(k, data, by) {
   } else {
     lane.append(el("p", "topic-empty", "None right now."));  // one line, like Today's other empty sections (Heston, 2026-10-31)
   }
-  const picked = oneSidePicked(data, k);
-  if (picked.length) {
-    lane.append(el("h4", "os-picked-title", "Picked up since"));
-    const ul = el("ul", "os-picked");
-    for (const r of picked) {
-      const li = el("li");
-      const s = by[r.sid];
-      if (s && s.on_today) { const a = el("a", "os-picked-link", r.title); a.href = storyHref(s); li.append(a); }
-      else li.append(el("span", "os-picked-link", r.title));
-      li.append(el("span", "os-picked-when", `${r.by} was the first ${x}-leaning outlet, ${tookText(r)} (${r.broke_by}).`));
-      ul.append(li);
-    }
-    lane.append(ul);
-  }
   return lane;
 }
 function oneSideSection(data) {
@@ -743,7 +718,7 @@ function oneSideSection(data) {
   const n = oneSideTotal(data, by);
   head.append(el("h2", "topic-name", "Covered by one side"), el("p", "topic-span", `${os.hours} hours · ${n}`));
   sec.append(head);
-  if (!n && !["left", "right"].some(k => oneSidePicked(data, k).length)) {
+  if (!n) {  // one line, like Today's other empty sections; no "Picked up since" list on Today (Heston, 2026-11-03)
     sec.append(el("p", "topic-empty", "Nothing right now that only one side is covering."));
     return sec;
   }
