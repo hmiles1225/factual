@@ -197,8 +197,12 @@ Write:
   approved the warrant", not "The Daily Wire reports a federal judge approved the warrant"), so each
   side's facts can be checked the same way; otherwise leave it empty.
 - values_questions: up to 2 questions about what should happen or what matters more, worded neutrally.
-- main_subject: the one person (or organization, or place) the story is mainly about, by full name.
-  Use kind "none" if there is no single clear subject.
+- main_subject: the one person (or organization, or place) the story is mainly about, by full name: the
+  subject of the headline's news, not someone who announced, confirmed, reported or commented on it. A
+  governor announcing a measles death, a police chief describing a crash, a spokesperson confirming a
+  layoff: the story is about the death, the crash, the layoff, not them. Use kind "none" when the story is
+  about a thing or an event (a disease, a storm, a crash, a study, a policy) rather than one person,
+  organization or place.
 
 Rules:
 - Attribute every claim to whoever made it. If a person, party, agency or lawyer says something, write
@@ -234,7 +238,7 @@ SUPPORT_SCHEMA = _item({"established": {"type": "string", "enum": ["all", "part"
                         "missing": {"type": "string", "description": "Only the part of the claim the evidence does not establish, as a short phrase starting with 'that' (e.g. 'that other work was paused'). Empty if all is established."}},
                        ["established", "missing"])
 LOADED_VERSION = "2"
-IMAGES_VERSION = "6"   # 2: aliases, transliterations, headline fallback; 3: no maps, flags, logos; 4: article pictures, nothing graphic
+IMAGES_VERSION = "7"   # 7: every picture, portraits too, must show what the story is about (Hochul on a measles death, 2026-11-03); 2: aliases, transliterations, headline fallback; 3: no maps, flags, logos; 4: article pictures, nothing graphic
 ALT_VERSION = IMAGES_VERSION + ".3"   # .2: a backup never shares the first picture's surname; .3: on every path
 LOADED_SCHEMA = _item({"terms": {"type": "array", "items": _item({
     "term": {"type": "string", "description": "Copied exactly as the outlet wrote it."},
@@ -472,6 +476,10 @@ answer whether it makes sense there for a reader: it shows the thing, place, ins
 the story is about, and it would not mislead (a different country, a different event, a different person,
 an unrelated object that shares a name). A generic picture of the right thing is fine; a picture from
 somewhere else that could be mistaken for this story is not. Anything graphic is not.
+A person fits only when the story is about that person: what they did, said or decided is the news. A
+person who only announced, confirmed, reported or commented on the news does not fit, even when named in
+the story: a governor's portrait on a story about a child's measles death, a sheriff's on a story about a
+crash, a CEO's on a story about a recall they announced. The reader should see what the story is about.
 
 Story: {story}
 Picture: {subject}. Description: {about}"""
@@ -840,12 +848,11 @@ def main():
             check_claim(rec["claim"], (rec.get("stories") or ["recheck"])[0], rec.get("said_by", []))
 
     def fits(story, brief, rec, key):
-        """Portraits are exact name matches; any other picture must also pass the relevance check, once per
-        story and picture, before it is shown."""
+        """Every picture, a portrait too, must pass the relevance check, once per story and picture, before it is
+        shown. A name match only proves who is in the portrait, not that the story is about them (Kathy Hochul,
+        who announced it, on a child's measles death, 2026-11-03)."""
         if not rec:
             return False
-        if key.startswith("person:"):
-            return True
         seen = brief.setdefault("image_fits", {})
         if key not in seen:
             if not gemini_ok():
@@ -908,14 +915,15 @@ def main():
             last = full.split()[-1]
             if last in avoid_last:
                 continue
-            if re.search(rf"\b{re.escape(full)}\b", title) or (len(last) >= 5 and last_count[last] == 1 and not first_name(last)
-                                                               and re.search(rf"\b{re.escape(last)}\b", title)):
+            if (re.search(rf"\b{re.escape(full)}\b", title) or (len(last) >= 5 and last_count[last] == 1 and not first_name(last)
+                                                                and re.search(rf"\b{re.escape(last)}\b", title))) and fits(story, brief, rec, k):
                 return rec
         # The headline's actor: a full name from the shared facts whose surname is in the headline ("Trump
         # Says ..." -> Donald Trump). Heston: a person the headline is about beats a picture of the place.
         for name in person_names(facts_text)[:6]:
             last = name.split()[-1]
-            if last not in avoid_last and len(last) >= 4 and re.search(rf"\b{re.escape(last)}\b", title) and ok(person(name)):
+            if last not in avoid_last and len(last) >= 4 and re.search(rf"\b{re.escape(last)}\b", title) and ok(person(name)) \
+                    and fits(story, brief, person(name), f"person:{name.casefold()}"):
                 return person(name)
         if brief.get("img_v") != IMAGES_VERSION and gemini_ok():
             # Ask once which Wikipedia articles' main pictures would illustrate the story (for an Ebola story,
@@ -942,7 +950,7 @@ def main():
         # they are in sentence case, so capitalized runs are names; headlines are in title case.
         text = " ".join([f["fact"] for f in brief["agreed"] if "left" in f["sides"] and "right" in f["sides"]][:3] + [title])
         for name in person_names(text)[:6]:
-            if name.split()[-1] not in avoid_last and ok(person(name)):
+            if name.split()[-1] not in avoid_last and ok(person(name)) and fits(story, brief, person(name), f"person:{name.casefold()}"):
                 return person(name)
         return None
 
