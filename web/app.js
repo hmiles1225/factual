@@ -532,7 +532,7 @@ function renderToday(data) {
   if (LOCAL_ON) getJSON(txNumbersURL(), true).then(n => { if (n && n.races) { TXNUM = n; const y = window.scrollY; drawToday(); window.scrollTo({ top: y, behavior: "instant" }); } }).catch(() => {});
   // Election night: the count joins the Texas numbers once counting starts, and keeps itself current.
   const results = () => getResults().then(r => { if (r || TXRES) { TXRES = r; const y = window.scrollY; drawToday(); window.scrollTo({ top: y, behavior: "instant" }); } return r; });
-  if (LOCAL_ON) results().then(r => { if (r || awaitingCount()) setInterval(results, 120000); }).catch(() => {});
+  if (LOCAL_ON) results().then(r => { if (r || awaitingCount()) setInterval(results, RESULTS_EVERY); }).catch(() => {});
   // Coming back from a story: Today is drawn after the browser would restore the scroll, so keep the
   // position ourselves (this tab only) and put it back once the stories are on the page.
   try { history.scrollRestoration = "manual"; } catch (e) {}
@@ -2319,6 +2319,8 @@ let TXRES = null;  // the count, once api/results.php says counting has started
 // shows, says when the count starts, and the page keeps checking, so a reader who opened it at 6 pm sees the count
 // arrive. From midnight Central (CST, UTC-6, after daylight saving ended Nov 1) until the next morning.
 const ELECTION_DAY = [Date.parse("2026-11-03T06:00:00Z"), Date.parse("2026-11-04T15:00:00Z")];
+// The server reads the state's feed at most once a minute (api/results.php EVERY); reading faster gains nothing.
+const RESULTS_EVERY = 60000;
 const awaitingCount = () => !TXRES && !CAPSULE && Date.now() >= ELECTION_DAY[0] && Date.now() < ELECTION_DAY[1];
 const getResults = () => CAPSULE ? Promise.resolve(null) : getJSON(RESULTS_API, true).then(r => (r && r.live && r.counted ? r : null));
 // A number story is shown when it has something to show: polls by group only once switched on and read.
@@ -2464,7 +2466,7 @@ function numbersCards(nums) {
     a.href = `numbers.html?n=${RESULTS_STORY.key}`;
     h.append(a);
     main.append(h, el("p", "gist", TXRES ? resultsGist(TXRES)
-      : "Polls close at 7 pm Central (8 pm Central in El Paso and Hudspeth counties). The state\u2019s own count shows here as counties report, updated every 2 minutes. We never call a race."));
+      : "Polls close at 7 pm Central (8 pm Central in El Paso and Hudspeth counties). The state\u2019s own count shows here as counties report, updated every minute. We never call a race."));
     li.append(main);
     ol.append(li);
     g.append(ol);
@@ -2535,9 +2537,9 @@ function renderNumbers(nums) {
   if (n.kind === "results") {
     let block = resultsBlock(TXRES);
     sec.append(block);
-    // The count changes through the night: read again every two minutes, in place.
+    // The count changes through the night: read again every minute, in place.
     setInterval(() => getResults().then(r => { if (!r) return; TXRES = r; const b = resultsBlock(r); block.replaceWith(b); block = b;
-      $("story-meta").textContent = `Texas Election \u00b7 Results \u00b7 Read ${stamp(r.checked_at)}`; }).catch(() => {}), 120000);
+      $("story-meta").textContent = `Texas Election \u00b7 Results \u00b7 Read ${stamp(r.checked_at)}`; }).catch(() => {}), RESULTS_EVERY);
   }
   if (r) {
     const c = r.candidates;
