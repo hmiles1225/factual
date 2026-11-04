@@ -76,6 +76,7 @@ function get_all(array $urls): array {
     $out = [];
     foreach ($hs as $i => $ch) {
         $b = curl_multi_getcontent($ch);
+        $GLOBALS['codes'][parse_url($urls[$i], PHP_URL_HOST)] = curl_getinfo($ch, CURLINFO_HTTP_CODE) . (curl_error($ch) ? ' ' . curl_error($ch) : '');
         $out[$i] = (curl_getinfo($ch, CURLINFO_HTTP_CODE) === 200 && is_string($b) && $b !== '') ? $b : null;
         curl_multi_remove_handle($mh, $ch);
     }
@@ -169,7 +170,7 @@ function read_feed(): ?array {
         'updated' => (string) ($home['LastUpdatedTime'] ?? ''),  // the Secretary of State's own time, in UTC
         'counties' => [(int) ($home['CountiesReporting']['CR'] ?? 0), (int) ($home['CountiesReporting']['CT'] ?? 0)],
         'polling_places' => [(int) ($home['PollingReporting']['PLR'] ?? 0), (int) ($home['PollingReporting']['PLT'] ?? 0)],
-        'direct' => $direct, 'direct_notes' => $GLOBALS['why'] ?? [], 'races' => $races];
+        'direct' => $direct, 'direct_notes' => $GLOBALS['why'] ?? [], 'reads' => $GLOBALS['codes'] ?? [], 'races' => $races];
 }
 
 // Swap in each county's own count where it is ahead of the state's for that county. Returns the counties used.
