@@ -888,3 +888,18 @@ a.num-name:hover { text-decoration: underline; }
 .sci-over-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .sci-over-q { margin: 0; font: 400 0.9375rem/1.45 var(--sans); color: var(--ink); }
 .sci-over-why { margin: 2px 0 0; font-size: 0.875rem; line-height: 1.45; color: var(--ink-2); }
+
+/* The AP's call on a results race (Heston, 2026-11-04): the winner's picture, the call across its foot, a tick on
+   the winner's row. Brand purple, not green: green means Confirmed on a fact check. */
+.win-photo { margin: 6px 0 14px; max-width: 360px; }
+.win-frame { position: relative; border-radius: 10px; overflow: hidden; }
+.win-frame img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; }
+.win-band { position: absolute; left: 0; right: 0; bottom: 0; margin: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px;
+  padding: 10px 12px; background: rgba(75, 58, 158, 0.94); color: #fff; }
+.win-check { display: inline-flex; flex: none; }
+.win-text { font: 700 1.0625rem/1.2 var(--cond); }
+.win-by { margin-left: auto; font: 500 0.6875rem/1.2 var(--mono); letter-spacing: 0.02em; text-transform: uppercase; color: #fff; }
+.win-note { margin-bottom: 10px; }
+.win-tick { display: inline-flex; vertical-align: -3px; margin-right: 6px; }
+.win-tick circle { fill: var(--lav); }
+.win-tick path { stroke: var(--bg); }

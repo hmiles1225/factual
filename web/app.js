@@ -2383,16 +2383,53 @@ function resultsGist(res) {
   const r = res.races[0];
   const top = [...r.candidates].sort((a, b) => b.votes - a.votes).filter(c => c.party !== "W").slice(0, 2);
   const shares = top.map(c => `${nameCase(c.last)} ${fmtN(c.votes)} (${pct(c.votes, r.total).toFixed(1)}%)`);
+  const call = apCall(r);
+  if (call) return `${officeName(r.office)}: the AP called it for ${candName(call.winner)}. The count so far: ${shares.join(", ")}. ${call.conceded}`;
   return `${officeName(r.office)} so far: ${shares.join(", ")}. ${sourceNote(res)} No race is called here.`;
+}
+
+// Races the Associated Press has called (Heston, 2026-11-04: "we should refer to the AP winners"). Entered by hand from
+// the reporting, each with its source: we still never call a race ourselves. Keyed by the state's office name.
+const AP_CALLS = {
+  "U. S. SENATOR": { last: "TALARICO", conceded: "Ken Paxton conceded on election night.",
+    outlet: "NPR", source: "https://www.npr.org/2026/11/03/g-s1-148943/texas-senate-race-james-talarico",
+    img: { src: "img/talarico-win-v1.jpg", alt: "James Talarico", caption: "Photo: Antonioaesparza \u00b7 CC BY-SA 4.0 \u00b7 Wikimedia Commons",
+      source: "https://commons.wikimedia.org/wiki/File:James_Talarico_Press_Conference_(cropped).jpg" } },
+  "GOVERNOR": { last: "HINOJOSA", conceded: "Greg Abbott conceded on election night.",
+    outlet: "NPR", source: "https://www.npr.org/2026/11/03/g-s1-150844/gina-hinojosa-texas-governor-abbott",
+    img: { src: "img/hinojosa-win-v1.jpg", alt: "Gina Hinojosa", caption: "Photo: RRC1701 \u00b7 CC0 \u00b7 Wikimedia Commons",
+      source: "https://commons.wikimedia.org/wiki/File:Gina_Hinojosa_at_the_AFL-CIO_COPE_convention_in_2024.jpg" } },
+};
+const apCall = r => { const c = AP_CALLS[r.office]; const w = c && r.candidates.find(x => x.last.toUpperCase() === c.last);
+  return w ? { ...c, winner: w } : null; };
+const CHECK_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#fff"/><path d="M7 12.5l3.2 3.2L17 8.8" fill="none" stroke="#4B3A9E" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+// The winner's picture above the race's numbers, with the call across its foot: the AP's call, said as the AP's.
+function winnerFigure(call) {
+  const f = el("figure", "win-photo");
+  const frame = el("div", "win-frame");
+  const im = el("img"); im.src = call.img.src; im.alt = call.img.alt; im.decoding = "async";
+  const band = el("p", "win-band");
+  const tick = el("span", "win-check"); tick.innerHTML = CHECK_SVG;
+  band.append(tick, el("span", "win-text", `${candName(call.winner)} wins`), el("span", "win-by", "Called by the AP"));
+  frame.append(im, band);
+  const cap = el("figcaption"); const a = el("a", null, call.img.caption); a.href = call.img.source; a.rel = "noopener"; cap.append(a);
+  f.append(frame, cap);
+  return f;
 }
 
 function resultsRace(r) {
   const box = el("div", "num-early-part results-race");
   box.append(el("h2", "num-h", officeName(r.office)));
+  const call = apCall(r);
+  if (call) {
+    box.append(winnerFigure(call));
+    box.append(el("p", "num-note win-note", `The Associated Press called this race for ${candName(call.winner)}. ${call.conceded} The count below is the state\u2019s, still unofficial until the canvass.`));
+  }
   // Write-in candidates share one row: most are not counted until the official canvass.
   const named = r.candidates.filter(c => c.party !== "W");
   const writeIns = r.candidates.filter(c => c.party === "W");
-  const rows = named.map(c => ({ label: `${candName(c)} · ${PARTY[c.party] || c.party}`, votes: c.votes, early: c.early, ballot: c.ballot }));
+  const rows = named.map(c => ({ label: `${candName(c)} · ${PARTY[c.party] || c.party}`, votes: c.votes, early: c.early, ballot: c.ballot, won: !!call && c === call.winner }));
   if (writeIns.length) rows.push({ label: `Write-in candidates (${writeIns.length})`, votes: writeIns.reduce((t, c) => t + c.votes, 0), ballot: 1e9 });
   // Most votes first once there are votes; before that, ballot order. Order is the count, not a call.
   rows.sort((a, b) => r.total ? b.votes - a.votes : a.ballot - b.ballot);
@@ -2401,7 +2438,9 @@ function resultsRace(r) {
     const li = el("li", "rate-row");
     const bar = el("div", "rate-bar"); bar.setAttribute("aria-hidden", "true");
     const f = el("i"); f.style.width = `${pct(x.votes, r.total)}%`; bar.append(f);
-    li.append(el("span", "rate-label", x.label), el("span", "rate-text", `${fmtN(x.votes)} · ${pct(x.votes, r.total).toFixed(1)}%`), bar);
+    const label = el("span", "rate-label", x.label);
+    if (x.won) { const t = el("span", "win-tick"); t.innerHTML = CHECK_SVG; label.prepend(t); label.append(el("span", "sr-only", ", winner as called by the AP")); }
+    li.append(label, el("span", "rate-text", `${fmtN(x.votes)} · ${pct(x.votes, r.total).toFixed(1)}%`), bar);
     ul.append(li);
   }
   const early = r.candidates.reduce((t, c) => t + c.early, 0);
@@ -2421,7 +2460,7 @@ function resultsBlock(res) {
   const bar = el("div", "rate-bar results-reporting"); bar.setAttribute("aria-hidden", "true");
   const f = el("i"); f.style.width = `${reportingShare(res)}%`; bar.append(f);
   box.append(bar);
-  box.append(el("p", "num-lede", `${fmtN(pp)} of ${fmtN(ppAll)} polling places and ${co} of ${coAll} counties have reported to the state, as of ${sosTime(res.updated)} Central. ${sourceNote(res)} These are unofficial results. We show the count; we never call a race or project a winner.`));
+  box.append(el("p", "num-lede", `${fmtN(pp)} of ${fmtN(ppAll)} polling places and ${co} of ${coAll} counties have reported to the state, as of ${sosTime(res.updated)} Central. ${sourceNote(res)} These are unofficial results. We never call a race ourselves: a winner shows only once the Associated Press has called it.`));
   const [first, second, ...rest] = res.races;
   for (const r of [first, second].filter(Boolean)) box.append(resultsRace(r));
   if (rest.length) {
@@ -2435,6 +2474,8 @@ function resultsBlock(res) {
   src.append(el("summary", null, `Sources (${1 + (res.direct || []).length})`));
   src.append(sourceLine(`The Texas Secretary of State\u2019s unofficial election night results, as last updated by the state at ${sosTime(res.updated)} Central; read by us ${Math.max(1, Math.round((Date.now() - Date.parse(res.checked_at)) / 60000))} min ago. Official results come from the state canvass weeks later.`, "Secretary of State results", res.source));
   for (const x of res.direct || []) src.append(sourceLine(`${nameCase(x.county)} County\u2019s own unofficial results, from the county\u2019s results site${countyTime(x.updated) ? `, as last updated by the county at ${countyTime(x.updated)} Central` : ""}. They replace the state\u2019s numbers for this county only, so no vote is counted twice.`, `${nameCase(x.county)} County results`, x.source));
+  for (const r of res.races) { const c = apCall(r); if (c) src.append(sourceLine(`Race call, ${officeName(r.office)}: the Associated Press, as reported by ${c.outlet}.`, c.outlet, c.source)); }
+  src.querySelector("summary").textContent = `Sources (${src.querySelectorAll(".num-basis").length})`;
   box.append(src);
   return box;
 }
