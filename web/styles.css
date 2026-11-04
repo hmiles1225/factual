@@ -741,6 +741,8 @@ a.num-name:hover { text-decoration: underline; }
 /* Early vote: filled share against an outlined one */
 .num-early-part { margin-top: 26px; }
 .results-more { margin-top: 26px; }
+.results-sources .num-basis { margin-top: 12px; }
+.results-more + .results-sources { margin-top: -1px; }  /* two folds in a row share one rule */
 .pair-list { list-style: none; margin: 0; padding: 0; }
 .pair-row { display: grid; grid-template-columns: minmax(0, 11rem) minmax(0, 1fr) minmax(0, 13rem); gap: 4px 14px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); }
 .pair-label { font: 600 0.9375rem/1.3 var(--cond); color: var(--ink); }

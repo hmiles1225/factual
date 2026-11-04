@@ -1597,6 +1597,8 @@ function gapText(gap, cands) {
 }
 const usd = v => v == null ? "–" : v >= 1e6 ? `$${(v / 1e6).toFixed(v >= 1e8 ? 0 : 1)}M` : v >= 1e3 ? `$${Math.round(v / 1e3)}K` : `$${Math.round(v)}`;
 const shortDate = iso => new Date(`${iso}T12:00:00`).toLocaleDateString([], { month: "short", day: "numeric" });
+// A source inside a Sources fold: the sentence and its link, without the "Based on" label.
+function sourceLine(text, link, href) { const p = basedOn(text, link, href); p.firstChild.remove(); return p; }
 function basedOn(text, link, href) {
   // Heston's basis rule: what a number is based on sits right where it appears, never in a footnote.
   const p = el("p", "num-basis");
@@ -2400,8 +2402,6 @@ function resultsBlock(res) {
   const f = el("i"); f.style.width = `${reportingShare(res)}%`; bar.append(f);
   box.append(bar);
   box.append(el("p", "num-lede", `${fmtN(pp)} of ${fmtN(ppAll)} polling places and ${co} of ${coAll} counties have reported to the state, as of ${sosTime(res.updated)} Central. ${sourceNote(res)} These are unofficial results. We show the count; we never call a race or project a winner.`));
-  box.append(basedOn(`the Texas Secretary of State’s unofficial election night results, as last updated by the state at ${sosTime(res.updated)} Central; read by us ${Math.max(1, Math.round((Date.now() - Date.parse(res.checked_at)) / 60000))} min ago. Official results come from the state canvass weeks later.`, "Secretary of State results", res.source));
-  for (const x of res.direct || []) box.append(basedOn(`${nameCase(x.county)} County\u2019s own unofficial results, from the county\u2019s results site${countyTime(x.updated) ? `, as last updated by the county at ${countyTime(x.updated)} Central` : ""}. They replace the state\u2019s numbers for this county only, so no vote is counted twice.`, `${nameCase(x.county)} County results`, x.source));
   const [first, second, ...rest] = res.races;
   for (const r of [first, second].filter(Boolean)) box.append(resultsRace(r));
   if (rest.length) {
@@ -2410,6 +2410,12 @@ function resultsBlock(res) {
     for (const r of rest) more.append(resultsRace(r));
     box.append(more);
   }
+  // Where the count comes from, folded away at the end (Heston, 2026-11-03: not a stack of "Based on" lines).
+  const src = el("details", "results-more results-sources");
+  src.append(el("summary", null, `Sources (${1 + (res.direct || []).length})`));
+  src.append(sourceLine(`The Texas Secretary of State\u2019s unofficial election night results, as last updated by the state at ${sosTime(res.updated)} Central; read by us ${Math.max(1, Math.round((Date.now() - Date.parse(res.checked_at)) / 60000))} min ago. Official results come from the state canvass weeks later.`, "Secretary of State results", res.source));
+  for (const x of res.direct || []) src.append(sourceLine(`${nameCase(x.county)} County\u2019s own unofficial results, from the county\u2019s results site${countyTime(x.updated) ? `, as last updated by the county at ${countyTime(x.updated)} Central` : ""}. They replace the state\u2019s numbers for this county only, so no vote is counted twice.`, `${nameCase(x.county)} County results`, x.source));
+  box.append(src);
   return box;
 }
 const pct = (a, b) => b ? 100 * a / b : 0;
