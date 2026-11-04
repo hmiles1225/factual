@@ -2549,7 +2549,12 @@ const AP_CALLS = {
     outlet: "Houston Public Media", source: "https://www.houstonpublicmedia.org/articles/news/politics/election-2026/2026/11/03/565293/railroad-comm-prewrite/",
     img: { src: "img/rosenthal-win-v1.jpg", alt: "Jon Rosenthal", caption: "Photo: Scriptrix101 \u00b7 CC BY-SA 4.0 \u00b7 Wikimedia Commons",
       source: "https://commons.wikimedia.org/wiki/File:Photo_of_Jon_Rosenthal.jpg" } },
-  // No AP call found in the reporting (2026-11-04) for the other ten statewide races: they stay unmarked until one is.
+  "ATTORNEY GENERAL": { last: "JOHNSON",
+    outlet: "KPRC 2", source: "https://www.click2houston.com/decision-2026/2026/11/04/nathan-johnson-wins-texas-attorney-general-race-beating-galvestons-mayes-middleton/",
+    img: { src: "img/johnson-win-v1.jpg", alt: "Nathan Johnson", caption: "Photo: LBJ Library · Public domain · Wikimedia Commons",
+      source: "https://commons.wikimedia.org/wiki/File:Yvette_Simpson,_Texas_State_Sen._Nathan_Johnson_of_Dallas,_and_Eric_Vincent,_2023.jpg" } },
+  // No AP call (2026-11-04 16:53 UTC, AP feed behind the Texas Tribune's results) for the other ten statewide races:
+  // comptroller, land, agriculture, four Supreme Court seats, three Court of Criminal Appeals seats. Unmarked until one is.
 };
 const apCall = r => { const c = AP_CALLS[r.office]; const w = c && r.candidates.find(x => x.last.toUpperCase() === c.last);
   return w ? { ...c, winner: w } : null; };
