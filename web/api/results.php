@@ -25,10 +25,9 @@ const CLARITY = 'https://results.enr.clarityelections.com/';
 // state posts the counties' uploads in batches, well behind the counties themselves, which is what TV shows. For each
 // county below, in each race, when the county's own count is ahead of what the state has from that county, the
 // county's count replaces the state's for that county. Never added on top, so nothing is counted twice. Only sites
-// that let us read without a robot check: Dallas County's (an AWS challenge) is not one of them.
+// that let us read without a robot check: Dallas County's site and Clarity (Tarrant, Travis; an AWS challenge to
+// our server, 2026-11-03) are not, so they are left out. The Clarity reader stays for a county that becomes readable.
 const COUNTIES = [
-    'TARRANT' => ['clarity', 'TX/Tarrant/127297'],
-    'TRAVIS'  => ['clarity', 'TX/Travis/127492'],
     'HARRIS'  => ['harris', 'https://appfiles.harrisvotes.com/harrisvotes/prd/Data/1126/resultsbyballot.json',
                   'https://www.harrisvotes.com/Election-Results/Live-Results'],
 ];
