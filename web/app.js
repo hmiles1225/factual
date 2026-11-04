@@ -2345,6 +2345,13 @@ const sosTime = t => { const m = /^(\w{3}) (\d+), (\d{4}) (\d+):(\d+)/.exec(t ||
     .replace(/ (AM|PM)$/, (_, x) => ` ${x.toLowerCase()}`); };
 // Why our count can trail TV: networks take each county's count directly; the state posts the counties' uploads in batches.
 const LAG_NOTE = "The state posts the counties\u2019 counts in batches, so it runs behind TV and the counties\u2019 own sites, which count directly from each county. Early in the night the first counties in are mostly small ones.";
+// A county's own update time: Clarity says "11/3/2026 7:06:57 PM CST", Harris County an ISO time in UTC.
+const countyTime = t => { const m = /(\d+):(\d+):\d+ (AM|PM)/.exec(t || ""); if (m) return `${+m[1]}:${m[2]} ${m[3].toLowerCase()}`;
+  const d = Date.parse(t || ""); return isNaN(d) ? "" : new Date(d).toLocaleString("en-US", { timeZone: "America/Chicago", hour: "numeric", minute: "2-digit" }).replace(/ (AM|PM)$/, (_, x) => ` ${x.toLowerCase()}`); };
+// Where we read a big county's own site because it was ahead of the state (api/results.php COUNTIES).
+const directNames = res => (res.direct || []).map(x => `${nameCase(x.county)} County`);
+const sourceNote = res => { const d = directNames(res); if (!d.length) return LAG_NOTE;
+  return `${listNames(d)}: the ${d.length > 1 ? "counties\u2019 own counts" : "county\u2019s own count"}, read from ${d.length > 1 ? "their" : "its"} results site, which runs ahead of the state. Everywhere else: the state\u2019s count, which posts the counties\u2019 numbers in batches and runs behind TV.`; };
 const reportingShare = res => pct(res.polling_places[0], res.polling_places[1]);
 // "12% reporting": the share of polling places the state counts as reported, its own measure of how far along the count is.
 const reportingText = res => `${shareText(reportingShare(res))}% reporting`;
@@ -2354,7 +2361,7 @@ function resultsGist(res) {
   const r = res.races[0];
   const top = [...r.candidates].sort((a, b) => b.votes - a.votes).filter(c => c.party !== "W").slice(0, 2);
   const shares = top.map(c => `${nameCase(c.last)} ${fmtN(c.votes)} (${pct(c.votes, r.total).toFixed(1)}%)`);
-  return `The state\u2019s count as of ${sosTime(res.updated)} Central, ${res.counties[0]} of ${res.counties[1]} counties in. ${officeName(r.office)} so far: ${shares.join(", ")}. ${LAG_NOTE} No race is called here.`;
+  return `${officeName(r.office)} so far: ${shares.join(", ")}. ${sourceNote(res)} No race is called here.`;
 }
 
 function resultsRace(r) {
@@ -2376,7 +2383,7 @@ function resultsRace(r) {
     ul.append(li);
   }
   const early = r.candidates.reduce((t, c) => t + c.early, 0);
-  box.append(ul, el("p", "num-note", `${fmtN(r.total)} votes counted in this race${r.total ? `, ${fmtN(early)} of them cast early (in person or by mail)` : ""}.`));
+  box.append(ul, el("p", "num-note", `${fmtN(r.total)} votes counted in this race${r.total && !r.early_partial ? `, ${fmtN(early)} of them cast early (in person or by mail)` : ""}.`));
   return box;
 }
 
@@ -2392,8 +2399,9 @@ function resultsBlock(res) {
   const bar = el("div", "rate-bar results-reporting"); bar.setAttribute("aria-hidden", "true");
   const f = el("i"); f.style.width = `${reportingShare(res)}%`; bar.append(f);
   box.append(bar);
-  box.append(el("p", "num-lede", `${fmtN(pp)} of ${fmtN(ppAll)} polling places and ${co} of ${coAll} counties have reported to the state, as of ${sosTime(res.updated)} Central. ${LAG_NOTE} These are unofficial results. We show the count; we never call a race or project a winner.`));
+  box.append(el("p", "num-lede", `${fmtN(pp)} of ${fmtN(ppAll)} polling places and ${co} of ${coAll} counties have reported to the state, as of ${sosTime(res.updated)} Central. ${sourceNote(res)} These are unofficial results. We show the count; we never call a race or project a winner.`));
   box.append(basedOn(`the Texas Secretary of State’s unofficial election night results, as last updated by the state at ${sosTime(res.updated)} Central; read by us ${Math.max(1, Math.round((Date.now() - Date.parse(res.checked_at)) / 60000))} min ago. Official results come from the state canvass weeks later.`, "Secretary of State results", res.source));
+  for (const x of res.direct || []) box.append(basedOn(`${nameCase(x.county)} County\u2019s own unofficial results, from the county\u2019s results site${countyTime(x.updated) ? `, as last updated by the county at ${countyTime(x.updated)} Central` : ""}. They replace the state\u2019s numbers for this county only, so no vote is counted twice.`, `${nameCase(x.county)} County results`, x.source));
   const [first, second, ...rest] = res.races;
   for (const r of [first, second].filter(Boolean)) box.append(resultsRace(r));
   if (rest.length) {
