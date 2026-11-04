@@ -2393,9 +2393,9 @@ function resultsGist(res) {
 
 // The U.S. House and Senate, seat by seat (Heston, 2026-11-04: "stories about the house and senate, with
 // diagrams/data viz about the seats won"). From api/seats.php: Wikipedia's tally of the AP's and networks' calls,
-// as the page stood 15 minutes earlier (his yes to Wikipedia, with that safeguard). No red and blue: party is
-// position (Democrats from the left, Republicans from the right) and a label; a lighter tint is a Senate seat not up
-// this year; grey is not called yet. The line in the middle is half the chamber: crossing it is a majority.
+// as the page stood 15 minutes earlier (his yes to Wikipedia, with that safeguard). No red and blue: each party gets
+// its own labelled row, measured against the same line, the majority (Heston, 11-04: one shared bar "is actually kind
+// of difficult to read"). A lighter tint is a Senate seat not up this year; hatched grey is not called yet.
 const SEATS_API = "api/seats.php";
 const SEATS_UNTIL = Date.parse("2026-12-01T06:00:00Z");
 let SEATS = null;
@@ -2416,25 +2416,31 @@ const sideTotal = s => s.held + s.won;
 function seatBar(c, kind, big) {
   const wrap = el("div", `seat-chart${big ? " is-big" : ""}`);
   const d = sideTotal(c.D), r = sideTotal(c.R);
-  const top = el("div", "seat-ends");
-  top.append(el("span", "seat-end", `Democrats${c.indep ? "*" : ""} ${d}`), el("span", "seat-end seat-end-r", `Republicans ${r}`));
-  const bar = el("div", "seat-bar");
-  bar.setAttribute("role", "img");
-  bar.setAttribute("aria-label", `${kind === "house" ? "House" : "Senate"}: Democrats${c.indep ? " and independents" : ""} ${d}, Republicans ${r}, not called ${c.uncalled}, of ${c.total} seats. ${c.majority} is a majority.`);
-  const seg = (n, cls, tip) => { if (!n) return; const g = el("i", cls); g.style.flexGrow = n; g.title = tip; bar.append(g); };
-  seg(c.D.held, "seat-held", `Democrats${c.indep ? " and independents" : ""}: ${c.D.held} seats not up this year`);
-  seg(c.D.won, "seat-won", `Democrats${c.indep ? " and independents" : ""}: ${c.D.won} seats won Tuesday`);
-  seg(c.uncalled + c.other, "seat-open", `${c.uncalled} not called yet${c.other ? `, ${c.other} other parties` : ""}`);
-  seg(c.R.won, "seat-won", `Republicans: ${c.R.won} seats won Tuesday`);
-  seg(c.R.held, "seat-held", `Republicans: ${c.R.held} seats not up this year`);
-  const mid = el("b", "seat-mid"); mid.setAttribute("aria-hidden", "true"); bar.append(mid);
-  const foot = el("div", "seat-foot");
-  foot.append(el("span", null, c.uncalled ? `${c.uncalled} not called` : "All called"), el("span", "seat-foot-mid", `${c.majority} for a majority`), el("span"));
-  wrap.append(top, bar, foot);
+  wrap.style.setProperty("--maj", `${100 * c.majority / c.total}%`);
+  wrap.setAttribute("role", "img");
+  wrap.setAttribute("aria-label", `${kind === "house" ? "House" : "Senate"}: Democrats${c.indep ? " and independents" : ""} ${d}, Republicans ${r}, not called ${c.uncalled}, of ${c.total} seats. ${c.majority} is a majority.`);
+  const status = n => n >= c.majority ? "Majority" : `${c.majority - n} short`;
+  const row = (name, n, segs, note) => {
+    const g = el("div", `seat-row${note ? "" : " is-open"}`);
+    const top = el("p", "seat-row-top");
+    top.append(el("span", "seat-name", name), el("span", "seat-num", String(n)));
+    if (note) top.append(el("span", `seat-status${n >= c.majority ? " is-majority" : ""}`, note));
+    const track = el("div", "seat-track");
+    for (const [cls, k] of segs) if (k) { const i = el("i", cls); i.style.width = `${100 * k / c.total}%`; track.append(i); }
+    g.append(top, track);
+    return g;
+  };
+  const head = el("p", "seat-maj-label", `${c.majority} for a majority`);
+  wrap.append(head,
+    row(`Democrats${c.indep ? "*" : ""}`, d, [["seat-held", c.D.held], ["seat-won", c.D.won]], status(d)),
+    row("Republicans", r, [["seat-held", c.R.held], ["seat-won", c.R.won]], status(r)));
+  if (c.uncalled || c.other) wrap.append(row(c.other ? "Not called or other" : "Not called", c.uncalled + c.other, [["seat-open", c.uncalled + c.other]], ""));
+  for (const x of wrap.children) x.setAttribute("aria-hidden", "true");
   if (kind === "senate") {
     const key = el("ul", "seat-key");
+    key.setAttribute("aria-hidden", "true");
     for (const [cls, t] of [["seat-won", "Won Tuesday"], ["seat-held", "Not up this year"], ["seat-open", "Not called yet"]]) {
-      const li = el("li"); const sw = el("i", `seat-swatch ${cls}`); sw.setAttribute("aria-hidden", "true"); li.append(sw, document.createTextNode(t)); key.append(li);
+      const li = el("li"); const sw = el("i", `seat-swatch ${cls}`); li.append(sw, document.createTextNode(t)); key.append(li);
     }
     wrap.append(key);
   }
@@ -2472,6 +2478,59 @@ function seatsCards(sx) {
   }
   box.append(el("p", "num-note seats-note", "Seat calls as listed on Wikipedia, which gathers the AP’s and the networks’ calls. We show each page as it stood 15 minutes earlier, so a bad edit has time to be undone. We never call a seat ourselves."));
   return box;
+}
+
+// The House page's district detail, on the page itself (Heston, 11-04: "why are we hiding the deeper story behind
+// another click"): every seat that changed party, then Texas's 38. From the same Wikipedia revision as the totals, but
+// its district rows are edited one by one and can trail the totals, which the note says with both counts.
+const PARTY1 = { D: "Democrat", R: "Republican", I: "Independent" };
+const district = x => `${STATES[x.st] || x.st} ${x.d === "AL" ? "at-large" : x.d}`;
+const who = (name, p) => `${name}, ${PARTY1[p] || "other party"}`;
+function heldBefore(x) {
+  if (x.new) return "New district";
+  if (x.vacant) return "Vacant";
+  return x.incumbents.map(i => who(i.name, i.party)).join("; ") || "\u2013";
+}
+function districtTable(caption, heads, rows) {
+  const wrapT = el("div", "num-table-wrap");
+  const tbl = el("table", "num-table seat-table");
+  tbl.append(el("caption", "sr-only", caption));
+  const hr = el("tr"); for (const h of heads) hr.append(el("th", null, h));
+  const thead = el("thead"); thead.append(hr); tbl.append(thead);
+  const tb = el("tbody");
+  for (const [cls, cells] of rows) { const tr = el("tr", cls); for (const c of cells) tr.append(el("td", null, c)); tb.append(tr); }
+  tbl.append(tb); wrapT.append(tbl);
+  return wrapT;
+}
+function houseDistricts(x) {
+  const ds = x.districts, out = [];
+  const byPlace = (a, b) => (STATES[a.st] || a.st).localeCompare(STATES[b.st] || b.st) || (parseInt(a.d) || 0) - (parseInt(b.d) || 0);
+  const gains = ds.filter(d => d.gain).sort(byPlace);
+  const part = el("div", "num-early-part");
+  part.append(el("h2", "num-h", `Seats that changed party (${gains.length})`));
+  const by = p => gains.filter(d => d.gain === p).length;
+  const fresh = gains.filter(d => d.new).length;
+  const counts = [["D", "Democrats"], ["R", "Republicans"], ["I", "Independents"]].filter(([p]) => by(p)).map(([p, n], i) => i ? `${n} ${by(p)}` : `${n} gained ${by(p)} ${by(p) === 1 ? "seat" : "seats"}`);
+  part.append(el("p", "num-lede", gains.length
+    ? `${counts.join(", ")}.${fresh ? ` ${fresh} of them ${fresh === 1 ? "is a district" : "are districts"} first drawn for this election, counted against the old map.` : ""}`
+    : "No seat has changed party in the called races so far."));
+  if (gains.length) part.append(districtTable("House seats that changed party: district, winner, and who held it before",
+    ["District", "Won by", "Held before"], gains.map(d => [null, [district(d), who(d.winner, d.party), heldBefore(d)]])));
+  out.push(part);
+  const tx = ds.filter(d => d.st === "TX").sort(byPlace);
+  if (tx.length) {
+    const p2 = el("div", "num-early-part");
+    const open = tx.filter(d => !d.winner).length;
+    p2.append(el("h2", "num-h", `Texas, district by district (${tx.length})`));
+    p2.append(el("p", "num-lede", open ? `${tx.length - open} called, ${open} not called yet.` : "Every Texas district is called."));
+    p2.append(districtTable("Texas House districts: winner, and whether the seat changed party", ["District", "Won by", "Change"],
+      tx.map(d => [d.gain ? "is-gain" : d.winner ? null : "is-open",
+        [`${d.d === "AL" ? "At-large" : d.d}`, d.winner ? who(d.winner, d.party) : "Not called", d.gain ? (d.new ? "New district" : "Changed party") : d.winner ? "Same party" : "\u2013"]])));
+    out.push(p2);
+  }
+  const called = ds.filter(d => d.winner).length, total = x.D + x.R + (x.other || 0);
+  if (called !== total) out.unshift(el("p", "num-note", `Wikipedia\u2019s district rows are updated one at a time and trail its totals: they list ${called} districts called, the totals above ${total}. A district shows here once its own row is updated.`));
+  return out;
 }
 
 // The full page for one chamber.
@@ -2513,8 +2572,10 @@ function renderSeats(n) {
       tb.append(tr);
     }
     tbl.append(tb); part.append(tbl); box.append(part);
+  } else if (x.districts) {
+    box.append(...houseDistricts(x));
   } else {
-    box.append(el("p", "num-note", "District-by-district results are not on this page yet: this is the national count of seats called."));
+    box.append(el("p", "num-note", "The district-by-district list could not be read from Wikipedia just now; the totals above still stand."));
   }
   const src = el("details", "results-more results-sources");
   src.append(el("summary", null, "Sources (1)"));

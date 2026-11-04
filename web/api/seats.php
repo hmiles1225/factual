@@ -74,7 +74,7 @@ function field(string $w, string $k): string {
 }
 function num(string $v): ?int { $v = preg_replace("/'''|''/", '', $v); return preg_match('/^\s*(\d+)\s*$/', $v, $m) ? (int) $m[1] : null; }
 function party(string $p): string {
-    return stripos($p, 'Democratic') !== false ? 'D' : (stripos($p, 'Republican') !== false ? 'R' : (stripos($p, 'Independent') !== false ? 'I' : '?'));
+    return (stripos($p, 'Democratic') !== false || preg_match('/\bDFL\b/', $p)) ? 'D' : (stripos($p, 'Republican') !== false ? 'R' : (stripos($p, 'Independent') !== false ? 'I' : '?'));
 }
 
 // House: the infobox's seats won so far, party by party. Seats not yet called are the rest of the 435.
@@ -92,8 +92,47 @@ function house(string $w): ?array {
     $called = $won['D'] + $won['R'] + $won['other'];
     if ($called > 435 || $won['D'] + $won['R'] === 0) return null;
     return ['D' => $won['D'], 'R' => $won['R'], 'other' => $won['other'], 'uncalled' => 435 - $called, 'total' => 435, 'majority' => 218,
-        'page_updated' => preg_replace('/\[\[|\]\]/', '', field($w, 'last_update'))];
+        'page_updated' => preg_replace('/\[\[|\]\]/', '', field($w, 'last_update')), 'districts' => districts($w)];
 }
+
+// House, district by district (Heston, 2026-11-04: "why are we hiding the deeper story behind another click"): each
+// state's table on the same page. A district's winner is the candidate Wikipedia marks with {{aye}}; no mark means not
+// called. "Democratic gain" / "Republican gain" in the status cell means the seat changed party. All 435 or nothing:
+// a table we can't read in full is not shown in part.
+function districts(string $w): ?array {
+    if (!preg_match('/\n==\s*Alabama\s*==/', $w, $a, PREG_OFFSET_CAPTURE)
+        || !preg_match('/\n==\s*Non-voting delegates\s*==/', $w, $b, PREG_OFFSET_CAPTURE)) return null;
+    [$s, $e] = [$a[0][1], $b[0][1]];
+    if ($e <= $s) return null;
+    $parts = preg_split('/^!(?:rowspan=\d+\s*\|)?\s*\{\{ushr\|([A-Z]{2})\|([A-Z0-9]+)\|X\}\}/m', substr($w, $s, $e - $s), -1, PREG_SPLIT_DELIM_CAPTURE);
+    $out = []; $seen = [];
+    for ($i = 1; $i + 2 < count($parts); $i += 3) {
+        [$st, $d, $row] = [$parts[$i], $parts[$i + 1], $parts[$i + 2]];
+        $row = preg_split('/\n\|\}|\n==/', $row)[0];  // stop at the table's or section's end
+        $at = stripos($row, '{{plainlist}}');
+        $head = $at === false ? $row : substr($row, 0, $at);
+        $cands = $at === false ? '' : substr($row, $at);
+        preg_match_all('/\{\{sortname\|([^|}]+)\|([^|}]+)[^\n]*\n\|[^\n]*\|\s*([^|\n]+?)\s*$/m', $head, $inc);
+        $incumbents = array_map(fn($f, $l, $p) => ['name' => clean(trim($f) . ' ' . trim($l)), 'party' => party($p)], $inc[1], $inc[2], $inc[3]);
+        $winner = null; $wp = null;
+        foreach (explode("\n", $cands) as $line) {
+            if (stripos($line, '{{aye}}') === false) continue;
+            $name = preg_match("/'''(.+?)'''/", $line, $m) ? $m[1] : '';
+            $name = trim(preg_replace(['/\[\[(?:[^|\]]*\|)?([^\]]*)\]\]/', '/\{\{[^}]*\}\}/', '/<[^>]+>/'], ['$1', '', ''], $name));
+            $wp = preg_match('/\(([^()]*)\)\s*$/', trim(preg_replace('/<ref[^>]*>.*?<\/ref>|<ref[^>]*\/>/', '', $line)), $m) ? party($m[1]) : '?';
+            $winner = $name ? clean($name) : null;
+            break;
+        }
+        $gain = preg_match('/\b(Democratic|Republican|Independent) gain\b/', $head, $g) ? party($g[1]) : null;
+        $key = "$st-$d";
+        if (isset($seen[$key])) continue;
+        $seen[$key] = true;
+        $out[] = ['st' => $st, 'd' => $d, 'winner' => $winner, 'party' => $winner ? $wp : null, 'gain' => $gain, 'incumbents' => $incumbents,
+            'vacant' => !$incumbents && stripos($head, 'Vacant') !== false, 'new' => stripos($head, '(new seat)') !== false];
+    }
+    return count($out) === 435 ? $out : null;
+}
+function clean(string $s): string { return trim(str_replace("\u{00A0}", ' ', html_entity_decode($s, ENT_QUOTES | ENT_HTML5, 'UTF-8'))); }
 
 // Senate: the "After the elections" seat grid, one cell per seat: its party, whether it was up this year, the state,
 // and the result ("Gain", "Hold", "Re-elected", "Elected", or TBD).
