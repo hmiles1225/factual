@@ -169,7 +169,7 @@ function read_feed(): ?array {
         'updated' => (string) ($home['LastUpdatedTime'] ?? ''),  // the Secretary of State's own time, in UTC
         'counties' => [(int) ($home['CountiesReporting']['CR'] ?? 0), (int) ($home['CountiesReporting']['CT'] ?? 0)],
         'polling_places' => [(int) ($home['PollingReporting']['PLR'] ?? 0), (int) ($home['PollingReporting']['PLT'] ?? 0)],
-        'direct' => $direct, 'races' => $races];
+        'direct' => $direct, 'direct_notes' => $GLOBALS['why'] ?? [], 'races' => $races];
 }
 
 // Swap in each county's own count where it is ahead of the state's for that county. Returns the counties used.
@@ -178,7 +178,8 @@ function merge_counties(array &$races): array {
     $info = get(COUNTY_INFO);
     $byCounty = [];
     $ci = $info ? json_decode((string) base64_decode((string) (json_decode($info, true)['upload'] ?? '')), true) : null;
-    if (!is_array($ci)) return [];  // without the state's own county rows we cannot swap safely
+    $GLOBALS['why'] = [];  // what happened with each county, in the response, so a failed read is visible
+    if (!is_array($ci)) { $GLOBALS['why'][] = 'state county rows: ' . ($info ? 'unreadable' : 'not read'); return []; }
     foreach ($ci as $c) $byCounty[(string) ($c['N'] ?? '')] = $c;
     $used = [];
     foreach (COUNTIES as $name => $src) {
@@ -186,7 +187,7 @@ function merge_counties(array &$races): array {
         $county = read_county($name, $src);
         if ($county) file_put_contents($cache, json_encode($county));
         elseif (is_file($cache)) $county = json_decode((string) file_get_contents($cache), true);  // last good copy
-        if (!$county || !isset($byCounty[$name])) continue;
+        if (!$county || !isset($byCounty[$name])) { $GLOBALS['why'][] = "$name: " . (!$county ? 'not read' : 'not in state rows'); continue; }
         $stateRaces = [];
         foreach ($byCounty[$name]['Races'] ?? [] as $r) $stateRaces[office_key((string) $r['N'])] = $r;
         $senate = 0;
@@ -213,6 +214,7 @@ function merge_counties(array &$races): array {
             if ($k === office_key('U. S. SENATOR')) $senate = array_sum($cv);
         }
         unset($race);
+        $GLOBALS['why'][] = "$name: " . ($senate ? 'used' : 'state is level or ahead');
         if ($senate) $used[] = ['county' => $name, 'updated' => $county['updated'], 'source' => $county['source'], 'senate_votes' => $senate];
     }
     return $used;
