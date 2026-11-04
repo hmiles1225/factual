@@ -529,6 +529,8 @@ function renderToday(data) {
   drawToday();
   document.addEventListener("fx-topics", drawToday);
   // The Texas race numbers come in their own file; their cards join the Texas section when it arrives.
+  // The House and Senate seat charts lead the Elections section once the seats are read.
+  if (seatsOn()) getJSON(SEATS_API, true).then(x => { if (x && x.ok) { SEATS = x; const y = window.scrollY; drawToday(); window.scrollTo({ top: y, behavior: "instant" }); } }).catch(() => {});
   if (LOCAL_ON) getJSON(txNumbersURL(), true).then(n => { if (n && n.races) { TXNUM = n; const y = window.scrollY; drawToday(); window.scrollTo({ top: y, behavior: "instant" }); } }).catch(() => {});
   // Election night: the count joins the Texas numbers once counting starts, and keeps itself current.
   const results = () => getResults().then(r => { if (r || TXRES) { TXRES = r; const y = window.scrollY; drawToday(); window.scrollTo({ top: y, behavior: "instant" }); } return r; });
@@ -604,6 +606,7 @@ function drawToday() {
     // Texas Election (Heston, 2026-10-23): the Capitol as its header, the numbers first, then the stories.
     if (t.key === "texas") sec.append(figure(TX_HEADER, "section-photo"));
     if (numbers) { sec.append(numbers); sec.append(el("h3", "numbers-group-h stories-h", "Stories")); }
+    if (t.key === "elections" && SEATS && !CAPSULE) { sec.append(seatsCards(SEATS)); sec.append(el("h3", "numbers-group-h stories-h", "Stories")); }
     if (list.length) {
       const ol = el("ol", "stories");
       ol.setAttribute("aria-label", `${t.name} stories`);
@@ -2388,6 +2391,145 @@ function resultsGist(res) {
   return `${officeName(r.office)} so far: ${shares.join(", ")}. ${sourceNote(res)} No race is called here.`;
 }
 
+// The U.S. House and Senate, seat by seat (Heston, 2026-11-04: "stories about the house and senate, with
+// diagrams/data viz about the seats won"). From api/seats.php: Wikipedia's tally of the AP's and networks' calls,
+// as the page stood 15 minutes earlier (his yes to Wikipedia, with that safeguard). No red and blue: party is
+// position (Democrats from the left, Republicans from the right) and a label; a lighter tint is a Senate seat not up
+// this year; grey is not called yet. The line in the middle is half the chamber: crossing it is a majority.
+const SEATS_API = "api/seats.php";
+const SEATS_UNTIL = Date.parse("2026-12-01T06:00:00Z");
+let SEATS = null;
+const seatsOn = () => Date.now() < SEATS_UNTIL;
+const SEAT_STORIES = [{ key: "house", kind: "house", title: "U.S. House: seats won" }, { key: "senate", kind: "senate", title: "U.S. Senate: seats won" }];
+const usTime = t => new Date(Date.parse(t)).toLocaleString("en-US", { timeZone: "America/Chicago", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).replace(/ (AM|PM)$/, (_, x) => ` ${x.toLowerCase()}`);
+
+// One chamber as numbers: each side's seats (held over / won this year) and the seats not called yet.
+function chamber(kind, x) {
+  if (kind === "house") return { total: x.total, majority: x.majority, uncalled: x.uncalled,
+    D: { held: 0, won: x.D }, R: { held: 0, won: x.R }, other: x.other || 0 };
+  const P = x.parties;
+  return { total: x.total, majority: x.majority, uncalled: x.uncalled.length,
+    D: { held: P.D.held + P.I.held, won: P.D.won + P.I.won }, R: { held: P.R.held, won: P.R.won }, other: 0, indep: P.I.held + P.I.won };
+}
+const sideTotal = s => s.held + s.won;
+
+function seatBar(c, kind, big) {
+  const wrap = el("div", `seat-chart${big ? " is-big" : ""}`);
+  const d = sideTotal(c.D), r = sideTotal(c.R);
+  const top = el("div", "seat-ends");
+  top.append(el("span", "seat-end", `Democrats${c.indep ? "*" : ""} ${d}`), el("span", "seat-end seat-end-r", `Republicans ${r}`));
+  const bar = el("div", "seat-bar");
+  bar.setAttribute("role", "img");
+  bar.setAttribute("aria-label", `${kind === "house" ? "House" : "Senate"}: Democrats${c.indep ? " and independents" : ""} ${d}, Republicans ${r}, not called ${c.uncalled}, of ${c.total} seats. ${c.majority} is a majority.`);
+  const seg = (n, cls, tip) => { if (!n) return; const g = el("i", cls); g.style.flexGrow = n; g.title = tip; bar.append(g); };
+  seg(c.D.held, "seat-held", `Democrats${c.indep ? " and independents" : ""}: ${c.D.held} seats not up this year`);
+  seg(c.D.won, "seat-won", `Democrats${c.indep ? " and independents" : ""}: ${c.D.won} seats won Tuesday`);
+  seg(c.uncalled + c.other, "seat-open", `${c.uncalled} not called yet${c.other ? `, ${c.other} other parties` : ""}`);
+  seg(c.R.won, "seat-won", `Republicans: ${c.R.won} seats won Tuesday`);
+  seg(c.R.held, "seat-held", `Republicans: ${c.R.held} seats not up this year`);
+  const mid = el("b", "seat-mid"); mid.setAttribute("aria-hidden", "true"); bar.append(mid);
+  const foot = el("div", "seat-foot");
+  foot.append(el("span", null, c.uncalled ? `${c.uncalled} not called` : "All called"), el("span", "seat-foot-mid", `${c.majority} for a majority`), el("span"));
+  wrap.append(top, bar, foot);
+  if (kind === "senate") {
+    const key = el("ul", "seat-key");
+    for (const [cls, t] of [["seat-won", "Won Tuesday"], ["seat-held", "Not up this year"], ["seat-open", "Not called yet"]]) {
+      const li = el("li"); const sw = el("i", `seat-swatch ${cls}`); sw.setAttribute("aria-hidden", "true"); li.append(sw, document.createTextNode(t)); key.append(li);
+    }
+    wrap.append(key);
+  }
+  return wrap;
+}
+
+function seatsGist(kind, x) {
+  const c = chamber(kind, x), d = sideTotal(c.D), r = sideTotal(c.R);
+  const lead = d >= c.majority ? `Democrats${c.indep ? ", with the independents who vote with them," : ""} have ${d} seats, past the ${c.majority} needed for a majority.`
+    : r >= c.majority ? `Republicans have ${r} seats, past the ${c.majority} needed for a majority.`
+    : `Neither party has the ${c.majority} seats for a majority yet: Democrats ${d}, Republicans ${r}.`;
+  const rest = d >= c.majority || r >= c.majority ? ` ${d >= c.majority ? `Republicans have ${r}` : `Democrats have ${d}`}.` : "";
+  const open = c.uncalled ? ` ${c.uncalled} ${c.uncalled === 1 ? "seat is" : "seats are"} not called yet${kind === "senate" ? ` (${listNames(x.uncalled)})` : ""}.` : " Every seat is called.";
+  const gains = kind === "senate" ? Object.entries(x.gains || {}).map(([p, st]) => ` ${p === "D" ? "Democrats" : p === "R" ? "Republicans" : "Independents"} took ${st.length} ${st.length === 1 ? "seat" : "seats"} from the other side: ${listNames(st.map(stateName), 8)}.`).join("") : "";
+  return lead + rest + gains + open;
+}
+const stateName = s => s.replace(/ \(special\)$/, " (special election)");
+
+function seatsCards(sx) {
+  const box = el("div", "numbers-group");
+  box.append(el("h3", "numbers-group-h", "By the numbers"));
+  for (const n of SEAT_STORIES) {
+    const x = sx[n.kind];
+    if (!x) continue;
+    const g = el("div", "numbers-race");
+    g.append(el("h4", "numbers-race-h", n.kind === "house" ? "U.S. House · 435 seats" : "U.S. Senate · 100 seats"));
+    const ol = el("ol", "stories numbers-pair");
+    ol.setAttribute("aria-label", `${n.title}`);
+    const li = el("li", "story story-data");
+    const main = el("div", "story-main");
+    main.append(el("p", "story-when", `Calls as of ${usTime(x.as_of)} Central`));
+    const h = el("h2", "headline"); const a = el("a", null, n.title); a.href = `numbers.html?n=${n.key}`; h.append(a);
+    main.append(h, seatBar(chamber(n.kind, x), n.kind, false), el("p", "gist", seatsGist(n.kind, x)));
+    li.append(main); ol.append(li); g.append(ol); box.append(g);
+  }
+  box.append(el("p", "num-note seats-note", "Seat calls as listed on Wikipedia, which gathers the AP’s and the networks’ calls. We show each page as it stood 15 minutes earlier, so a bad edit has time to be undone. We never call a seat ourselves."));
+  return box;
+}
+
+// The full page for one chamber.
+function renderSeats(n) {
+  const x = SEATS && SEATS[n.kind];
+  document.title = `${n.title} · fACTUAL`;
+  $("story-title").textContent = n.title;
+  $("story-meta").textContent = x ? `Elections · Seats · Calls as of ${usTime(x.as_of)} Central` : "Elections · Seats";
+  const tools = el("div", "story-tools");
+  const back = el("a", "back-link");
+  back.append(el("span", "back-arrow", "←"), document.createTextNode(" Elections"));
+  back.querySelector(".back-arrow").setAttribute("aria-hidden", "true");
+  back.href = "./#elections";
+  tools.append(back);
+  $("story-meta").before(tools);
+  const sec = el("section", "block numbers");
+  if (!x) { sec.append(el("p", "num-lede", "The seat counts could not be read just now. Try again in a few minutes.")); $("story-body").append(sec); return; }
+  const c = chamber(n.kind, x);
+  const box = el("div", "num-early");
+  box.append(seatBar(c, n.kind, true));
+  box.append(el("p", "num-lede", seatsGist(n.kind, x) + (n.kind === "senate" ? " At 50 seats each, the vice president, a Republican, breaks ties." : "")));
+  if (c.indep) box.append(el("p", "num-note", `*Democrats’ count includes ${c.indep} independents who vote with them.`));
+  if (x.held_over) box.append(el("p", "num-note", "Wikipedia’s numbers changed sharply in the last few minutes, so this is the last count we showed while they settle."));
+  if (n.kind === "senate") {
+    const races = (x.races || []).slice().sort((a, b) => a.state.localeCompare(b.state));
+    const RES = { Gain: "Changed party", Hold: "Same party", "Re-elected": "Re-elected", Elected: "Elected", TBD: "Not called" };
+    const part = el("div", "num-early-part");
+    part.append(el("h2", "num-h", `This year’s ${races.length} races`));
+    const tbl = el("table", "num-table seat-table");
+    const cap = el("caption", "sr-only", "Senate races this year, by state: who won and what changed"); tbl.append(cap);
+    const thead = el("thead"); const hr = el("tr");
+    for (const t of ["State", "Won by", "Result"]) hr.append(el("th", null, t));
+    thead.append(hr); tbl.append(thead);
+    const tb = el("tbody");
+    for (const r of races) {
+      const tr = el("tr", r.result === "Gain" ? "is-gain" : r.result === "TBD" ? "is-open" : null);
+      tr.append(el("td", null, stateName(r.state)), el("td", null, r.party === "TBD" ? "–" : PARTY[r.party === "D" ? "DEM" : r.party === "R" ? "REP" : "IND"] || r.party),
+        el("td", null, RES[r.result] || r.result));
+      tb.append(tr);
+    }
+    tbl.append(tb); part.append(tbl); box.append(part);
+  } else {
+    box.append(el("p", "num-note", "District-by-district results are not on this page yet: this is the national count of seats called."));
+  }
+  const src = el("details", "results-more results-sources");
+  src.append(el("summary", null, "Sources (1)"));
+  src.append(sourceLine(`Wikipedia’s page on the 2026 ${n.kind === "house" ? "House" : "Senate"} elections, as it stood at ${usTime(x.as_of)} Central (revision ${x.revision}). Wikipedia gathers the AP’s and the networks’ calls; anyone can edit it, so we show each page as it stood 15 minutes earlier and only when the newest edit does not contradict it. Read by us at ${usTime(SEATS.checked_at)} Central.`, "Wikipedia", x.page));
+  box.append(src);
+  sec.append(box);
+  const more = el("ul", "num-next");
+  for (const o of SEAT_STORIES.filter(o => o !== n && SEATS[o.kind])) { const li = el("li"); const a = el("a", null, `${o.title} →`); a.href = `numbers.html?n=${o.key}`; li.append(a); more.append(li); }
+  sec.append(more);
+  $("story-body").append(sec);
+  const foot = el("p", "disclosure");
+  foot.append(document.createTextNode("Read from Wikipedia by code. No AI, no human review."));
+  $("story-body").append(foot);
+}
+
 // Races the Associated Press has called (Heston, 2026-11-04: "we should refer to the AP winners"). Entered by hand from
 // the reporting, each with its source: we still never call a race ourselves. Keyed by the state's office name.
 const AP_CALLS = {
@@ -3212,6 +3354,15 @@ async function load() {
   if (page === "promises" && !PROMISES_ON) { location.replace("./"); return; }
   if (page === "promises") { const [lib, st] = await Promise.all([getJSON("data/library.json", true), getJSON("data/stories.json", true)]); return renderPromises({ library: lib, stories: (st && st.stories) || [] }); }
   if (page === "numbers") {
+    const sq = new URLSearchParams(location.search).get("n");
+    const seatStory = SEAT_STORIES.find(x => x.key === sq);
+    if (seatStory) {
+      SEATS = await getJSON(SEATS_API, true);
+      if (SEATS && !SEATS.ok) SEATS = null;
+      renderSeats(seatStory);
+      setInterval(() => getJSON(SEATS_API, true).then(x => { if (x && x.ok && SEATS && x.checked_at !== SEATS.checked_at) location.reload(); }).catch(() => {}), 300000);
+      return;
+    }
     // The investors' key shows the numbers as they stood at the cutoff, like the rest of the edition.
     const k = sget("fx-capsule", sessionStorage);
     const cap = k ? await getJSON(`data/capsule/${k}/tx.json`, true) : null;
