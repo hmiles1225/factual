@@ -1597,6 +1597,26 @@ function gapText(gap, cands) {
 }
 const usd = v => v == null ? "–" : v >= 1e6 ? `$${(v / 1e6).toFixed(v >= 1e8 ? 0 : 1)}M` : v >= 1e3 ? `$${Math.round(v / 1e3)}K` : `$${Math.round(v)}`;
 const shortDate = iso => new Date(`${iso}T12:00:00`).toLocaleDateString([], { month: "short", day: "numeric" });
+// Every "Based on" line on a numbers page, moved into one Sources fold at the end (Heston, 2026-11-03). Each keeps
+// the heading of the part it sat under, so it still says which numbers it is the basis for.
+function foldSources(sec) {
+  const lines = [...sec.querySelectorAll(".num-basis")];
+  if (!lines.length) return;
+  const src = el("details", "results-more results-sources");
+  let n = 0;
+  for (const p of lines) {
+    if (p.dataset.summary) { p.remove(); continue; }  // "each shown below with its own source": moot once they are all here
+    let at = p.parentElement, h = null;
+    while (at && at !== sec && !(h = at.querySelector(":scope > h2, :scope > h3"))) at = at.parentElement;
+    p.firstChild.remove();  // the "Based on" label
+    const t = p.firstChild;
+    if (t && t.nodeType === 3) t.textContent = t.textContent.replace(/^\s*\S/, c => c.toUpperCase());
+    if (h) p.prepend(el("strong", null, `${h.textContent.trim()}: `));
+    src.append(p); n++;
+  }
+  src.prepend(el("summary", null, `Sources (${n})`));
+  if (n) sec.append(src);
+}
 // A source inside a Sources fold: the sentence and its link, without the "Based on" label.
 function sourceLine(text, link, href) { const p = basedOn(text, link, href); p.firstChild.remove(); return p; }
 function basedOn(text, link, href) {
@@ -1872,7 +1892,7 @@ function summaryBox(points) {
   box.append(ul);
   return box;
 }
-const summaryBasis = () => basedOn("the figures on this page, each shown below with its own source.");
+const summaryBasis = () => { const p = basedOn("the figures on this page, each shown below with its own source."); p.dataset.summary = "1"; return p; };
 
 function pollsSummary(r, c, nums) {
   const pts = [];
@@ -2583,6 +2603,7 @@ function renderNumbers(nums) {
       sec.append(moneyBlock(r.money, c));
     }
   }
+  if (n.kind !== "results") foldSources(sec);  // results builds its own fold, redrawn each minute
   // The other number stories, so each is one tap away.
   const more = el("ul", "num-next");
   for (const o of NUMBER_STORIES.filter(o => o !== n && numberShown(o, nums))) {
