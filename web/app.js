@@ -2384,7 +2384,7 @@ function resultsGist(res) {
   const top = [...r.candidates].sort((a, b) => b.votes - a.votes).filter(c => c.party !== "W").slice(0, 2);
   const shares = top.map(c => `${nameCase(c.last)} ${fmtN(c.votes)} (${pct(c.votes, r.total).toFixed(1)}%)`);
   const call = apCall(r);
-  if (call) return `${officeName(r.office)}: the AP called it for ${candName(call.winner)}. The count so far: ${shares.join(", ")}. ${call.conceded}`;
+  if (call) return `${officeName(r.office)}: the AP called it for ${candName(call.winner)}. The count so far: ${shares.join(", ")}.${call.conceded ? ` ${call.conceded}` : ""}`;
   return `${officeName(r.office)} so far: ${shares.join(", ")}. ${sourceNote(res)} No race is called here.`;
 }
 
@@ -2399,6 +2399,15 @@ const AP_CALLS = {
     outlet: "NPR", source: "https://www.npr.org/2026/11/03/g-s1-150844/gina-hinojosa-texas-governor-abbott",
     img: { src: "img/hinojosa-win-v1.jpg", alt: "Gina Hinojosa", caption: "Photo: RRC1701 \u00b7 CC0 \u00b7 Wikimedia Commons",
       source: "https://commons.wikimedia.org/wiki/File:Gina_Hinojosa_at_the_AFL-CIO_COPE_convention_in_2024.jpg" } },
+  "LIEUTENANT GOVERNOR": { last: "GOODWIN", conceded: "Dan Patrick conceded before the call.",
+    outlet: "KUT", source: "https://www.kut.org/texas/2026-11-03/texas-nov-midterm-statewide-election-results",
+    img: { src: "img/goodwin-win-v1.jpg", alt: "Vikki Goodwin", caption: "Photo: Cole-Wilson-93 \u00b7 CC BY-SA 4.0 \u00b7 Wikimedia Commons",
+      source: "https://commons.wikimedia.org/wiki/File:HiRes-Vikki_Goodwin-6381-red_(cropped).jpg" } },
+  "RAILROAD COMMISSIONER": { last: "ROSENTHAL",
+    outlet: "Houston Public Media", source: "https://www.houstonpublicmedia.org/articles/news/politics/election-2026/2026/11/03/565293/railroad-comm-prewrite/",
+    img: { src: "img/rosenthal-win-v1.jpg", alt: "Jon Rosenthal", caption: "Photo: Scriptrix101 \u00b7 CC BY-SA 4.0 \u00b7 Wikimedia Commons",
+      source: "https://commons.wikimedia.org/wiki/File:Photo_of_Jon_Rosenthal.jpg" } },
+  // No AP call found in the reporting (2026-11-04) for the other ten statewide races: they stay unmarked until one is.
 };
 const apCall = r => { const c = AP_CALLS[r.office]; const w = c && r.candidates.find(x => x.last.toUpperCase() === c.last);
   return w ? { ...c, winner: w } : null; };
@@ -2424,7 +2433,7 @@ function resultsRace(r) {
   const call = apCall(r);
   if (call) {
     box.append(winnerFigure(call));
-    box.append(el("p", "num-note win-note", `The Associated Press called this race for ${candName(call.winner)}. ${call.conceded} The count below is the state\u2019s, still unofficial until the canvass.`));
+    box.append(el("p", "num-note win-note", `The Associated Press called this race for ${candName(call.winner)}.${call.conceded ? ` ${call.conceded}` : ""} The count below is the state\u2019s, still unofficial until the canvass.`));
   }
   // Write-in candidates share one row: most are not counted until the official canvass.
   const named = r.candidates.filter(c => c.party !== "W");
