@@ -553,6 +553,11 @@ def note_ai_error(where, e):
         except Exception:
             pass
     AI_ERRORS.append({"where": where, "error": f"{type(e).__name__}: {e} {body}".strip()[:300]})
+    # Heston (2026-11-04): when the Google balance runs out, pause everything until he says resume. This marker
+    # makes scan.yml switch itself off after the deploy; .github/resume switches it back on. Only Google's
+    # out-of-credit refusal sets it, never a rate limit (both are HTTP 429 RESOURCE_EXHAUSTED).
+    if "prepayment credits are depleted" in f"{e} {body}".lower():
+        (ROOT / "data/.paused").write_text(f"{datetime.now(timezone.utc).isoformat(timespec='seconds')} {where}: Gemini prepaid balance is empty\n")
 
 
 def gemini_json(prompt, schema, thinking=None):

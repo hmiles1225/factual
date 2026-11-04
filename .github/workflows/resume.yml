@@ -1,0 +1,24 @@
+# Switches the hourly scan back on after it paused itself (scan.yml pauses when the Google balance runs out).
+# Runs when .github/resume changes on main, or by hand from the Actions tab.
+name: resume
+
+on:
+  push:
+    branches: [main]
+    paths: [.github/resume]
+  workflow_dispatch:
+
+permissions:
+  actions: write
+
+jobs:
+  resume:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Switch scans back on and start one
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow enable scan.yml --repo "$GITHUB_REPOSITORY"
+          gh workflow run scan.yml --repo "$GITHUB_REPOSITORY" --ref main

@@ -29,6 +29,8 @@ jobs:
   scan:
     runs-on: ubuntu-latest
     timeout-minutes: 40   # check_today stops new AI work at 22 minutes and saves; this is the margin
+    outputs:
+      paused: ${{ steps.paused.outputs.paused }}
     env:
       FASTEMBED_CACHE_PATH: ${{ github.workspace }}/.fastembed
     steps:
@@ -134,6 +136,17 @@ jobs:
           # The Texas time capsule (written only until the edition's cutoff; after it, the server keeps the last).
           if [ -d data/capsule ]; then find data/capsule -type f | while read -r f; do put "$f" "$f"; done; fi
 
+      # Heston (2026-11-04): when the Google balance runs out, pause everything until he says resume. check_today
+      # writes data/.paused only on Google's out-of-credit refusal; the next job then switches this workflow off.
+      - name: Out of Google credit?
+        id: paused
+        if: always()
+        run: |
+          if [ -f data/.paused ]; then
+            echo "::warning::Gemini prepaid balance is empty: $(cat data/.paused). Scans pause after this one."
+            echo "paused=true" >> "$GITHUB_OUTPUT"
+          fi
+
   # GitHub's scheduler skips most runs (2026-10-31: 7 of 26 in 13 hours, gaps of 3 hours), so each scan queues the
   # next one itself, 15 minutes after it ends; the cron above stays as the backup if this chain ever breaks. The
   # concurrency group holds one running and one waiting scan, so extra triggers merge into one chain, never pile up.
@@ -146,8 +159,17 @@ jobs:
     permissions:
       actions: write
     steps:
-      - run: sleep 900
+      # Paused: switch this workflow off (cron, pushes and this chain all stop). Pushing a change to .github/resume
+      # switches it back on (resume.yml). Already off is fine: a scan that was waiting in the queue lands here too.
+      - name: Pause scans
+        if: needs.scan.outputs.paused == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow disable scan.yml --repo "$GITHUB_REPOSITORY" || true
+      - if: needs.scan.outputs.paused != 'true'
+        run: sleep 900
       - name: Queue the next scan
+        if: needs.scan.outputs.paused != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh workflow run scan.yml --repo "$GITHUB_REPOSITORY" --ref main
