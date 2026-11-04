@@ -2337,16 +2337,24 @@ const OFFICE = { "U. S. SENATOR": "U.S. Senate", "COMPTROLLER OF PUBLIC ACCOUNTS
   "COMMISSIONER OF THE GENERAL LAND OFFICE": "Land Commissioner", "COMMISSIONER OF AGRICULTURE": "Agriculture Commissioner" };
 const officeName = o => OFFICE[o] || nameCase(o).replace(/\bOf\b/g, "of").replace(/\bThe\b/g, "the").replace(/ - Unexpired Term$/, " (unexpired term)");
 // "Nov 3, 2026 21:42:07" (the state's own clock, Central) -> "9:42 pm, Nov 3"
-const sosTime = t => { const m = /^(\w+) (\d+), \d+ (\d+):(\d+)/.exec(t || ""); if (!m) return t;
-  const h = +m[3]; return `${h % 12 || 12}:${m[4]} ${h < 12 ? "am" : "pm"}, ${m[1]} ${m[2]}`; };
+// The state stamps its updates in UTC ("Nov 04, 2026 01:28:46" is 7:28 pm Central on Nov 3); shown in Central.
+const MON = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11 };
+const sosTime = t => { const m = /^(\w{3}) (\d+), (\d{4}) (\d+):(\d+)/.exec(t || ""); if (!m || !(m[1] in MON)) return t;
+  const d = Date.UTC(+m[3], MON[m[1]], +m[2], +m[4], +m[5]);
+  return new Date(d).toLocaleString("en-US", { timeZone: "America/Chicago", hour: "numeric", minute: "2-digit", month: "short", day: "numeric" })
+    .replace(/ (AM|PM)$/, (_, x) => ` ${x.toLowerCase()}`); };
+// Why our count can trail TV: networks take each county's count directly; the state posts the counties' uploads in batches.
+const LAG_NOTE = "The state posts the counties\u2019 counts in batches, so it runs behind TV and the counties\u2019 own sites, which count directly from each county. Early in the night the first counties in are mostly small ones.";
 const reportingShare = res => pct(res.polling_places[0], res.polling_places[1]);
+// "12% reporting": the share of polling places the state counts as reported, its own measure of how far along the count is.
+const reportingText = res => `${shareText(reportingShare(res))}% reporting`;
 const shareText = v => v > 0 && v < 1 ? "under 1" : v > 99 && v < 100 ? "over 99" : String(Math.round(v));
 
 function resultsGist(res) {
   const r = res.races[0];
   const top = [...r.candidates].sort((a, b) => b.votes - a.votes).filter(c => c.party !== "W").slice(0, 2);
   const shares = top.map(c => `${nameCase(c.last)} ${fmtN(c.votes)} (${pct(c.votes, r.total).toFixed(1)}%)`);
-  return `${officeName(r.office)} so far: ${shares.join(", ")}. Polling places reporting: ${shareText(reportingShare(res))}%. Unofficial; no race is called here.`;
+  return `The state\u2019s count as of ${sosTime(res.updated)} Central, ${res.counties[0]} of ${res.counties[1]} counties in. ${officeName(r.office)} so far: ${shares.join(", ")}. ${LAG_NOTE} No race is called here.`;
 }
 
 function resultsRace(r) {
@@ -2380,8 +2388,11 @@ function resultsBlock(res) {
     return box;
   }
   const [pp, ppAll] = res.polling_places, [co, coAll] = res.counties;
-  box.append(el("h2", "num-h", "Reporting"));
-  box.append(el("p", "num-lede", `Polling places reporting: ${fmtN(pp)} of ${fmtN(ppAll)} (${shareText(reportingShare(res))}%). Counties reporting: ${co} of ${coAll}. These are unofficial results as the counties send them in. We show the count; we never call a race or project a winner.`));
+  box.append(el("h2", "num-h", reportingText(res)));
+  const bar = el("div", "rate-bar results-reporting"); bar.setAttribute("aria-hidden", "true");
+  const f = el("i"); f.style.width = `${reportingShare(res)}%`; bar.append(f);
+  box.append(bar);
+  box.append(el("p", "num-lede", `${fmtN(pp)} of ${fmtN(ppAll)} polling places and ${co} of ${coAll} counties have reported to the state, as of ${sosTime(res.updated)} Central. ${LAG_NOTE} These are unofficial results. We show the count; we never call a race or project a winner.`));
   box.append(basedOn(`the Texas Secretary of State’s unofficial election night results, as last updated by the state at ${sosTime(res.updated)} Central; read by us ${Math.max(1, Math.round((Date.now() - Date.parse(res.checked_at)) / 60000))} min ago. Official results come from the state canvass weeks later.`, "Secretary of State results", res.source));
   const [first, second, ...rest] = res.races;
   for (const r of [first, second].filter(Boolean)) box.append(resultsRace(r));
@@ -2462,7 +2473,7 @@ function numbersCards(nums) {
     const main = el("div", "story-main");
     main.append(el("p", "story-when", TXRES ? agoText(Date.parse(TXRES.checked_at)) : "Tonight"));
     const h = el("h2", "headline");
-    const a = el("a", null, TXRES ? "Results: the count so far" : "Results: the count starts tonight");
+    const a = el("a", null, TXRES ? `Results: ${reportingText(TXRES)}` : "Results: the count starts tonight");
     a.href = `numbers.html?n=${RESULTS_STORY.key}`;
     h.append(a);
     main.append(h, el("p", "gist", TXRES ? resultsGist(TXRES)
