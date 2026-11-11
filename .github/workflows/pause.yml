@@ -1,0 +1,29 @@
+# Switches the hourly scan off by hand (Heston, 2026-11-11: "i think we can stop"). The automatic pause for an
+# empty Google balance lives in scan.yml. Runs when .github/pause changes on main, or from the Actions tab.
+# A scan already running finishes and deploys; its next job can't queue another once scan.yml is off.
+# resume.yml switches it back on.
+name: pause
+
+on:
+  push:
+    branches: [main]
+    paths: [.github/pause]
+  workflow_dispatch:
+
+permissions:
+  actions: write
+
+jobs:
+  pause:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Switch scans off and drop any waiting in the queue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow disable scan.yml --repo "$GITHUB_REPOSITORY" || true
+          for id in $(gh run list --repo "$GITHUB_REPOSITORY" --workflow scan.yml --status queued --json databaseId -q '.[].databaseId'; \
+                      gh run list --repo "$GITHUB_REPOSITORY" --workflow scan.yml --status pending --json databaseId -q '.[].databaseId'); do
+            gh run cancel "$id" --repo "$GITHUB_REPOSITORY" || true
+          done

@@ -15,7 +15,8 @@ on:
     - cron: "47 * * * *"
   push:
     branches: [main]   # a push is a deploy; one that changes only the site goes through site.yml instead
-    paths-ignore: ["web/**", "method/**", "**/*.md", ".github/workflows/site.yml"]
+    paths-ignore: ["web/**", "method/**", "**/*.md", ".github/workflows/site.yml", ".github/pause", ".github/resume",
+                   ".github/workflows/pause.yml", ".github/workflows/resume.yml"]
   workflow_dispatch:
 
 concurrency:
