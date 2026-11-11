@@ -1,2 +1,3 @@
 # Change this file and push to main to switch scans off (see pause.yml). Log each pause here.
 2026-11-11: Heston stopped fACTUAL's scans by hand.
+2026-11-11: run again to cancel the scan the first pause push queued (it changed scan.yml).
